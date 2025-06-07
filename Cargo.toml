@@ -8,7 +8,8 @@ members = [
     "crates/identity/rust-identity-local",
     "crates/identity/rust-identity-oauth2",
     "crates/identity/rust-identity-session",
-    "examples/basic-service"
+    "examples/basic-service",
+    "examples/google-oauth-example"
 ]
 
 [workspace.dependencies]

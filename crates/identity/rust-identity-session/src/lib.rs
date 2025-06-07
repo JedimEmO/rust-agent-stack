@@ -157,6 +157,7 @@ impl SessionService {
     }
 }
 
+#[derive(Clone)]
 pub struct JwtAuthProvider {
     session_service: Arc<SessionService>,
 }
