@@ -14,6 +14,10 @@ All notable changes to this project will be documented in this file.
 - Example applications demonstrating JSON-RPC service implementation
   - basic-service: Complete working example with authentication and multiple endpoints
   - Usage examples showing macro-generated service builders
+- Enhanced project documentation and development guidelines
+  - Updated CLAUDE.md with comprehensive crate organization patterns
+  - Added development workflow instructions and dependency management guidelines
+  - Improved orchestration commands for better AI-assisted development
 
 ### Added - 2025-01-06
 - Initial project setup with Cargo workspace structure

@@ -21,4 +21,6 @@ When you are done with a task, I want you to write an entry in the `scraim/curre
 on what went well and what could have gone better when solving the task.
 Be terse and concise, we only want a bullet point or two there.
 
+Make sure to update relevant CLAUDE.md files with relevant new knowledge!
+
 Here are your instructions: $ARGUMENTS
