@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added - 2025-01-07
+- Sprint retrospective implementation with project guidelines optimization
+  - Streamlined CLAUDE.md documentation from verbose descriptions to concise guidelines
+  - Added testing guidelines based on sprint observations (security-first, end-to-end testing)
+  - Enhanced orchestrate command with key execution principles to prevent observed mistakes
+  - Archived sprint-1 retrospective notes to scraim/retroed/ for historical tracking
+  
+- Added raitro command for automated sprint retrospectives
+  - Command analyzes sprint observations and optimizes project guidelines
+  - Provides framework for continuous improvement of development processes
+
 ### Fixed - 2025-01-07
 - Fixed JSON-RPC macro routing issue causing 404 errors when accessing service endpoints
   - Macro now properly uses the base_url parameter instead of hardcoding "/" routes
