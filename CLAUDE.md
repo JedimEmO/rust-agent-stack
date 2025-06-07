@@ -98,6 +98,9 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
 - All crates follow the same version (0.1.0) and edition (2024)
 - Procedural macro crate can ONLY export macros, not runtime types or functions
 
+#### Common Pitfalls
+- **Axum Router Nesting**: Use `.nest("/api", router)` not `.merge(router.nest("/api", Router::new()))` - the latter creates invalid nesting syntax
+
 ### Error Handling Guidelines
 - Use `thiserror` for library error handling and `anyhow` for application level errors
 

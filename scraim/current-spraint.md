@@ -63,3 +63,14 @@
 
 **What could have gone better:**
 - Could have tested with different Google OAuth endpoint versions during initial implementation
+
+## OAuth2 Example Routing Fix (2025-01-07)
+
+**What went well:**
+- Identified two separate routing issues: incorrect Axum nesting syntax and macro ignoring base_url parameter
+- Fixed both issues systematically: first the nesting, then the deeper macro bug
+- Proper testing revealed the root cause was in the macro, not just the routing configuration
+
+**What could have gone better:**
+- Should have tested the complete end-to-end flow during initial example implementation
+- Could have identified the macro bug earlier by examining generated code first
