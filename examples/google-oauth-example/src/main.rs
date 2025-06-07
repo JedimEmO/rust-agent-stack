@@ -79,8 +79,7 @@ pub struct StartOAuth2Request {
 }
 
 /// OAuth2 flow initiation response
-#[derive(Debug, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct StartOAuth2Response {
     authorization_url: String,
     state: String,
@@ -102,7 +101,6 @@ pub struct UserInfo {
     pub picture: Option<String>,
     pub permissions: Vec<String>,
 }
-
 
 impl Default for SessionTokenResponse {
     fn default() -> Self {
@@ -131,7 +129,7 @@ fn create_oauth2_provider(config: &AppConfig) -> Result<OAuth2Provider> {
         client_secret: config.google_client_secret.clone(),
         authorization_endpoint: "https://accounts.google.com/o/oauth2/v2/auth".to_string(),
         token_endpoint: "https://oauth2.googleapis.com/token".to_string(),
-        userinfo_endpoint: Some("https://www.googleapis.com/oauth2/v2/userinfo".to_string()),
+        userinfo_endpoint: Some("https://www.googleapis.com/oauth2/v3/userinfo".to_string()),
         redirect_uri: config.redirect_uri.clone(),
         scopes: vec![
             "openid".to_string(),

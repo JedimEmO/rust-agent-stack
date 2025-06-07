@@ -35,8 +35,21 @@ pub struct TokenResponse {
 }
 
 /// OAuth2 user info response (OpenID Connect compatible)
+///
+/// This struct supports both OpenID Connect standard field names and
+/// legacy OAuth2 providers that use different field names. Specifically:
+/// - `sub` (standard OpenID Connect) or `id` (Google OAuth2 v1) for the user identifier
+/// - `email_verified` (OpenID Connect) for email verification status
+///
+/// The struct is designed to work with multiple Google OAuth2 userinfo endpoints:
+/// - v1: `https://www.googleapis.com/oauth2/v1/userinfo` (returns `id`)
+/// - v2: `https://www.googleapis.com/oauth2/v2/userinfo` (returns `sub`)
+/// - v3: `https://www.googleapis.com/oauth2/v3/userinfo` (returns `sub`)
+/// - OpenID Connect: `https://openidconnect.googleapis.com/v1/userinfo` (returns `sub`)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserInfoResponse {
+    /// User identifier - accepts both "sub" (OpenID Connect standard) and "id" (Google v1 API)
+    #[serde(alias = "id")]
     pub sub: String,
     pub email: Option<String>,
     pub email_verified: Option<bool>,
@@ -61,4 +74,65 @@ pub struct ProviderMetadata {
     pub response_types_supported: Option<Vec<String>>,
     pub grant_types_supported: Option<Vec<String>>,
     pub code_challenge_methods_supported: Option<Vec<String>>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_user_info_response_deserialize_sub_field() {
+        let json = r#"{
+            "sub": "123456789",
+            "email": "user@example.com",
+            "email_verified": true,
+            "name": "Test User"
+        }"#;
+
+        let user_info: UserInfoResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(user_info.sub, "123456789");
+        assert_eq!(user_info.email, Some("user@example.com".to_string()));
+        assert_eq!(user_info.email_verified, Some(true));
+        assert_eq!(user_info.name, Some("Test User".to_string()));
+    }
+
+    #[test]
+    fn test_user_info_response_deserialize_id_field() {
+        let json = r#"{
+            "id": "123456789",
+            "email": "user@example.com",
+            "name": "Test User"
+        }"#;
+
+        let user_info: UserInfoResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(user_info.sub, "123456789");
+        assert_eq!(user_info.email, Some("user@example.com".to_string()));
+        assert_eq!(user_info.name, Some("Test User".to_string()));
+    }
+
+    #[test]
+    fn test_user_info_response_with_additional_claims() {
+        let json = r#"{
+            "id": "123456789",
+            "email": "user@example.com",
+            "name": "Test User",
+            "custom_field": "custom_value",
+            "another_field": 42
+        }"#;
+
+        let user_info: UserInfoResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(user_info.sub, "123456789");
+        assert_eq!(user_info.email, Some("user@example.com".to_string()));
+        assert_eq!(user_info.name, Some("Test User".to_string()));
+
+        // Verify additional claims are captured
+        assert_eq!(
+            user_info.additional_claims.get("custom_field").unwrap(),
+            "custom_value"
+        );
+        assert_eq!(
+            user_info.additional_claims.get("another_field").unwrap(),
+            42
+        );
+    }
 }
