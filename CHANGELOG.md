@@ -11,6 +11,9 @@ All notable changes to this project will be documented in this file.
   - rust-jsonrpc-macro: Procedural macro for generating type-safe RPC interfaces with axum integration
 - Comprehensive test suite and integration tests for macro functionality
 - Workspace-level dependency management with shared crate versions
+- Example applications demonstrating JSON-RPC service implementation
+  - basic-service: Complete working example with authentication and multiple endpoints
+  - Usage examples showing macro-generated service builders
 
 ### Added - 2025-01-06
 - Initial project setup with Cargo workspace structure
