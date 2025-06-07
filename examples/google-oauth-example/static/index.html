@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google OAuth2 Example - Rust Agent Stack</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦀</text></svg>">
+    <style>
+        :root {
+            --primary-color: #4285f4;
+            --primary-hover: #3367d6;
+            --secondary-color: #34a853;
+            --secondary-hover: #2e9447;
+            --danger-color: #ea4335;
+            --warning-color: #fbbc04;
+            --surface-color: #ffffff;
+            --background-color: #f8f9fa;
+            --text-primary: #202124;
+            --text-secondary: #5f6368;
+            --text-muted: #9aa0a6;
+            --border-color: #dadce0;
+            --shadow-light: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+            --shadow-medium: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
+            --shadow-heavy: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
+            --border-radius: 8px;
+            --border-radius-large: 12px;
+            --transition-fast: 0.15s ease;
+            --transition-normal: 0.3s ease;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: var(--text-primary);
+        }
+
+        .background-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="%23ffffff" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header {
+            background: var(--surface-color);
+            padding: 40px;
+            border-radius: var(--border-radius-large);
+            box-shadow: var(--shadow-medium);
+            margin-bottom: 30px;
+            text-align: center;
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(10px);
+        }
+
+        .header h1 {
+            color: var(--text-primary);
+            margin: 0 0 16px 0;
+            font-size: 2.5em;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            margin: 0;
+            font-size: 1.1em;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 30px;
+            align-items: start;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+        }
+
+        .auth-section {
+            background: var(--surface-color);
+            padding: 40px;
+            border-radius: var(--border-radius-large);
+            box-shadow: var(--shadow-medium);
+            text-align: center;
+            border: 1px solid var(--border-color);
+            position: sticky;
+            top: 20px;
+        }
+
+        .auth-steps {
+            margin-bottom: 30px;
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+            padding: 12px;
+            border-radius: var(--border-radius);
+            background: #f8f9fa;
+            transition: var(--transition-normal);
+        }
+
+        .step.active {
+            background: #e3f2fd;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .step.completed {
+            background: #e8f5e8;
+            border-left: 4px solid var(--secondary-color);
+        }
+
+        .step-number {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            margin-right: 12px;
+            font-size: 14px;
+        }
+
+        .step.active .step-number {
+            background: var(--primary-color);
+        }
+
+        .step.completed .step-number {
+            background: var(--secondary-color);
+        }
+
+        .step-text {
+            flex: 1;
+            text-align: left;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .step.active .step-text {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .card {
+            background: var(--surface-color);
+            padding: 30px;
+            border-radius: var(--border-radius-large);
+            box-shadow: var(--shadow-medium);
+            margin-bottom: 24px;
+            border: 1px solid var(--border-color);
+        }
+
+        .card h2, .card h3 {
+            color: var(--text-primary);
+            margin-top: 0;
+        }
+
+        .button {
+            background: var(--primary-color);
+            color: white;
+            padding: 16px 32px;
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: var(--transition-normal);
+            position: relative;
+            overflow: hidden;
+            min-width: 200px;
+        }
+
+        .button:hover {
+            background: var(--primary-hover);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-medium);
+        }
+
+        .button:active {
+            transform: translateY(0);
+        }
+
+        .button.secondary {
+            background: var(--surface-color);
+            color: var(--text-primary);
+            border: 2px solid var(--border-color);
+        }
+
+        .button.secondary:hover {
+            background: var(--background-color);
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .button.success {
+            background: var(--secondary-color);
+        }
+
+        .button.success:hover {
+            background: var(--secondary-hover);
+        }
+
+        .button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .button .loading-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid transparent;
+            border-top: 2px solid currentColor;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: none;
+        }
+
+        .button.loading .loading-spinner {
+            display: block;
+        }
+
+        .button.loading .button-text {
+            display: none;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .status {
+            margin: 20px 0;
+            padding: 16px;
+            border-radius: var(--border-radius);
+            display: none;
+            align-items: center;
+            gap: 12px;
+            font-weight: 500;
+        }
+
+        .status.success {
+            background: #e8f5e8;
+            color: #2e7d2e;
+            border: 1px solid #81c784;
+        }
+
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+            border: 1px solid #ef5350;
+        }
+
+        .status.warning {
+            background: #fff8e1;
+            color: #ef6c00;
+            border: 1px solid #ffb74d;
+        }
+
+        .status.info {
+            background: #e3f2fd;
+            color: #1565c0;
+            border: 1px solid #64b5f6;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-top: 30px;
+        }
+
+        .feature {
+            background: var(--surface-color);
+            padding: 30px;
+            border-radius: var(--border-radius-large);
+            box-shadow: var(--shadow-light);
+            border: 1px solid var(--border-color);
+            transition: var(--transition-normal);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-medium);
+        }
+
+        .feature::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+        }
+
+        .feature h3 {
+            color: var(--text-primary);
+            margin: 0 0 12px 0;
+            font-size: 1.2em;
+            font-weight: 600;
+        }
+
+        .feature p {
+            color: var(--text-secondary);
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        .feature-icon {
+            font-size: 2em;
+            margin-bottom: 16px;
+            opacity: 0.8;
+        }
+
+        .code-example {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border-radius: var(--border-radius);
+            padding: 20px;
+            margin: 20px 0;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            position: relative;
+            border: 1px solid #333;
+        }
+
+        .code-example::before {
+            content: attr(data-language);
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .permission-badge {
+            display: inline-block;
+            background: var(--primary-color);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            margin: 2px;
+        }
+
+        .permission-badge.admin {
+            background: var(--danger-color);
+        }
+
+        .permission-badge.elevated {
+            background: var(--warning-color);
+            color: var(--text-primary);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--background-color);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+            transition: width 0.5s ease;
+            width: 0%;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 16px;
+            }
+            
+            .header {
+                padding: 24px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .auth-section {
+                padding: 24px;
+                position: static;
+            }
+            
+            .card {
+                padding: 20px;
+            }
+            
+            .features {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+            
+            .feature {
+                padding: 20px;
+            }
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.6s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-slide-in {
+            animation: slideIn 0.8s ease;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-30px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="background-overlay"></div>
+    <div class="container">
+        <div class="header animate-fade-in">
+            <h1>🦀 Google OAuth2 Example</h1>
+            <p>Rust Agent Stack - Identity Management with JSON-RPC</p>
+        </div>
+
+        <div class="main-content">
+            <div class="content-section">
+                <div class="card animate-slide-in">
+                    <h2>Welcome to the OAuth2 Demo</h2>
+                    <p>This example demonstrates a complete Google OAuth2 integration using the Rust Agent Stack identity management system. Experience modern authentication with:</p>
+                    <ul>
+                        <li><strong>OAuth2 Authorization Code Flow with PKCE</strong> - Enhanced security with proof key for code exchange</li>
+                        <li><strong>JWT Session Management</strong> - Stateless session tokens with embedded permissions</li>
+                        <li><strong>JSON-RPC API</strong> - Type-safe API with compile-time validation</li>
+                        <li><strong>Permission-based Authorization</strong> - Fine-grained access control based on user attributes</li>
+                    </ul>
+                    
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="authProgress"></div>
+                    </div>
+                    <p id="progressText" style="color: var(--text-secondary); font-size: 14px; margin-top: 8px;">Ready to begin authentication</p>
+                </div>
+
+                <div class="features animate-fade-in">
+                    <div class="feature">
+                        <div class="feature-icon">🔒</div>
+                        <h3>Secure Authentication</h3>
+                        <p>Uses OAuth2 with PKCE for enhanced security. State parameters prevent CSRF attacks, and JWTs provide stateless session management with configurable expiration.</p>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">🎯</div>
+                        <h3>Smart Permissions</h3>
+                        <p>Dynamic permission assignment based on email domain and user attributes. Different access levels for admin, trusted domains, and beta users.</p>
+                        <div style="margin-top: 12px;">
+                            <span class="permission-badge">user:read</span>
+                            <span class="permission-badge elevated">content:create</span>
+                            <span class="permission-badge admin">admin:write</span>
+                        </div>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">🚀</div>
+                        <h3>JSON-RPC API</h3>
+                        <p>Type-safe API endpoints with automatic serialization and authentication. Real-time validation with comprehensive error handling and response caching.</p>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">⚡</div>
+                        <h3>Modern Rust</h3>
+                        <p>Built with async/await, strong typing, and zero-cost abstractions. Leverages Rust 2024 edition features for maximum performance and safety.</p>
+                    </div>
+                </div>
+
+                <div class="card" id="apiTestingSection" style="display: none;">
+                    <h3>🧪 Interactive API Testing</h3>
+                    <p>After authentication, you can test the API endpoints directly in your browser:</p>
+                    
+                    <div id="apiPlayground">
+                        <!-- API playground will be populated by JavaScript -->
+                    </div>
+                    
+                    <div class="code-example" data-language="bash">
+# Example: Get user information
+curl -X POST http://localhost:3000/api/rpc \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "get_user_info",
+    "params": {},
+    "id": 1
+  }'</div>
+                </div>
+            </div>
+
+            <div class="auth-section animate-fade-in">
+                <h3>🔐 Authentication Flow</h3>
+                
+                <div class="auth-steps">
+                    <div class="step active" id="step1">
+                        <div class="step-number">1</div>
+                        <div class="step-text">Click to initiate OAuth2 flow</div>
+                    </div>
+                    <div class="step" id="step2">
+                        <div class="step-number">2</div>
+                        <div class="step-text">Redirect to Google authorization</div>
+                    </div>
+                    <div class="step" id="step3">
+                        <div class="step-number">3</div>
+                        <div class="step-text">Grant permissions to application</div>
+                    </div>
+                    <div class="step" id="step4">
+                        <div class="step-number">4</div>
+                        <div class="step-text">Receive JWT token and explore API</div>
+                    </div>
+                </div>
+                
+                <div class="status" id="status"></div>
+                
+                <button class="button" id="authButton" onclick="startOAuth2()">
+                    <div class="loading-spinner"></div>
+                    <span class="button-text">🚀 Sign in with Google</span>
+                </button>
+                
+                <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px;">
+                    <a href="/api-docs" class="button secondary">📚 View API Documentation</a>
+                    <button class="button secondary" onclick="showDemo()">🎬 See Demo</button>
+                </div>
+                
+                <div style="margin-top: 24px; padding: 16px; background: var(--background-color); border-radius: var(--border-radius); font-size: 14px; color: var(--text-secondary);">
+                    <strong>Permission Levels:</strong><br>
+                    <span class="permission-badge">@example.com</span> Admin access<br>
+                    <span class="permission-badge elevated">@trusted-domain.com</span> Content creation<br>
+                    <span class="permission-badge">Other domains</span> Basic access
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State management
+        let authState = {
+            isAuthenticating: false,
+            currentStep: 1,
+            token: localStorage.getItem('jwt_token'),
+            userInfo: null
+        };
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAuthenticationState();
+            initializeAnimations();
+        });
+
+        function initializeAnimations() {
+            // Add staggered animation delays
+            const features = document.querySelectorAll('.feature');
+            features.forEach((feature, index) => {
+                feature.style.animationDelay = `${index * 0.1}s`;
+            });
+        }
+
+        function checkAuthenticationState() {
+            // Check if we're returning from OAuth2 callback
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('error')) {
+                showStatus('error', `OAuth2 Error: ${urlParams.get('error')} - ${urlParams.get('error_description') || 'No description'}`);
+                return;
+            }
+
+            // Check if user has a stored token
+            if (authState.token) {
+                showAuthenticatedState();
+            }
+        }
+
+        async function startOAuth2() {
+            if (authState.isAuthenticating) return;
+            
+            authState.isAuthenticating = true;
+            updateAuthButton(true);
+            updateStep(2);
+            updateProgress(25);
+            
+            try {
+                showStatus('info', 'Initiating OAuth2 flow with Google...');
+                
+                const response = await fetch('/auth/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        provider_id: 'google',
+                        additional_params: null
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.authorization_url) {
+                    showStatus('success', 'Redirecting to Google for authorization...');
+                    updateProgress(50);
+                    updateStep(3);
+                    
+                    // Small delay for UX
+                    setTimeout(() => {
+                        window.location.href = result.authorization_url;
+                    }, 1000);
+                } else {
+                    throw new Error('No authorization URL received');
+                }
+            } catch (error) {
+                console.error('OAuth2 initiation failed:', error);
+                showStatus('error', `Authentication failed: ${error.message}`);
+                authState.isAuthenticating = false;
+                updateAuthButton(false);
+                resetSteps();
+                updateProgress(0);
+            }
+        }
+
+        function updateAuthButton(loading) {
+            const button = document.getElementById('authButton');
+            if (loading) {
+                button.classList.add('loading');
+                button.disabled = true;
+            } else {
+                button.classList.remove('loading');
+                button.disabled = false;
+            }
+        }
+
+        function updateStep(stepNumber) {
+            // Remove active class from all steps
+            document.querySelectorAll('.step').forEach(step => {
+                step.classList.remove('active', 'completed');
+            });
+            
+            // Mark previous steps as completed
+            for (let i = 1; i < stepNumber; i++) {
+                const step = document.getElementById(`step${i}`);
+                if (step) step.classList.add('completed');
+            }
+            
+            // Mark current step as active
+            const currentStep = document.getElementById(`step${stepNumber}`);
+            if (currentStep) currentStep.classList.add('active');
+            
+            authState.currentStep = stepNumber;
+        }
+
+        function resetSteps() {
+            document.querySelectorAll('.step').forEach(step => {
+                step.classList.remove('active', 'completed');
+            });
+            document.getElementById('step1').classList.add('active');
+            authState.currentStep = 1;
+        }
+
+        function updateProgress(percentage) {
+            const progressFill = document.getElementById('authProgress');
+            const progressText = document.getElementById('progressText');
+            
+            progressFill.style.width = `${percentage}%`;
+            
+            const messages = {
+                0: 'Ready to begin authentication',
+                25: 'Preparing OAuth2 request...',
+                50: 'Redirecting to Google...',
+                75: 'Processing authorization...',
+                100: 'Authentication complete!'
+            };
+            
+            progressText.textContent = messages[percentage] || `${percentage}% complete`;
+        }
+
+        function showStatus(type, message) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            statusDiv.style.display = 'flex';
+            
+            // Auto-hide success messages
+            if (type === 'success' || type === 'info') {
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        function showAuthenticatedState() {
+            // Update UI to show authenticated state
+            const authButton = document.getElementById('authButton');
+            authButton.innerHTML = `
+                <span class="button-text">✅ Authenticated - Explore API</span>
+            `;
+            authButton.className = 'button success';
+            authButton.onclick = () => window.location.href = '/api-docs';
+            
+            updateStep(4);
+            updateProgress(100);
+            showStatus('success', 'You are authenticated! Explore the API endpoints.');
+            
+            // Show API testing section
+            const apiSection = document.getElementById('apiTestingSection');
+            if (apiSection) {
+                apiSection.style.display = 'block';
+                apiSection.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        function showDemo() {
+            // Simulate demo mode
+            showStatus('info', 'Demo mode: Showing authentication flow simulation...');
+            
+            let step = 1;
+            const demoSteps = [
+                { step: 1, progress: 0, delay: 0 },
+                { step: 2, progress: 25, delay: 1000 },
+                { step: 3, progress: 50, delay: 2000 },
+                { step: 4, progress: 100, delay: 3500 }
+            ];
+            
+            demoSteps.forEach(({ step, progress, delay }) => {
+                setTimeout(() => {
+                    updateStep(step);
+                    updateProgress(progress);
+                    if (step === 4) {
+                        showStatus('success', 'Demo complete! Click "Sign in with Google" for real authentication.');
+                    }
+                }, delay);
+            });
+        }
+
+        // Enhanced error handling
+        window.addEventListener('error', function(e) {
+            console.error('JavaScript error:', e.error);
+            showStatus('error', 'An unexpected error occurred. Please refresh and try again.');
+        });
+
+        // Enhanced fetch with timeout
+        async function fetchWithTimeout(url, options, timeout = 10000) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
+            
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                return response;
+            } catch (error) {
+                clearTimeout(timeoutId);
+                if (error.name === 'AbortError') {
+                    throw new Error('Request timed out');
+                }
+                throw error;
+            }
+        }
+    </script>
+</body>
+</html>

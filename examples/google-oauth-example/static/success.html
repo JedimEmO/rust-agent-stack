@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OAuth2 Success - Google OAuth2 Example</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✅</text></svg>">
+    <style>
+        :root {
+            --primary-color: #4285f4;
+            --primary-hover: #3367d6;
+            --secondary-color: #34a853;
+            --secondary-hover: #2e9447;
+            --danger-color: #ea4335;
+            --warning-color: #fbbc04;
+            --surface-color: #ffffff;
+            --background-color: #f8f9fa;
+            --text-primary: #202124;
+            --text-secondary: #5f6368;
+            --text-muted: #9aa0a6;
+            --border-color: #dadce0;
+            --shadow-light: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+            --shadow-medium: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
+            --border-radius: 8px;
+            --border-radius-large: 12px;
+            --transition-normal: 0.3s ease;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: var(--text-primary);
+        }
+
+        .background-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="%23ffffff" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .success-card {
+            background: var(--surface-color);
+            padding: 60px 40px;
+            border-radius: var(--border-radius-large);
+            box-shadow: var(--shadow-medium);
+            text-align: center;
+            border: 1px solid var(--border-color);
+            margin-bottom: 30px;
+            animation: slideUp 0.8s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .success-icon {
+            font-size: 80px;
+            margin-bottom: 24px;
+            animation: bounce 1s ease;
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% {
+                transform: translateY(0);
+            }
+            40% {
+                transform: translateY(-10px);
+            }
+            60% {
+                transform: translateY(-5px);
+            }
+        }
+
+        .success-card h1 {
+            color: var(--text-primary);
+            margin: 0 0 16px 0;
+            font-size: 2.5em;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .success-card p {
+            color: var(--text-secondary);
+            margin: 0 0 30px 0;
+            font-size: 1.1em;
+        }
+
+        .token-section {
+            background: var(--background-color);
+            padding: 30px;
+            border-radius: var(--border-radius);
+            margin: 30px 0;
+            border: 2px dashed var(--border-color);
+        }
+
+        .token-section h3 {
+            margin: 0 0 20px 0;
+            color: var(--text-primary);
+            font-size: 1.3em;
+        }
+
+        .token-display {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: var(--border-radius);
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            font-size: 13px;
+            word-break: break-all;
+            max-height: 200px;
+            overflow-y: auto;
+            margin: 16px 0;
+            position: relative;
+            border: 1px solid #333;
+        }
+
+        .copy-button {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #d4d4d4;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: var(--transition-normal);
+        }
+
+        .copy-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .button {
+            background: var(--primary-color);
+            color: white;
+            padding: 16px 32px;
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: var(--transition-normal);
+            margin: 8px;
+        }
+
+        .button:hover {
+            background: var(--primary-hover);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-medium);
+        }
+
+        .button.secondary {
+            background: var(--surface-color);
+            color: var(--text-primary);
+            border: 2px solid var(--border-color);
+        }
+
+        .button.secondary:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .button.success {
+            background: var(--secondary-color);
+        }
+
+        .button.success:hover {
+            background: var(--secondary-hover);
+        }
+
+        .actions {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-top: 30px;
+        }
+
+        .info-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .info-card {
+            background: var(--surface-color);
+            padding: 30px;
+            border-radius: var(--border-radius-large);
+            box-shadow: var(--shadow-light);
+            border: 1px solid var(--border-color);
+            transition: var(--transition-normal);
+        }
+
+        .info-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-medium);
+        }
+
+        .info-card h3 {
+            color: var(--text-primary);
+            margin: 0 0 16px 0;
+            font-size: 1.2em;
+            font-weight: 600;
+        }
+
+        .info-card p {
+            color: var(--text-secondary);
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        .info-card::before {
+            content: '';
+            display: block;
+            width: 40px;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+            border-radius: 2px;
+            margin-bottom: 20px;
+        }
+
+        .token-info {
+            background: #e8f5e8;
+            border: 1px solid var(--secondary-color);
+            border-radius: var(--border-radius);
+            padding: 16px;
+            margin: 16px 0;
+            font-size: 14px;
+        }
+
+        .token-info strong {
+            color: var(--secondary-color);
+        }
+
+        .token-warnings {
+            background: #fff8e1;
+            border: 1px solid var(--warning-color);
+            border-radius: var(--border-radius);
+            padding: 16px;
+            margin: 16px 0;
+            font-size: 14px;
+        }
+
+        .token-warnings strong {
+            color: #ef6c00;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px 16px;
+            }
+            
+            .success-card {
+                padding: 40px 24px;
+            }
+            
+            .success-card h1 {
+                font-size: 2em;
+            }
+            
+            .actions {
+                flex-direction: column;
+            }
+            
+            .button {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        .progress-steps {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 30px 0;
+            padding: 20px;
+            background: var(--background-color);
+            border-radius: var(--border-radius);
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            color: var(--secondary-color);
+            font-weight: 500;
+        }
+
+        .step::after {
+            content: '→';
+            margin: 0 16px;
+            color: var(--text-muted);
+        }
+
+        .step:last-child::after {
+            display: none;
+        }
+
+        .step-number {
+            width: 24px;
+            height: 24px;
+            background: var(--secondary-color);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 8px;
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.6s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="background-overlay"></div>
+    <div class="container">
+        <div class="success-card">
+            <div class="success-icon">🎉</div>
+            <h1>Authentication Successful!</h1>
+            <p>You have successfully authenticated with Google OAuth2. Your JWT token is ready for use.</p>
+            
+            <div class="progress-steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <span>OAuth2 Flow</span>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <span>Google Authorization</span>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <span>JWT Token Generated</span>
+                </div>
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <span>Ready to Use API</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="token-section">
+            <h3>🔑 Your JWT Token</h3>
+            <div class="token-info">
+                <strong>✅ Success:</strong> Your JWT token has been generated and is ready to use for API requests.
+            </div>
+            
+            <div class="token-display" id="tokenDisplay">
+                <button class="copy-button" onclick="copyToken()">Copy Token</button>
+                <div id="tokenContent">Loading token...</div>
+            </div>
+            
+            <div class="token-warnings">
+                <strong>⚠️ Security Note:</strong> Keep this token secure and do not share it publicly. 
+                It provides access to your authenticated session and API endpoints.
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <button class="button success" onclick="storeAndRedirect()">
+                    💾 Save Token & Explore API
+                </button>
+                <button class="button secondary" onclick="testToken()">
+                    🧪 Test Token
+                </button>
+            </div>
+        </div>
+
+        <div class="info-cards animate-fade-in">
+            <div class="info-card">
+                <h3>🚀 Next Steps</h3>
+                <p>Use your JWT token to make authenticated requests to the JSON-RPC API. The token contains your user information and permissions for role-based access control.</p>
+            </div>
+            
+            <div class="info-card">
+                <h3>📚 API Documentation</h3>
+                <p>Explore the interactive API documentation to test endpoints directly in your browser. The documentation includes examples and permission requirements for each endpoint.</p>
+            </div>
+            
+            <div class="info-card">
+                <h3>🔐 Permission System</h3>
+                <p>Your permissions are automatically assigned based on your Google account attributes. Admin users from certain domains receive elevated permissions for advanced features.</p>
+            </div>
+        </div>
+
+        <div class="actions">
+            <a href="/api-docs" class="button">📖 Interactive API Docs</a>
+            <a href="/" class="button secondary">🏠 Back to Home</a>
+            <button class="button secondary" onclick="showTokenInfo()">ℹ️ Token Details</button>
+        </div>
+    </div>
+
+    <script>
+        let jwtToken = '';
+        let userInfo = null;
+
+        // Get token from URL parameter
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            jwtToken = urlParams.get('token') || '';
+            
+            if (jwtToken) {
+                displayToken();
+                parseTokenInfo();
+            } else {
+                document.getElementById('tokenContent').textContent = 'No token found in URL';
+            }
+        });
+
+        function displayToken() {
+            const tokenContent = document.getElementById('tokenContent');
+            tokenContent.textContent = jwtToken;
+        }
+
+        function parseTokenInfo() {
+            try {
+                const payload = JSON.parse(atob(jwtToken.split('.')[1]));
+                userInfo = payload;
+                console.log('JWT Payload:', payload);
+            } catch (error) {
+                console.error('Failed to parse JWT:', error);
+            }
+        }
+
+        function copyToken() {
+            navigator.clipboard.writeText(jwtToken).then(() => {
+                const button = document.querySelector('.copy-button');
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                button.style.background = 'rgba(52, 168, 83, 0.2)';
+                
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.background = 'rgba(255, 255, 255, 0.1)';
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy token:', err);
+                alert('Failed to copy token to clipboard');
+            });
+        }
+
+        function storeAndRedirect() {
+            if (jwtToken) {
+                localStorage.setItem('jwt_token', jwtToken);
+                window.location.href = '/api-docs';
+            }
+        }
+
+        async function testToken() {
+            if (!jwtToken) {
+                alert('No token available to test');
+                return;
+            }
+
+            const button = event.target;
+            const originalText = button.textContent;
+            button.textContent = '🔄 Testing...';
+            button.disabled = true;
+
+            try {
+                const response = await fetch('/api/rpc', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${jwtToken}`
+                    },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        method: 'get_user_info',
+                        params: {},
+                        id: 1
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (response.ok && !result.error) {
+                    button.textContent = '✅ Token Valid';
+                    button.style.background = 'var(--secondary-color)';
+                    console.log('Token test successful:', result);
+                } else {
+                    throw new Error(result.error?.message || 'Token test failed');
+                }
+            } catch (error) {
+                button.textContent = '❌ Token Invalid';
+                button.style.background = 'var(--danger-color)';
+                console.error('Token test failed:', error);
+                alert(`Token test failed: ${error.message}`);
+            }
+
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.style.background = '';
+                button.disabled = false;
+            }, 3000);
+        }
+
+        function showTokenInfo() {
+            if (!userInfo) {
+                alert('Token information not available');
+                return;
+            }
+
+            const info = `
+JWT Token Information:
+
+User ID: ${userInfo.sub || 'N/A'}
+Issuer: ${userInfo.iss || 'N/A'}
+Audience: ${userInfo.aud || 'N/A'}
+Issued At: ${userInfo.iat ? new Date(userInfo.iat * 1000).toLocaleString() : 'N/A'}
+Expires At: ${userInfo.exp ? new Date(userInfo.exp * 1000).toLocaleString() : 'N/A'}
+Permissions: ${userInfo.permissions ? userInfo.permissions.join(', ') : 'N/A'}
+            `.trim();
+
+            alert(info);
+        }
+
+        // Enhanced error handling
+        window.addEventListener('error', function(e) {
+            console.error('JavaScript error:', e.error);
+        });
+    </script>
+</body>
+</html>
