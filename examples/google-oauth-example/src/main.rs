@@ -378,9 +378,7 @@ async fn main() -> Result<()> {
 
     // For this example, let's run both on the same server by merging them manually
     // We'll create a new combined router
-    let combined_app = Router::new()
-        .merge(app)
-        .merge(api_router.nest("/api", Router::new()));
+    let combined_app = Router::new().merge(app).nest("/api", api_router);
 
     // Start the server
     let bind_addr = format!("{}:{}", config.server_host, config.server_port);
