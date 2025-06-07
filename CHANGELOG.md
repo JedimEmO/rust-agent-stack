@@ -17,6 +17,9 @@ All notable changes to this project will be documented in this file.
 - Design documentation and architecture patterns for identity management
 - Workspace configuration updates to include identity management crates
 
+### Fixed - 2025-01-07
+- Resolved unused variable warning in JSON-RPC macro usage example
+
 ### Added - 2025-01-07
 - Complete JSON-RPC library ecosystem with three core crates
   - rust-jsonrpc-types: Pure JSON-RPC 2.0 protocol types and utilities
