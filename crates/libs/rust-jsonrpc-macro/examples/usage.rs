@@ -46,7 +46,7 @@ jsonrpc_service!({
 async fn main() {
     println!("Building JSON-RPC service with the generated macro...");
 
-    let router = MyServiceBuilder::new("/api/v1")
+    let _router = MyServiceBuilder::new("/api/v1")
         .auth_provider(MyAuthProvider)
         .sign_in_handler(|request| async move {
             println!("Handling sign_in: {:?}", request);
