@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added - 2025-01-07
+- Identity management system with pluggable authentication providers
+  - rust-identity-core: Core traits for IdentityProvider and UserPermissions with default implementations
+  - rust-identity-local: Local username/password authentication with Argon2 password hashing
+  - rust-identity-oauth2: OAuth2 provider framework (stub implementation for future completion)
+  - rust-identity-session: JWT-based session management with configurable secrets and permission lookup
+- Two-stage authentication flow: identity verification followed by JWT session creation
+- Permission system with UserPermissions trait enabling flexible RBAC patterns
+- JwtAuthProvider implementing AuthProvider trait for seamless JSON-RPC integration
+- Comprehensive test suite covering authentication workflows and permission assignment
+- Design documentation and architecture patterns for identity management
+- Workspace configuration updates to include identity management crates
+
+### Added - 2025-01-07
 - Complete JSON-RPC library ecosystem with three core crates
   - rust-jsonrpc-types: Pure JSON-RPC 2.0 protocol types and utilities
   - rust-jsonrpc-core: Authentication and authorization framework with AuthProvider trait

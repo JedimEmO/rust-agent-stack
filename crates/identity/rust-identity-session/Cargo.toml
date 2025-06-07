@@ -1,0 +1,20 @@
+[package]
+name = "rust-identity-session"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rust-identity-core = { path = "../rust-identity-core" }
+rust-jsonrpc-core = { path = "../../libs/rust-jsonrpc-core" }
+
+async-trait = { workspace = true }
+chrono = { workspace = true }
+jsonwebtoken = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+rust-identity-local = { path = "../rust-identity-local" }

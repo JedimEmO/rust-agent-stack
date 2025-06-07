@@ -1,6 +1,15 @@
 [workspace]
 resolver = "3"
-members = ["crates/libs/rust-jsonrpc-macro", "crates/libs/rust-jsonrpc-core", "crates/libs/rust-jsonrpc-types", "examples/basic-service"]
+members = [
+    "crates/libs/rust-jsonrpc-macro", 
+    "crates/libs/rust-jsonrpc-core", 
+    "crates/libs/rust-jsonrpc-types",
+    "crates/identity/rust-identity-core",
+    "crates/identity/rust-identity-local",
+    "crates/identity/rust-identity-oauth2",
+    "crates/identity/rust-identity-session",
+    "examples/basic-service"
+]
 
 [workspace.dependencies]
 axum = "0.8"
@@ -14,3 +23,10 @@ syn = { version = "2.0", features = ["full"] }
 quote = "1.0"
 proc-macro2 = "1.0"
 bon = "3.2"
+async-trait = "0.1"
+jsonwebtoken = "9.3"
+chrono = { version = "0.4", features = ["serde"] }
+argon2 = { version = "0.5", features = ["std"] }
+rand_core = { version = "0.6", features = ["std"] }
+uuid = { version = "1.11", features = ["v4", "serde"] }
+tokio-test = "0.4"
