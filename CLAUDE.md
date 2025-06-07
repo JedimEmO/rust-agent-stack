@@ -129,3 +129,11 @@ The authentication system is designed with flexibility and security in mind:
 - Session tracking enables token revocation
 - Provider parameters use `JsonValue` to prevent type coupling and allow flexible configuration
 - Permissions are embedded in JWT claims for stateless authorization
+
+#### Authentication Attack Vector Protection
+- **Username Enumeration Prevention**: All authentication failures return identical `InvalidCredentials` errors regardless of whether the username exists or the password is wrong
+- **Timing Attack Resistance**: Constant-time authentication using real Argon2 dummy hash for non-existent users to ensure consistent response times
+- **Input Validation**: Robust handling of malformed payloads, empty credentials, and special characters
+- **Brute Force Protection**: Consistent error handling across repeated authentication attempts
+- **Thread Safety**: Concurrent authentication attempts are handled safely without information leakage
+- **Security Testing**: Comprehensive test suite covering username enumeration, timing attacks, password spraying, and other common attack vectors

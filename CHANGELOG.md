@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Security - 2025-01-07
+- Enhanced authentication security in rust-identity-local with comprehensive attack vector protection
+  - Fixed username enumeration vulnerability - consistent errors for non-existent users and wrong passwords
+  - Implemented timing attack resistance using constant-time authentication with real Argon2 dummy hash
+  - Added robust input validation for malformed payloads, empty credentials, and special characters
+  - Enhanced concurrent authentication safety and brute force protection
+  - Comprehensive security test suite covering 11 attack vectors including password spraying and timing analysis
+- Updated authentication architecture documentation with detailed security measures
+- Added security considerations and attack vector protection guidelines to development documentation
+
 ### Added - 2025-01-07
 - Identity management system with pluggable authentication providers
   - rust-identity-core: Core traits for IdentityProvider and UserPermissions with default implementations
