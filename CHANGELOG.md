@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed - 2025-01-07
+- Fixed JSON-RPC macro routing issue causing 404 errors when accessing service endpoints
+  - Macro now properly uses the base_url parameter instead of hardcoding "/" routes
+  - Services created with custom paths (e.g., "/rpc") now work correctly when nested in routers
+  - This resolves 404 errors in the Google OAuth2 example and other JSON-RPC services
+
+- Fixed Axum router nesting syntax in Google OAuth2 example
+  - Corrected router nesting from incorrect .merge() syntax to proper .nest() method
+  - API endpoints now correctly accessible at /api/rpc instead of returning 404 errors
+
+- Simplified Google OAuth2 example environment configuration template
+  - Streamlined .env.example with cleaner formatting and reduced verbosity
+  - Removed redundant comments and example credentials that could cause confusion
+  - Improved clarity of required vs optional configuration parameters
+
 - Fixed Google OAuth2 field compatibility issue preventing successful authentication callbacks
   - Added serde field alias to support both "sub" (OpenID Connect/v2/v3) and "id" (Google v1) user identifier fields
   - Updated Google OAuth example to use v3 userinfo endpoint for better feature support
@@ -46,7 +60,10 @@ All notable changes to this project will be documented in this file.
   - Comprehensive API endpoint documentation with permission requirements and functionality descriptions
   - Added oauth2 provider status update from stub to full production-ready implementation
   - Enhanced development commands with example application execution instructions
+  - Added Common Pitfalls section documenting Axum router nesting syntax issues
 - Updated sprint reflection documentation with Google OAuth2 full-stack implementation learnings and coordination insights
+  - Added reflection on OAuth2 example routing fix process and systematic debugging approach
+  - Documented lessons learned about testing end-to-end flows and examining generated code
 
 ### Security - 2025-01-07
 - Enhanced authentication security in rust-identity-local with comprehensive attack vector protection
