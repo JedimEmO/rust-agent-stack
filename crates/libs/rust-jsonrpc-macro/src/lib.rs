@@ -356,10 +356,11 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
 
             /// Build the axum router for the JSON-RPC service
             pub fn build(self) -> axum::Router {
+                let base_url = self.base_url.clone();
                 let service = std::sync::Arc::new(self);
 
                 axum::Router::new()
-                    .route("/", axum::routing::post(move |headers: axum::http::HeaderMap, body: String| {
+                    .route(&base_url, axum::routing::post(move |headers: axum::http::HeaderMap, body: String| {
                         let service = service.clone();
                         async move {
                             match service.handle_request(headers, body).await {
