@@ -1,5 +1,16 @@
 [workspace]
 resolver = "3"
-members = ["crates/libs/rust-jsonrpc-macro"]
+members = ["crates/libs/rust-jsonrpc-macro", "crates/libs/rust-jsonrpc-core", "crates/libs/rust-jsonrpc-types", "examples/basic-service"]
 
 [workspace.dependencies]
+axum = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+tracing = "0.1"
+thiserror = "2.0"
+anyhow = "1.0"
+syn = { version = "2.0", features = ["full"] }
+quote = "1.0"
+proc-macro2 = "1.0"
+bon = "3.2"

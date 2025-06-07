@@ -1,0 +1,9 @@
+[package]
+name = "rust-jsonrpc-types"
+version = "0.1.0"
+edition = "2024"
+description = "JSON-RPC 2.0 protocol types and utilities"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
