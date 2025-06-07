@@ -249,8 +249,8 @@ impl IdentityProvider for OAuth2Provider {
                     .map_err(|e| IdentityError::ProviderError(e.to_string()))?;
 
                 // Return the response as a provider error (client should handle this specially)
-                let response_json = serde_json::to_string(&response)
-                    .map_err(IdentityError::SerializationError)?;
+                let response_json =
+                    serde_json::to_string(&response).map_err(IdentityError::SerializationError)?;
 
                 Err(IdentityError::ProviderError(response_json))
             }

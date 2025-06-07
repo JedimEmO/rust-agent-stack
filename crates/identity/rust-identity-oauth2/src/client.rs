@@ -167,7 +167,8 @@ impl OAuth2Client {
         // Check for errors in callback
         if let Some(error) = &callback_response.error {
             let error_desc = callback_response
-                .error_description.as_deref()
+                .error_description
+                .as_deref()
                 .unwrap_or("No description");
             return Err(OAuth2Error::CallbackError(format!(
                 "{}: {}",

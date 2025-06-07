@@ -9,14 +9,12 @@ use tracing::info;
 pub struct GetUserInfoRequest {}
 
 /// Response containing user information
-#[derive(Debug, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct GetUserInfoResponse {
     pub user_id: String,
     pub permissions: Vec<String>,
     pub metadata: Option<serde_json::Value>,
 }
-
 
 /// Request to create a new document (admin only)
 #[derive(Debug, Serialize, Deserialize)]
@@ -27,13 +25,11 @@ pub struct CreateDocumentRequest {
 }
 
 /// Response for document creation
-#[derive(Debug, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct CreateDocumentResponse {
     pub document_id: String,
     pub created_at: String,
 }
-
 
 /// Request to list documents
 #[derive(Debug, Serialize, Deserialize)]
@@ -52,13 +48,11 @@ pub struct DocumentInfo {
 }
 
 /// Response for listing documents
-#[derive(Debug, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct ListDocumentsResponse {
     pub documents: Vec<DocumentInfo>,
     pub total: u32,
 }
-
 
 /// Request to delete a document (admin only)
 #[derive(Debug, Serialize, Deserialize)]
@@ -67,13 +61,11 @@ pub struct DeleteDocumentRequest {
 }
 
 /// Response for document deletion
-#[derive(Debug, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct DeleteDocumentResponse {
     pub success: bool,
     pub message: String,
 }
-
 
 /// Request to get system status (system admin only)
 #[derive(Debug, Serialize, Deserialize)]
@@ -120,12 +112,10 @@ pub struct BetaFeature {
 }
 
 /// Response for beta features
-#[derive(Debug, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct GetBetaFeaturesResponse {
     pub features: Vec<BetaFeature>,
 }
-
 
 // Define the JSON-RPC service using the macro
 jsonrpc_service!({
