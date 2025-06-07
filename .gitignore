@@ -2,3 +2,12 @@
 target
 dist
 node_modules
+
+# Environment files and secrets
+.env
+.env.local
+.env.production
+.env.staging
+secrets/
+**/secrets/
+**/.env

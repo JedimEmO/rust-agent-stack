@@ -21,6 +21,9 @@ cargo test -p rust-jsonrpc-macro
 cargo test -p rust-jsonrpc-core
 cargo test -p rust-jsonrpc-types
 
+# Run example applications
+cargo run -p google-oauth-example
+
 # Check code without building
 cargo check
 
@@ -57,8 +60,11 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
 #### Identity Management (`crates/identity/`)
 - **rust-identity-core**: Core identity provider traits and types. Defines the `IdentityProvider` trait for pluggable authentication mechanisms and `UserPermissions` trait for permission lookup.
 - **rust-identity-local**: Local user identity provider with username/password authentication using Argon2 password hashing.
-- **rust-identity-oauth2**: OAuth2 identity provider implementation (stub, requires completion for production use).
+- **rust-identity-oauth2**: OAuth2 identity provider implementation with Google OAuth2 support. Includes PKCE, state management, and comprehensive error handling.
 - **rust-identity-session**: Session management with JWT token generation and validation. Includes `SessionService` for JWT issuance with permission lookup and `JwtAuthProvider` that implements the `AuthProvider` trait.
+
+#### Examples (`examples/`)
+- **google-oauth-example**: Complete full-stack Google OAuth2 example showcasing the entire authentication stack. Includes Rust backend with JSON-RPC API, interactive HTML/JS frontend, and comprehensive permission system demonstration.
 
 ### Key Design Decisions
 1. **Procedural Macro Architecture**: Using proc-macros for JSON-RPC suggests focus on ergonomic, type-safe RPC interfaces with compile-time validation
@@ -137,3 +143,58 @@ The authentication system is designed with flexibility and security in mind:
 - **Brute Force Protection**: Consistent error handling across repeated authentication attempts
 - **Thread Safety**: Concurrent authentication attempts are handled safely without information leakage
 - **Security Testing**: Comprehensive test suite covering username enumeration, timing attacks, password spraying, and other common attack vectors
+
+## Examples and Usage
+
+### Google OAuth2 Example (`examples/google-oauth-example/`)
+
+A comprehensive full-stack example demonstrating the complete OAuth2 authentication flow with Google. This example showcases:
+
+#### **Features:**
+- **Complete OAuth2 Flow**: Authorization code + PKCE with Google OAuth2
+- **Modern Frontend**: Interactive HTML/JS interface with responsive design
+- **Permission-Based Access**: Sophisticated role assignment based on user attributes
+- **JSON-RPC Integration**: Type-safe API endpoints with compile-time validation
+- **Security Best Practices**: PKCE, state validation, JWT management
+
+#### **Quick Start:**
+```bash
+# 1. Set up Google OAuth2 credentials at https://console.cloud.google.com/
+# 2. Copy environment template
+cp examples/google-oauth-example/.env.example examples/google-oauth-example/.env
+
+# 3. Configure your Google OAuth2 credentials in .env file
+# GOOGLE_CLIENT_ID=your_client_id_here
+# GOOGLE_CLIENT_SECRET=your_client_secret_here
+
+# 4. Run the example
+cargo run -p google-oauth-example
+
+# 5. Open browser to http://localhost:3000
+```
+
+#### **Permission System Demo:**
+The example demonstrates a sophisticated permission model where user roles are automatically assigned based on email domains and user attributes:
+
+- **Basic Users**: Any authenticated user gets `user:read`, `profile:read`
+- **Verified Users**: Email-verified users get additional `email:verified` permission
+- **Trusted Domains**: Users from `@trusted-domain.com` get content creation/editing permissions
+- **Admin Users**: Users from `@example.com` get administrative permissions
+- **System Admins**: Special users get full system access including debug capabilities
+- **Beta Users**: Users with beta flags get access to preview features
+
+#### **API Endpoints:**
+The example includes several JSON-RPC endpoints that demonstrate permission-based access control:
+
+- `get_user_info`: Get current user information (authenticated users)
+- `list_documents`: List available documents (requires `user:read`)
+- `create_document`: Create new documents (requires `content:create`)
+- `delete_document`: Delete documents (requires `admin:write`)
+- `get_system_status`: System administration (requires `system:admin`)
+- `get_beta_features`: Beta feature access (requires `beta:access`)
+
+#### **Architecture Highlights:**
+- **Type-Safe JSON-RPC**: Uses `rust-jsonrpc-macro` for compile-time API validation
+- **Pluggable Authentication**: Demonstrates `OAuth2Provider` + `SessionService` integration
+- **JWT-Based Sessions**: Stateless authentication with embedded permissions
+- **Modern Frontend**: Vanilla HTML/JS with interactive API testing capabilities
