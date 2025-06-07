@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed - 2025-01-07
+- Fixed Google OAuth2 field compatibility issue preventing successful authentication callbacks
+  - Added serde field alias to support both "sub" (OpenID Connect/v2/v3) and "id" (Google v1) user identifier fields
+  - Updated Google OAuth example to use v3 userinfo endpoint for better feature support
+  - Maintains backward compatibility with existing OAuth2 provider configurations
+  - Added comprehensive tests for both field formats and additional claims handling
+
 ### Added - 2025-01-07
 - Complete OAuth2 provider implementation with Google OAuth2 support and comprehensive security features
   - OAuth2Client with PKCE (Proof Key for Code Exchange) support for enhanced security

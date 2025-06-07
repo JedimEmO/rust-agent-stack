@@ -54,3 +54,12 @@
 
 **What could have gone better:**
 - Could have planned frontend requirements earlier to ensure all necessary backend endpoints were included from start
+
+## Google OAuth2 Field Compatibility Fix (2025-01-07)
+
+**What went well:**
+- Quick diagnosis of Google API endpoint version differences (v1 uses `id`, v2/v3 use `sub`)
+- Elegant backward-compatible solution using serde field aliases without breaking changes
+
+**What could have gone better:**
+- Could have tested with different Google OAuth endpoint versions during initial implementation
