@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added - 2025-01-08
+- Comprehensive HTTP integration test suites for both JSON-RPC and REST macro crates
+  - Complete JSON-RPC integration tests covering all authentication patterns (UNAUTHORIZED, WITH_PERMISSIONS with various levels)
+  - Full REST API integration tests with CRUD operations, path parameters, and HTTP method validation
+  - Real HTTP server testing using random port binding with tokio TcpListener for concurrent test execution
+  - Authentication and authorization testing across all permission levels with JWT token validation
+  - Security testing including timing attack resistance and proper error handling scenarios
+  - Concurrent request testing validating thread safety and performance under load
+  - OpenRPC and OpenAPI document generation testing ensuring specification compliance
+  - Test infrastructure supporting both positive and negative scenarios with comprehensive error validation
+  - Fixed unused import warnings in rust-identity-local during test infrastructure development
+
+### Enhanced - 2025-01-08
+- Added comprehensive testing dependencies for HTTP integration testing across macro crates
+  - Added wiremock, reqwest, tower, hyper, rand, and futures to workspace dependencies for robust HTTP testing infrastructure
+  - Enhanced rust-jsonrpc-macro and rust-rest-macro with testing dependencies for real server integration tests
+  - Established foundation for comprehensive integration testing with random port binding and concurrent request handling
+  - Dependencies support both JSON-RPC and REST API testing patterns with authentication validation
+
 ### Refactored - 2025-01-08
 - Architectural refactoring to eliminate coupling between RPC and REST macro crates
   - Created new `rust-auth-core` crate as shared foundation for authentication types and traits
