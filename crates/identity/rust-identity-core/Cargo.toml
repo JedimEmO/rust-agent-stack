@@ -2,6 +2,10 @@
 name = "rust-identity-core"
 version = "0.1.1"
 edition = "2024"
+description = "Core traits and types for identity management and authentication"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/example/rust-agent-stack"
+homepage = "https://github.com/example/rust-agent-stack"
 
 [dependencies]
 async-trait = { workspace = true }

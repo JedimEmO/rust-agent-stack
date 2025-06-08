@@ -1,5 +1,5 @@
-[registries]
-kellnr = { index = "http://localhost:8000/crate-index/" }
+[registries.kellnr]
+index = "sparse+http://127.0.0.1:8000/api/v1/crates/"
 token = "rGHuge8eJbqswR2kaVqlQ9lKYx95MANf"
 
 [registry]
