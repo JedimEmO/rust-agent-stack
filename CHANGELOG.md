@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added - 2025-01-08
+- Kellnr registry configuration for local crate publishing
+  - Configured kellnr as default registry in `.cargo/config.toml`
+  - Registry URL set to `http://localhost:8000/api/v1/crates/`
+  - Created comprehensive release command at `.claude/commands/kellnr-release.md`
+  - Includes A-Z release process with dependency order management
+  - All internal dependencies already properly configured with path + version
+
+### Added - 2025-01-08
 - Complete OpenRPC 1.3.2 specification types crate (openrpc-types) with full type safety and validation
   - Comprehensive implementation of all OpenRPC specification types with serde serialization support
   - Ergonomic builder patterns using bon crate for fluent API construction

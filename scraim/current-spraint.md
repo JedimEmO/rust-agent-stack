@@ -26,3 +26,15 @@
 - Could have asked for specification location earlier rather than starting with web research
 - Should have tested compilation immediately after implementation rather than assuming it would work
 - Initial bon builder implementation needed string type fixes (expected String, received &str)
+
+## Kellnr Registry Setup (2025-01-08)
+
+### What Went Well
+- Successfully configured kellnr as default registry in `.cargo/config.toml`
+- All internal dependencies already had proper versioning (path + version)
+- Created comprehensive release command at `.claude/commands/kellnr-release.md` with detailed A-Z instructions
+- Command-based approach provides flexibility without requiring complex scripts
+
+### What Could Have Gone Better
+- Could have asked about authentication requirements upfront
+- Future improvements: automated version synchronization, CI/CD integration, registry health checks
