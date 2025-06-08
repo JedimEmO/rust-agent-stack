@@ -54,6 +54,7 @@ jsonrpc_service!({
         UNAUTHORIZED sign_in(SignInRequest) -> SignInResponse,
         WITH_PERMISSIONS([]) sign_out(()) -> (),
         WITH_PERMISSIONS(["admin"]) delete_everything(()) -> (),
+        WITH_PERMISSIONS(["admin", "user"] | ["super_admin"]) advanced_operation(()) -> (),
     ]
 });
 
@@ -69,7 +70,8 @@ async fn test_macro_generation() {
             })
         })
         .sign_out_handler(|_user, _request| async move { Ok(()) })
-        .delete_everything_handler(|_user, _request| async move { Ok(()) });
+        .delete_everything_handler(|_user, _request| async move { Ok(()) })
+        .advanced_operation_handler(|_user, _request| async move { Ok(()) });
 
     // Build the router
     let _router = builder.build();

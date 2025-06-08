@@ -130,9 +130,13 @@ pub fn generate_openapi_code(
             let method = endpoint.method.as_str();
             let path = &endpoint.path;
             let auth_required = matches!(endpoint.auth, AuthRequirement::WithPermissions(_));
+            // Flatten permission groups for OpenAPI documentation
             let permissions = match &endpoint.auth {
                 AuthRequirement::Unauthorized => vec![],
-                AuthRequirement::WithPermissions(perms) => perms.clone(),
+                AuthRequirement::WithPermissions(groups) => {
+                    // For OpenAPI docs, flatten all permission groups into a single list
+                    groups.iter().flatten().cloned().collect()
+                }
             };
 
             let request_type_name = if let Some(request_type) = &endpoint.request_type {
@@ -160,7 +164,7 @@ pub fn generate_openapi_code(
                     method: #method.to_string(),
                     path: #path.to_string(),
                     auth_required: #auth_required,
-                    permissions: vec![#(#permissions.to_string()),*] as Vec<String>,
+                    permissions: vec![#(#permissions.to_string()),*],
                     request_type_name: #request_type_name.to_string(),
                     response_type_name: stringify!(#response_type).to_string(),
                     path_params: vec![#(#path_param_infos),*] as Vec<(String, String)>,

@@ -44,7 +44,7 @@ struct MethodDefinition {
 #[derive(Debug)]
 enum AuthRequirement {
     Unauthorized,
-    WithPermissions(Vec<String>),
+    WithPermissions(Vec<Vec<String>>), // Vec of permission groups - OR between groups, AND within groups
 }
 
 impl Parse for ServiceDefinition {
@@ -122,24 +122,47 @@ impl Parse for MethodDefinition {
             match auth_ident.to_string().as_str() {
                 "UNAUTHORIZED" => AuthRequirement::Unauthorized,
                 "WITH_PERMISSIONS" => {
-                    // Parse ([...])
+                    // Parse ([...] | [...] | ...)
                     let perms_content;
                     syn::parenthesized!(perms_content in input);
 
-                    let perms_array_content;
-                    syn::bracketed!(perms_array_content in perms_content);
+                    let mut permission_groups = Vec::new();
 
-                    let mut permissions = Vec::new();
-                    while !perms_array_content.is_empty() {
-                        let perm = perms_array_content.parse::<LitStr>()?;
-                        permissions.push(perm.value());
+                    // Parse first permission group
+                    let first_group_content;
+                    syn::bracketed!(first_group_content in perms_content);
 
-                        if perms_array_content.peek(Token![,]) {
-                            let _ = perms_array_content.parse::<Token![,]>()?;
+                    let mut first_group = Vec::new();
+                    while !first_group_content.is_empty() {
+                        let perm = first_group_content.parse::<LitStr>()?;
+                        first_group.push(perm.value());
+
+                        if first_group_content.peek(Token![,]) {
+                            let _ = first_group_content.parse::<Token![,]>()?;
                         }
                     }
+                    permission_groups.push(first_group);
 
-                    AuthRequirement::WithPermissions(permissions)
+                    // Parse additional permission groups separated by |
+                    while perms_content.peek(Token![|]) {
+                        let _ = perms_content.parse::<Token![|]>()?;
+
+                        let group_content;
+                        syn::bracketed!(group_content in perms_content);
+
+                        let mut group = Vec::new();
+                        while !group_content.is_empty() {
+                            let perm = group_content.parse::<LitStr>()?;
+                            group.push(perm.value());
+
+                            if group_content.peek(Token![,]) {
+                                let _ = group_content.parse::<Token![,]>()?;
+                            }
+                        }
+                        permission_groups.push(group);
+                    }
+
+                    AuthRequirement::WithPermissions(permission_groups)
                 }
                 _ => {
                     return Err(syn::Error::new(
@@ -280,9 +303,9 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         let method_str = method_name.to_string();
         let field_name = quote::format_ident!("{}_handler", method_name);
         let request_type = &method.request_type;
-        let permissions = match &method.auth {
+        let permission_groups = match &method.auth {
             AuthRequirement::Unauthorized => Vec::new(),
-            AuthRequirement::WithPermissions(perms) => perms.clone(),
+            AuthRequirement::WithPermissions(groups) => groups.clone(),
         };
 
         match &method.auth {
@@ -316,6 +339,17 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
                 }
             }
             AuthRequirement::WithPermissions(_) => {
+                // Generate permission groups code for quote
+                let permission_groups_code = if permission_groups.is_empty() {
+                    quote! { Vec::<Vec<String>>::new() }
+                } else {
+                    let groups = permission_groups.iter().map(|group| {
+                        let perms = group.iter();
+                        quote! { vec![#(#perms.to_string()),*] }
+                    });
+                    quote! { vec![#(#groups),*] as Vec<Vec<String>> }
+                };
+
                 quote! {
                     #method_str => {
                         if let Some(handler) = &self.#field_name {
@@ -334,19 +368,44 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
                                 .await
                                 .map_err(|e| rust_jsonrpc_types::JsonRpcError::authentication_required())?;
 
-                            // Check permissions
-                            let required_permissions = vec![#(#permissions.to_string()),*];
-                            if !required_permissions.is_empty() {
-                                self.auth_provider
-                                    .as_ref()
-                                    .unwrap()
-                                    .check_permissions(&user, &required_permissions)
-                                    .map_err(|e| match e {
-                                        rust_jsonrpc_core::AuthError::InsufficientPermissions { required, has } => {
-                                            rust_jsonrpc_types::JsonRpcError::insufficient_permissions(required, has)
+                            // Check permissions - AND within groups, OR between groups
+                            let required_permission_groups: Vec<Vec<String>> = #permission_groups_code;
+                            // Only check permissions if we have non-empty groups
+                            let has_non_empty_groups = required_permission_groups.iter().any(|g| !g.is_empty());
+                            if has_non_empty_groups {
+                                let mut has_permission = false;
+
+                                // Check each permission group (OR logic between groups)
+                                for permission_group in &required_permission_groups {
+                                    // Check if user has ALL permissions in this group (AND logic within group)
+                                    if permission_group.is_empty() {
+                                        // Empty group means any authenticated user can access
+                                        has_permission = true;
+                                        break;
+                                    } else {
+                                        // Check if user has all permissions in this group
+                                        let group_result = self.auth_provider
+                                            .as_ref()
+                                            .unwrap()
+                                            .check_permissions(&user, permission_group);
+                                        if group_result.is_ok() {
+                                            has_permission = true;
+                                            break;
                                         }
-                                        _ => rust_jsonrpc_types::JsonRpcError::authentication_required(),
-                                    })?;
+                                    }
+                                }
+
+                                if !has_permission {
+                                    // Find the first non-empty group for error reporting
+                                    let first_group = required_permission_groups.iter()
+                                        .find(|g| !g.is_empty())
+                                        .cloned()
+                                        .unwrap_or_default();
+                                    return Err(rust_jsonrpc_types::JsonRpcError::insufficient_permissions(
+                                        first_group,
+                                        user.permissions.iter().cloned().collect()
+                                    ));
+                                }
                             }
 
                             // Parse parameters

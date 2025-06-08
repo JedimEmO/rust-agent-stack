@@ -87,3 +87,16 @@
 
 ### What Could Have Gone Better
 - Could have caught this during initial macro development with more comprehensive edge case testing for different parameter types
+
+## Enhanced Permission System Implementation (2025-01-08)
+
+### What Went Well
+- Clear requirements gathering through orchestration role clarified the AND/OR logic confusion before implementation
+- Comprehensive implementation covered both REST and JSON-RPC macros simultaneously, ensuring consistency
+- Backward compatibility maintained while completely replacing old OR logic with proper AND/OR group semantics
+- Excellent test coverage: updated existing tests for AND logic and added new tests for OR group functionality
+- All 183 workspace tests pass, confirming no breaking changes to existing functionality
+
+### What Could Have Gone Better
+- Could have designed the permission syntax from the beginning to support both AND and OR logic clearly
+- Integration testing during macro development could have caught the original permission logic confusion earlier

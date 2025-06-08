@@ -118,9 +118,13 @@ pub fn generate_openrpc_code(
         .map(|method| {
             let method_name = method.name.to_string();
             let auth_required = matches!(method.auth, AuthRequirement::WithPermissions(_));
+            // Flatten permission groups for OpenRPC documentation
             let permissions = match &method.auth {
                 AuthRequirement::Unauthorized => vec![],
-                AuthRequirement::WithPermissions(perms) => perms.clone(),
+                AuthRequirement::WithPermissions(groups) => {
+                    // For OpenRPC docs, flatten all permission groups into a single list
+                    groups.iter().flatten().cloned().collect()
+                }
             };
 
             let request_type = &method.request_type;

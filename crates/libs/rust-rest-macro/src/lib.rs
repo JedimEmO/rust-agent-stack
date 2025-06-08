@@ -135,7 +135,7 @@ struct PathParam {
 #[derive(Debug)]
 enum AuthRequirement {
     Unauthorized,
-    WithPermissions(Vec<String>),
+    WithPermissions(Vec<Vec<String>>), // Vec of permission groups - OR between groups, AND within groups
 }
 
 impl Parse for ServiceDefinition {
@@ -267,24 +267,47 @@ impl Parse for EndpointDefinition {
             match auth_ident.to_string().as_str() {
                 "UNAUTHORIZED" => AuthRequirement::Unauthorized,
                 "WITH_PERMISSIONS" => {
-                    // Parse ([...])
+                    // Parse ([...] | [...] | ...)
                     let perms_content;
                     syn::parenthesized!(perms_content in input);
 
-                    let perms_array_content;
-                    syn::bracketed!(perms_array_content in perms_content);
+                    let mut permission_groups = Vec::new();
 
-                    let mut permissions = Vec::new();
-                    while !perms_array_content.is_empty() {
-                        let perm = perms_array_content.parse::<LitStr>()?;
-                        permissions.push(perm.value());
+                    // Parse first permission group
+                    let first_group_content;
+                    syn::bracketed!(first_group_content in perms_content);
 
-                        if perms_array_content.peek(Token![,]) {
-                            let _ = perms_array_content.parse::<Token![,]>()?;
+                    let mut first_group = Vec::new();
+                    while !first_group_content.is_empty() {
+                        let perm = first_group_content.parse::<LitStr>()?;
+                        first_group.push(perm.value());
+
+                        if first_group_content.peek(Token![,]) {
+                            let _ = first_group_content.parse::<Token![,]>()?;
                         }
                     }
+                    permission_groups.push(first_group);
 
-                    AuthRequirement::WithPermissions(permissions)
+                    // Parse additional permission groups separated by |
+                    while perms_content.peek(Token![|]) {
+                        let _ = perms_content.parse::<Token![|]>()?;
+
+                        let group_content;
+                        syn::bracketed!(group_content in perms_content);
+
+                        let mut group = Vec::new();
+                        while !group_content.is_empty() {
+                            let perm = group_content.parse::<LitStr>()?;
+                            group.push(perm.value());
+
+                            if group_content.peek(Token![,]) {
+                                let _ = group_content.parse::<Token![,]>()?;
+                            }
+                        }
+                        permission_groups.push(group);
+                    }
+
+                    AuthRequirement::WithPermissions(permission_groups)
                 }
                 _ => {
                     return Err(syn::Error::new(
@@ -516,26 +539,37 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         let method_routing = endpoint.method.as_axum_method();
         let path = &endpoint.path;
         let field_name = quote::format_ident!("{}_handler", endpoint.handler_name);
-        let permissions = match &endpoint.auth {
+        let permission_groups = match &endpoint.auth {
             AuthRequirement::Unauthorized => Vec::new(),
-            AuthRequirement::WithPermissions(perms) => perms.clone(),
+            AuthRequirement::WithPermissions(groups) => groups.clone(),
         };
 
         // Generate the axum handler based on endpoint configuration
         let axum_handler = generate_axum_handler(endpoint);
         let handler_body = generate_handler_body(endpoint);
 
+        // Generate permission groups code for quote
+        let permission_groups_code = if permission_groups.is_empty() {
+            quote! { Vec::<Vec<String>>::new() }
+        } else {
+            let groups = permission_groups.iter().map(|group| {
+                let perms = group.iter();
+                quote! { vec![#(#perms.to_string()),*] }
+            });
+            quote! { vec![#(#groups),*] as Vec<Vec<String>> }
+        };
+
         quote! {
             if let Some(handler) = &self.#field_name {
                 let handler = handler.clone();
                 let auth_provider = self.auth_provider.clone();
-                let required_permissions: Vec<String> = vec![#(#permissions.to_string()),*];
+                let required_permission_groups: Vec<Vec<String>> = #permission_groups_code;
 
                 router = router.route(#path, #method_routing({
                     move |#axum_handler| {
                         let handler = handler.clone();
                         let auth_provider = auth_provider.clone();
-                        let required_permissions: Vec<String> = required_permissions.clone();
+                        let required_permission_groups: Vec<Vec<String>> = required_permission_groups.clone();
 
                         async move {
                             #handler_body
@@ -775,10 +809,30 @@ fn generate_handler_body(endpoint: &EndpointDefinition) -> proc_macro2::TokenStr
                     },
                 };
 
-                // Check permissions - REST uses OR logic (user needs ANY of the required permissions)
-                if !required_permissions.is_empty() {
-                    let has_permission = auth_provider.as_ref().unwrap().check_permissions(&user, &required_permissions);
-                    if has_permission.is_err() {
+                // Check permissions - AND within groups, OR between groups
+                // Only check permissions if we have non-empty groups
+                let has_non_empty_groups = required_permission_groups.iter().any(|g| !g.is_empty());
+                if has_non_empty_groups {
+                    let mut has_permission = false;
+
+                    // Check each permission group (OR logic between groups)
+                    for permission_group in &required_permission_groups {
+                        // Check if user has ALL permissions in this group (AND logic within group)
+                        if permission_group.is_empty() {
+                            // Empty group means any authenticated user can access
+                            has_permission = true;
+                            break;
+                        } else {
+                            // Check if user has all permissions in this group
+                            let group_result = auth_provider.as_ref().unwrap().check_permissions(&user, permission_group);
+                            if group_result.is_ok() {
+                                has_permission = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if !has_permission {
                         use axum::response::IntoResponse;
                         return (
                             axum::http::StatusCode::FORBIDDEN,

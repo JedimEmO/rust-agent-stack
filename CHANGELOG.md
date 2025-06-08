@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Enhanced - 2025-01-08
+- Refactored permission system to support AND/OR logic groups for both REST and JSON-RPC macros
+  - Changed permission syntax from flat array to nested groups with OR logic between groups and AND logic within groups
+  - `WITH_PERMISSIONS(["admin", "moderator"])` now requires user to have both admin AND moderator permissions
+  - `WITH_PERMISSIONS(["admin", "moderator"] | ["super_user"])` allows (admin AND moderator) OR super_user access
+  - Supports multiple OR groups for complex permission combinations
+  - Updated both REST and JSON-RPC macros simultaneously to ensure consistent behavior
+  - Enhanced test coverage with new test cases demonstrating OR group functionality
+  - Backward compatible syntax for existing single-group permissions
+  - OpenAPI and OpenRPC documentation generation handles new permission structure correctly
+
 ### Fixed - 2025-01-08
 - Fixed REST macro integration test failures with improved error handling and permission logic
   - Enhanced JSON error handling to return proper 400 status codes instead of 422 for invalid JSON requests

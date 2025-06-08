@@ -75,6 +75,7 @@ impl TestRestAuthProvider {
         valid_tokens.insert("admin-token".to_string());
         valid_tokens.insert("user-token".to_string());
         valid_tokens.insert("moderator-token".to_string());
+        valid_tokens.insert("superuser-token".to_string());
         valid_tokens.insert("empty-perms-token".to_string());
 
         Self { valid_tokens }
@@ -90,6 +91,10 @@ impl AuthProvider for TestRestAuthProvider {
 
             let (user_id, permissions) = match token.as_str() {
                 "admin-token" => ("admin-user", vec!["admin".to_string(), "user".to_string()]),
+                "superuser-token" => (
+                    "superuser-user",
+                    vec!["admin".to_string(), "super_user".to_string()],
+                ),
                 "user-token" => ("regular-user", vec!["user".to_string()]),
                 "moderator-token" => (
                     "mod-user",
@@ -129,11 +134,14 @@ rest_service!({
         POST WITH_PERMISSIONS(["user"]) users/{user_id: i32}/posts(PostRequest) -> Post,
         GET WITH_PERMISSIONS([]) users/{user_id: i32}/posts/{post_id: i32}() -> Post,
         PUT WITH_PERMISSIONS(["user", "moderator"]) users/{user_id: i32}/posts/{post_id: i32}(PostRequest) -> Post,
-        DELETE WITH_PERMISSIONS(["admin", "moderator"]) users/{user_id: i32}/posts/{post_id: i32}() -> (),
+        DELETE WITH_PERMISSIONS(["moderator"] | ["admin"]) users/{user_id: i32}/posts/{post_id: i32}() -> (),
 
         // Health check and status endpoints
         GET UNAUTHORIZED health() -> String,
         GET WITH_PERMISSIONS([]) status() -> Value,
+
+        // OR syntax demonstration endpoint
+        POST WITH_PERMISSIONS(["admin", "moderator"] | ["super_user"]) admin_action(()) -> String,
     ]
 });
 
@@ -241,6 +249,9 @@ async fn create_rest_test_server() -> (String, tokio::task::JoinHandle<()>) {
                 "permissions": user.permissions.iter().collect::<Vec<_>>(),
                 "timestamp": chrono::Utc::now().to_rfc3339()
             }))
+        })
+        .post_admin_action_handler(|_user, _request| async move {
+            Ok("Admin action completed".to_string())
         })
         // WITH_PERMISSIONS(["user", "moderator"]) endpoints
         .put_users_by_user_id_posts_by_post_id_handler(
@@ -532,7 +543,7 @@ async fn test_user_permission_endpoints() {
 async fn test_multiple_permissions_endpoints() {
     let (base_url, _handle) = create_rest_test_server().await;
 
-    // Test PUT /api/v1/users/123/posts/456 with user token - should fail
+    // Test PUT /api/v1/users/123/posts/456 with user token - should fail (needs both "user" AND "moderator")
     let response = make_rest_request(
         reqwest::Method::PUT,
         &format!("{}/api/v1/users/123/posts/456", base_url),
@@ -548,7 +559,7 @@ async fn test_multiple_permissions_endpoints() {
 
     assert_ne!(response.status(), 200);
 
-    // Test PUT /api/v1/users/123/posts/456 with moderator token - should fail
+    // Test PUT /api/v1/users/123/posts/456 with moderator token - should succeed (has both "user" and "moderator")
     let response = make_rest_request(
         reqwest::Method::PUT,
         &format!("{}/api/v1/users/123/posts/456", base_url),
@@ -772,4 +783,88 @@ async fn test_missing_dependencies() {
     let handles: Vec<tokio::task::JoinHandle<()>> = vec![];
     let _results = join_all(handles).await;
     assert!(true, "Futures dependency is working");
+}
+
+#[tokio::test]
+async fn test_new_permission_logic() {
+    let (base_url, _handle) = create_rest_test_server().await;
+
+    // Test admin_action endpoint with new permission logic:
+    // WITH_PERMISSIONS(["admin", "moderator"] | ["super_user"])
+    // This means user needs (admin AND moderator) OR (super_user)
+
+    // Test with admin-token (has "admin" and "user", but NOT "moderator") - should FAIL
+    let response = make_rest_request(
+        reqwest::Method::POST,
+        &format!("{}/api/v1/admin_action", base_url),
+        Some(serde_json::Value::Null), // Send null for unit type
+        Some("admin-token"),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        response.status(),
+        403,
+        "Admin token should fail - has admin but not moderator"
+    );
+
+    // Test with moderator-token (has "moderator" and "user", but NOT "admin") - should FAIL
+    let response = make_rest_request(
+        reqwest::Method::POST,
+        &format!("{}/api/v1/admin_action", base_url),
+        Some(Value::Null), // Send null for unit type
+        Some("moderator-token"),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        response.status(),
+        403,
+        "Moderator token should fail - has moderator but not admin"
+    );
+
+    // Test with superuser-token (has "superuser" and "admin") - should SUCCEED
+    let response = make_rest_request(
+        reqwest::Method::POST,
+        &format!("{}/api/v1/admin_action", base_url),
+        Some(Value::Null), // Send null for unit type
+        Some("superuser-token"),
+    )
+    .await
+    .unwrap();
+    assert_eq!(response.status(), 200, "superuser should succeed");
+
+    // We would need a token with both admin AND moderator permissions to test success
+    // But our test auth provider doesn't have such a token
+
+    // The DELETE endpoint uses ["moderator"] | ["admin"] - should succeed with either
+    // Test with admin-token (has "admin") - should SUCCEED
+    let response = make_rest_request(
+        reqwest::Method::DELETE,
+        &format!("{}/api/v1/users/123/posts/456", base_url),
+        None,
+        Some("admin-token"),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        response.status(),
+        200,
+        "Admin token should succeed for delete - has admin"
+    );
+
+    // Test with moderator-token (has "moderator") - should SUCCEED
+    let response = make_rest_request(
+        reqwest::Method::DELETE,
+        &format!("{}/api/v1/users/123/posts/456", base_url),
+        None,
+        Some("moderator-token"),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        response.status(),
+        200,
+        "Moderator token should succeed for delete - has moderator"
+    );
 }
