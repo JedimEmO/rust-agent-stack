@@ -40,3 +40,10 @@ tracing-subscriber = "0.3"
 tower-http = "0.6"
 mime_guess = "2.0"
 rust-embed = "8.0"
+# Testing dependencies
+wiremock = "0.6"
+reqwest = { version = "0.12", features = ["json"] }
+tower = { version = "0.5", features = ["util"] }
+hyper = { version = "1.0", features = ["full"] }
+rand = "0.8"
+futures = "0.3"

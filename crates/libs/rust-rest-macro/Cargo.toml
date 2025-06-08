@@ -21,3 +21,13 @@ rust-auth-core = { path = "../rust-auth-core" }
 
 [dev-dependencies]
 tokio = { workspace = true }
+wiremock = { workspace = true }
+reqwest = { workspace = true }
+tower = { workspace = true }
+hyper = { workspace = true }
+rand = { workspace = true }
+rust-identity-session = { path = "../../identity/rust-identity-session" }
+rust-jsonrpc-core = { path = "../rust-jsonrpc-core" }
+futures = { workspace = true }
+chrono = { workspace = true }
+serde_json = { workspace = true }

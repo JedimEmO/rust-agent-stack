@@ -24,3 +24,8 @@ schemars = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
+reqwest = { workspace = true }
+tower = { workspace = true }
+rand = { workspace = true }
+rust-identity-session = { path = "../../identity/rust-identity-session" }
+futures = { workspace = true }
