@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed - 2025-01-08
+- Fixed REST macro integration test failures with improved error handling and permission logic
+  - Enhanced JSON error handling to return proper 400 status codes instead of 422 for invalid JSON requests
+  - Fixed permission checking logic to use OR semantics (user needs ANY of the required permissions) instead of AND semantics
+  - Improved macro-generated code to handle JSON parsing errors gracefully with appropriate HTTP status codes
+  - Resolved test failures in `test_multiple_permissions_endpoints` and `test_invalid_requests`
+  - Permission system now properly allows users with any of the listed permissions to access endpoints
+
+### Fixed - 2025-01-08
+- Fixed REST service example endpoint syntax for empty parameter methods
+  - Corrected auth/logout and auth/me endpoint definitions to use proper empty parameter syntax
+  - Updated handler signatures to match macro-generated function signatures for parameterless endpoints
+  - Improved consistency with REST macro patterns for endpoints that don't require request bodies
+
+### Fixed - 2025-01-08
 - Fixed JSON-RPC macro parameter handling for unit type `()` parameters
   - Enhanced macro-generated code to properly handle methods with unit type parameters when no params are provided
   - Fixed parameter parsing to deserialize `None` parameters as `serde_json::Value::Null` for unit types instead of rejecting as invalid
