@@ -1219,6 +1219,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 
 [[package]]
+name = "openrpc-types"
+version = "0.1.0"
+dependencies = [
+ "bon",
+ "schemars",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio-test",
+]
+
+[[package]]
 name = "openssl"
 version = "0.10.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"

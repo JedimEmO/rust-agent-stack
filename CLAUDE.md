@@ -12,6 +12,7 @@ cargo build
 cargo build -p rust-jsonrpc-macro
 cargo build -p rust-jsonrpc-core
 cargo build -p rust-jsonrpc-types
+cargo build -p openrpc-types
 
 # Run tests
 cargo test
@@ -20,6 +21,7 @@ cargo test
 cargo test -p rust-jsonrpc-macro
 cargo test -p rust-jsonrpc-core
 cargo test -p rust-jsonrpc-types
+cargo test -p openrpc-types
 
 # Run example applications
 cargo run -p google-oauth-example
@@ -56,6 +58,7 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
 - **rust-jsonrpc-macro**: Procedural macro for type-safe JSON-RPC interfaces with auth integration and optional OpenRPC document generation
 - **rust-jsonrpc-core**: Core `AuthProvider` trait and auth types for JSON-RPC services  
 - **rust-jsonrpc-types**: Pure JSON-RPC 2.0 protocol types and utilities
+- **openrpc-types**: Complete OpenRPC 1.3.2 specification types with validation, builders, and JSON Schema Draft 7 support
 
 #### Identity Management (`crates/identity/`)
 - **rust-identity-core**: Core `IdentityProvider` and `UserPermissions` traits

@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added - 2025-01-08
+- Complete OpenRPC 1.3.2 specification types crate (openrpc-types) with full type safety and validation
+  - Comprehensive implementation of all OpenRPC specification types with serde serialization support
+  - Ergonomic builder patterns using bon crate for fluent API construction
+  - Extensive validation system for OpenRPC documents, method names, error codes, and component references
+  - JSON Schema Draft 7 support with schemars integration for automatic schema generation
+  - 142 comprehensive unit tests covering all types, builders, validation rules, and serialization scenarios
+  - Complete documentation with working examples and doctest validation
+  - Full workspace integration following established dependency patterns
+
+### Added - 2025-01-08
 - OpenRPC document generation support for jsonrpc_service macro
   - Added optional `openrpc` field to macro invocation for per-service control
   - Supports both default path (`target/openrpc/{service_name}.json`) and custom output paths

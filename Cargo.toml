@@ -4,6 +4,7 @@ members = [
     "crates/libs/rust-jsonrpc-macro", 
     "crates/libs/rust-jsonrpc-core", 
     "crates/libs/rust-jsonrpc-types",
+    "crates/libs/openrpc-types",
     "crates/identity/rust-identity-core",
     "crates/identity/rust-identity-local",
     "crates/identity/rust-identity-oauth2",
