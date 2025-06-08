@@ -1,1 +1,0 @@
-This is a placeholder file for static assets in the rest-service-example.

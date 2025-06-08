@@ -52,12 +52,6 @@ pub fn generate_static_hosting_code(
         quote::format_ident!("{}_docs_handler", service_name.to_string().to_lowercase());
 
     quote! {
-        // Embedded static assets
-        #[derive(::rust_embed::RustEmbed)]
-        #[folder = "static/"]
-        #[prefix = "static/"]
-        struct #assets_struct_name;
-
         // Handler for serving the documentation index
         async fn #docs_handler_name() -> ::axum::response::Html<String> {
             let openapi_spec = #openapi_fn_name();
@@ -67,35 +61,7 @@ pub fn generate_static_hosting_code(
             let html_content = generate_docs_html(&spec_json, #ui_theme, #base_path, #docs_path);
             ::axum::response::Html(html_content)
         }
-
-        // Static asset handler
-        async fn static_asset_handler(
-            ::axum::extract::Path(path): ::axum::extract::Path<String>
-        ) -> impl ::axum::response::IntoResponse {
-            let file_path = format!("static/{}", path);
-
-            match #assets_struct_name::get(&file_path) {
-                Some(content) => {
-                    use ::axum::response::IntoResponse;
-                    let content_type = ::mime_guess::from_path(&path)
-                        .first_or_octet_stream()
-                        .to_string();
-
-                    (
-                        [(::axum::http::header::CONTENT_TYPE, content_type)],
-                        content.data,
-                    ).into_response()
-                }
-                None => {
-                    use ::axum::response::IntoResponse;
-                    (
-                        ::axum::http::StatusCode::NOT_FOUND,
-                        "File not found"
-                    ).into_response()
-                }
-            }
-        }
-
+        
         // Generate HTML content for the API explorer page
         fn generate_docs_html(openapi_spec: &str, theme: &str, base_path: &str, docs_path: &str) -> String {
             format!(
@@ -1220,10 +1186,6 @@ pub fn generate_static_routes(
         // Register static hosting routes
         router = router
             .route(#docs_path, ::axum::routing::get(#docs_handler_name))
-            .route(&format!("{}/openapi.json", #docs_path), ::axum::routing::get(openapi_json_handler))
-            .nest(&format!("{}/static", #docs_path),
-                ::axum::Router::new()
-                    .route("/{*path}", ::axum::routing::get(static_asset_handler))
-            );
+            .route(&format!("{}/openapi.json", #docs_path), ::axum::routing::get(openapi_json_handler));
     }
 }
