@@ -75,3 +75,15 @@
 ### What Could Have Gone Better  
 - Could have implemented simpler smoke tests first before building comprehensive test suites
 - Some test failures indicate underlying implementation issues in macro-generated code that need investigation
+
+## JSON-RPC Macro Test Failure Fix (2025-01-08)
+
+### What Went Well
+- Delegation approach worked perfectly: Coder quickly identified the root cause in parameter parsing logic
+- Systematic debugging approach: ran tests → examined failures → investigated macro implementation → applied targeted fix
+- Issue was in macro-generated code handling of unit type `()` parameters - rejecting valid requests with missing/null params
+- Fix was minimal and backward compatible: enhanced parameter parsing to deserialize `None` as `serde_json::Value::Null` for unit types
+- All 4 failing tests now pass: `test_unauthorized_methods`, `test_authentication_required_methods`, `test_admin_permission_methods`, `test_concurrent_requests`
+
+### What Could Have Gone Better
+- Could have caught this during initial macro development with more comprehensive edge case testing for different parameter types
