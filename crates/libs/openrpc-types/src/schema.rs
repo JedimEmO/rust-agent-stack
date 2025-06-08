@@ -16,9 +16,12 @@ use std::collections::HashMap;
 /// JSON Schema Specification Draft 7. Alternatively, any time a Schema Object
 /// can be used, a Reference Object can be used in its place.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Builder)]
-#[serde(deny_unknown_fields)]
 pub struct Schema {
     // Core JSON Schema Draft 7 fields
+    /// JSON Schema version
+    #[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
+    pub schema: Option<String>,
+
     /// Schema identifier
     #[serde(rename = "$id", skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -427,6 +430,7 @@ impl Schema {
 impl Default for Schema {
     fn default() -> Self {
         Self {
+            schema: None,
             id: None,
             reference: None,
             comment: None,

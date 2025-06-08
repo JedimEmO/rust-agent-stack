@@ -13,7 +13,6 @@ use serde::{Deserialize, Serialize};
 /// The method name is used as the method field of the JSON-RPC body.
 /// It therefore MUST be unique.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Builder)]
-#[serde(deny_unknown_fields)]
 pub struct Method {
     /// The canonical name for the method.
     /// The name MUST be unique within the methods array.
