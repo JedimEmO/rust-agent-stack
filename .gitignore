@@ -11,3 +11,8 @@ node_modules
 secrets/
 **/secrets/
 **/.env
+
+# Generated test output and OpenRPC documents
+**/custom/
+**/*.json
+!package*.json
