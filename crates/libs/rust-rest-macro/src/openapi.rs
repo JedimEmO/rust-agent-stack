@@ -78,12 +78,16 @@ pub fn generate_openapi_code(
                 quote! {
                     fn #fn_name() -> serde_json::Value {
                         let schema = schemars::schema_for!(#type_tokens);
-                        serde_json::to_value(&schema).unwrap_or_else(|_| {
+                        let mut schema_value = serde_json::to_value(&schema).unwrap_or_else(|_| {
                             serde_json::json!({
                                 "type": "object",
                                 "description": format!("Schema for {}", #type_name)
                             })
-                        })
+                        });
+
+                        // Post-process schema to make it more Swagger UI friendly
+                        normalize_nullable_properties(&mut schema_value);
+                        schema_value
                     }
                 }
             }
@@ -175,6 +179,61 @@ pub fn generate_openapi_code(
             request_type_name: String,
             response_type_name: String,
             path_params: Vec<(String, String)>, // (name, type)
+        }
+
+        // Helper function to normalize nullable properties for better Swagger UI compatibility
+        fn normalize_nullable_properties(value: &mut serde_json::Value) {
+            match value {
+                serde_json::Value::Object(obj) => {
+                    // Process properties object if it exists
+                    if let Some(properties) = obj.get_mut("properties") {
+                        if let serde_json::Value::Object(props) = properties {
+                            for (_, prop_value) in props.iter_mut() {
+                                if let serde_json::Value::Object(prop_obj) = prop_value {
+                                    // Check if this property has type: ["string", "null"] pattern
+                                    if let Some(type_val) = prop_obj.get("type") {
+                                        if let serde_json::Value::Array(type_array) = type_val {
+                                            if type_array.len() == 2 {
+                                                let null_value = serde_json::Value::String("null".to_string());
+                                                if type_array.contains(&null_value) {
+                                                    // Find the non-null type
+                                                    let non_null_type = type_array.iter()
+                                                        .find(|t| **t != null_value)
+                                                        .cloned();
+
+                                                    if let Some(actual_type) = non_null_type {
+                                                        // Replace with the non-null type and add nullable: true
+                                                        prop_obj.insert("type".to_string(), actual_type);
+                                                        prop_obj.insert("nullable".to_string(), serde_json::Value::Bool(true));
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                // Recursively process nested objects
+                                normalize_nullable_properties(prop_value);
+                            }
+                        }
+                    }
+
+                    // Process definitions object if it exists
+                    if let Some(definitions) = obj.get_mut("definitions") {
+                        normalize_nullable_properties(definitions);
+                    }
+
+                    // Process any other nested objects
+                    for (_, v) in obj.iter_mut() {
+                        normalize_nullable_properties(v);
+                    }
+                }
+                serde_json::Value::Array(arr) => {
+                    for item in arr.iter_mut() {
+                        normalize_nullable_properties(item);
+                    }
+                }
+                _ => {}
+            }
         }
 
         // Generate schema functions for each type

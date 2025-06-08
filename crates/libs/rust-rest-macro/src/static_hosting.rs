@@ -968,22 +968,58 @@ pub fn generate_static_hosting_code(
             return html;
         }}
 
+        // Resolve schema reference
+        function resolveSchemaRef(schemaOrRef) {{
+            if (!schemaOrRef) return null;
+            
+            // If it's a reference, resolve it
+            if (schemaOrRef['$ref']) {{
+                const refPath = schemaOrRef['$ref'];
+                if (refPath.startsWith('#/components/schemas/')) {{
+                    const schemaName = refPath.replace('#/components/schemas/', '');
+                    return apiSpec?.components?.schemas?.[schemaName] || null;
+                }}
+            }}
+            
+            // Otherwise return as-is
+            return schemaOrRef;
+        }}
+
         // Generate example from schema
-        function generateExampleFromSchema(schema) {{
+        function generateExampleFromSchema(schemaOrRef) {{
+            const schema = resolveSchemaRef(schemaOrRef);
             if (!schema) return {{}};
             
             if (schema.example) return schema.example;
             if (schema.properties) {{
                 const example = {{}};
                 Object.entries(schema.properties).forEach(([key, prop]) => {{
-                    if (prop.type === 'string') {{
+                    // Handle type arrays (e.g., ["string", "null"] for Option<String>)
+                    let propType = prop.type;
+                    if (Array.isArray(propType)) {{
+                        // For nullable types, use the non-null type for the example
+                        propType = propType.find(t => t !== 'null') || propType[0];
+                    }}
+                    
+                    if (propType === 'string') {{
                         example[key] = prop.example || `example_${{key}}`;
-                    }} else if (prop.type === 'number' || prop.type === 'integer') {{
+                    }} else if (propType === 'number' || propType === 'integer') {{
                         example[key] = prop.example || 0;
-                    }} else if (prop.type === 'boolean') {{
+                    }} else if (propType === 'boolean') {{
                         example[key] = prop.example || false;
-                    }} else if (prop.type === 'array') {{
+                    }} else if (propType === 'array') {{
                         example[key] = [];
+                    }} else if (prop.type && Array.isArray(prop.type) && prop.type.includes('null')) {{
+                        // For nullable types, provide a meaningful example or null
+                        if (prop.type.includes('string')) {{
+                            example[key] = `example_${{key}}`;
+                        }} else if (prop.type.includes('number') || prop.type.includes('integer')) {{
+                            example[key] = 0;
+                        }} else if (prop.type.includes('boolean')) {{
+                            example[key] = false;
+                        }} else {{
+                            example[key] = null;
+                        }}
                     }} else {{
                         example[key] = generateExampleFromSchema(prop);
                     }}

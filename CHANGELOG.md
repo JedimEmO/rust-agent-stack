@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed - 2025-01-08
+- Fixed REST API documentation schema display for optional fields showing as empty objects
+  - Enhanced OpenAPI schema generation to convert `"type": ["string", "null"]` format to `"type": "string", "nullable": true"` for better Swagger UI compatibility
+  - Improved JavaScript schema processing in documentation UI to handle array type definitions (e.g., `["string", "null"]`)
+  - Added recursive schema normalization for all nested objects and definitions
+  - Optional fields like `email` and `display_name` now display as proper string input fields with meaningful examples
+  - Both backend OpenAPI generation and frontend UI handling improved for comprehensive fix
+
 ### Enhanced - 2025-01-08
 - Sprint retrospective update covering Static API Documentation Hosting & Explorer UI implementation
   - Documented strategic orchestration approach with successful role delegation (Architect → Backend Coder → UX Designer)

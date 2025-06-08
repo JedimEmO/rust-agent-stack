@@ -25,3 +25,16 @@
 
 ### What Could Have Gone Better
 - Could have implemented a smaller proof-of-concept first before building the full-featured API explorer interface
+
+## REST API Schema Documentation Fix (2025-01-08)
+
+### What Went Well
+- Quickly identified root cause: `schemars` generated valid but UI-unfriendly `"type": ["string", "null"]` schemas
+- Implemented dual-layer fix: both OpenAPI generation improvement AND JavaScript UI enhancement
+- Schema normalization approach was backward compatible - existing schemas continue to work  
+- End-to-end testing confirmed fix resolves the issue completely
+- Changes were targeted and minimal, reducing risk of regressions
+
+### What Could Have Gone Better  
+- Could have added unit tests for the nullable type handling to prevent future regressions
+- Schema normalization could be made configurable per service for flexibility
