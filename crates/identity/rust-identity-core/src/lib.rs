@@ -21,9 +21,6 @@ pub enum IdentityError {
     #[error("Invalid authentication payload")]
     InvalidPayload,
 
-    #[error("User not found: {0}")]
-    UserNotFound(String),
-
     #[error("Session error: {0}")]
     SessionError(String),
 
