@@ -2,6 +2,10 @@
 name = "rust-identity-oauth2"
 version = "0.1.1"
 edition = "2024"
+description = "OAuth2 authentication provider with Google support, PKCE, and state management"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/example/rust-agent-stack"
+homepage = "https://github.com/example/rust-agent-stack"
 
 [dependencies]
 rust-identity-core = { path = "../rust-identity-core" }
