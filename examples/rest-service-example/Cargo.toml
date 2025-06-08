@@ -5,12 +5,28 @@ edition = "2024"
 description = "Example REST service using rust-rest-macro"
 
 [dependencies]
+# REST and JSON-RPC infrastructure
 rust-rest-macro = { path = "../../crates/libs/rust-rest-macro" }
 rust-jsonrpc-core = { path = "../../crates/libs/rust-jsonrpc-core" }
-tokio = { workspace = true }
+
+# Identity management
+rust-identity-core = { path = "../../crates/identity/rust-identity-core" }
+rust-identity-local = { path = "../../crates/identity/rust-identity-local" }
+rust-identity-session = { path = "../../crates/identity/rust-identity-session" }
+
+# Web framework and utilities
 axum = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-schemars = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+jsonwebtoken = { workspace = true }
+
+# Additional dependencies
 tracing-subscriber = { workspace = true }
+schemars = { workspace = true }
+dotenvy = "0.15"

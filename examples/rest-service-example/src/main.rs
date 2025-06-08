@@ -1,8 +1,14 @@
+use anyhow::{Context, Result};
+use async_trait::async_trait;
+use rust_identity_core::{IdentityProvider, IdentityResult, UserPermissions, VerifiedIdentity};
+use rust_identity_local::LocalUserProvider;
+use rust_identity_session::{JwtAuthProvider, SessionConfig, SessionService};
 use rust_rest_macro::rest_service;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use tracing::info;
 
 // Example data types
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -29,12 +35,55 @@ struct UsersResponse {
     users: Vec<UserResponse>,
 }
 
+// Authentication data types
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+struct RegisterUserRequest {
+    username: String,
+    password: String,
+    email: Option<String>,
+    display_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+struct LoginRequest {
+    username: String,
+    password: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+struct AuthResponse {
+    token: String,
+    user_info: AuthUserInfo,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+struct AuthUserInfo {
+    subject: String,
+    email: Option<String>,
+    display_name: Option<String>,
+    permissions: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+struct UserInfoResponse {
+    user_id: String,
+    permissions: Vec<String>,
+    metadata: Option<serde_json::Value>,
+}
+
 // Generate the REST service
 rest_service!({
     service_name: UserService,
     base_path: "/api/v1",
     openapi: true,
     endpoints: [
+        // Authentication endpoints
+        POST UNAUTHORIZED auth/register(RegisterUserRequest) -> AuthResponse,
+        POST UNAUTHORIZED auth/login(LoginRequest) -> AuthResponse,
+        POST WITH_PERMISSIONS([]) auth/logout(()) -> (),
+        GET WITH_PERMISSIONS([]) auth/me(()) -> UserInfoResponse,
+
+        // User management endpoints
         GET UNAUTHORIZED users() -> UsersResponse,
         POST WITH_PERMISSIONS(["admin"]) users(CreateUserRequest) -> UserResponse,
         GET WITH_PERMISSIONS(["user"]) users/{id: i32}() -> UserResponse,
@@ -42,6 +91,51 @@ rest_service!({
         DELETE WITH_PERMISSIONS(["admin"]) users/{id: i32}() -> (),
     ]
 });
+
+// Application configuration
+#[derive(Debug, Clone)]
+struct AppConfig {
+    pub jwt_secret: String,
+    pub server_host: String,
+    pub server_port: u16,
+}
+
+impl AppConfig {
+    fn from_env() -> Result<Self> {
+        Ok(Self {
+            jwt_secret: std::env::var("JWT_SECRET")
+                .unwrap_or_else(|_| "change-me-in-production-please".to_string()),
+            server_host: std::env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".to_string()),
+            server_port: std::env::var("SERVER_PORT")
+                .unwrap_or_else(|_| "3000".to_string())
+                .parse()
+                .context("SERVER_PORT must be a valid port number")?,
+        })
+    }
+}
+
+// Simple permissions implementation for this example
+#[derive(Clone)]
+struct ExamplePermissions;
+
+#[async_trait]
+impl UserPermissions for ExamplePermissions {
+    async fn get_permissions(&self, identity: &VerifiedIdentity) -> IdentityResult<Vec<String>> {
+        // For this example, give admin permissions to 'admin' users and user permissions to others
+        if identity.subject == "admin" {
+            Ok(vec!["admin".to_string(), "user".to_string()])
+        } else {
+            Ok(vec!["user".to_string()])
+        }
+    }
+}
+
+// Application state shared across handlers
+#[derive(Clone)]
+struct AppState {
+    session_service: Arc<SessionService>,
+    local_provider: Arc<LocalUserProvider>,
+}
 
 // Example in-memory storage
 type UserStore = Arc<Mutex<HashMap<i32, UserResponse>>>;
@@ -141,41 +235,268 @@ impl UserHandlers {
     }
 }
 
+// Authentication handlers
+#[derive(Clone)]
+struct AuthHandlers {
+    app_state: AppState,
+}
+
+impl AuthHandlers {
+    fn new(app_state: AppState) -> Self {
+        Self { app_state }
+    }
+
+    async fn register_user(
+        &self,
+        request: RegisterUserRequest,
+    ) -> Result<AuthResponse, Box<dyn std::error::Error + Send + Sync>> {
+        info!("Registering new user: {}", request.username);
+
+        // Add user to local provider
+        self.app_state
+            .local_provider
+            .add_user(
+                request.username.clone(),
+                request.password.clone(),
+                request.email.clone(),
+                request.display_name.clone(),
+            )
+            .await
+            .map_err(|e| format!("Failed to register user: {}", e))?;
+
+        // Create auth payload for automatic login after registration
+        let auth_payload = serde_json::json!({
+            "username": request.username,
+            "password": request.password
+        });
+
+        // Begin session using the session service
+        let token = self
+            .app_state
+            .session_service
+            .begin_session("local", auth_payload)
+            .await
+            .map_err(|e| format!("Failed to create session: {}", e))?;
+
+        // Create identity for permissions lookup
+        let identity = VerifiedIdentity {
+            provider_id: "local".to_string(),
+            subject: request.username,
+            email: request.email,
+            display_name: request.display_name,
+            metadata: None,
+        };
+
+        let permissions = ExamplePermissions
+            .get_permissions(&identity)
+            .await
+            .map_err(|e| format!("Failed to get permissions: {}", e))?;
+
+        Ok(AuthResponse {
+            token,
+            user_info: AuthUserInfo {
+                subject: identity.subject,
+                email: identity.email,
+                display_name: identity.display_name,
+                permissions,
+            },
+        })
+    }
+
+    async fn login_user(
+        &self,
+        request: LoginRequest,
+    ) -> Result<AuthResponse, Box<dyn std::error::Error + Send + Sync>> {
+        info!("User login attempt: {}", request.username);
+
+        // Create auth payload
+        let auth_payload = serde_json::json!({
+            "username": request.username,
+            "password": request.password
+        });
+
+        // Begin session using the session service (this will verify credentials internally)
+        let token = self
+            .app_state
+            .session_service
+            .begin_session("local", auth_payload)
+            .await
+            .map_err(|e| format!("Authentication failed: {}", e))?;
+
+        // Create identity for permissions lookup
+        let identity = VerifiedIdentity {
+            provider_id: "local".to_string(),
+            subject: request.username,
+            email: None, // We could look this up from the user provider if needed
+            display_name: None,
+            metadata: None,
+        };
+
+        let permissions = ExamplePermissions
+            .get_permissions(&identity)
+            .await
+            .map_err(|e| format!("Failed to get permissions: {}", e))?;
+
+        Ok(AuthResponse {
+            token,
+            user_info: AuthUserInfo {
+                subject: identity.subject,
+                email: identity.email,
+                display_name: identity.display_name,
+                permissions,
+            },
+        })
+    }
+
+    async fn logout_user(
+        &self,
+        user: rust_jsonrpc_core::AuthenticatedUser,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        info!("User logout: {}", user.user_id);
+
+        // Revoke session using the JTI from the JWT metadata
+        if let Some(metadata) = &user.metadata {
+            if let Some(jti) = metadata.get("jti").and_then(|v| v.as_str()) {
+                self.app_state.session_service.end_session(jti).await;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn get_user_info(
+        &self,
+        user: &rust_jsonrpc_core::AuthenticatedUser,
+    ) -> Result<UserInfoResponse, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(UserInfoResponse {
+            user_id: user.user_id.clone(),
+            permissions: user.permissions.iter().cloned().collect(),
+            metadata: user.metadata.clone(),
+        })
+    }
+}
+
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
-    let handlers = UserHandlers::new();
+    // Load environment variables
+    dotenvy::dotenv().ok();
 
-    // Build the service router with separate handler instances for each closure
-    let handlers1 = handlers.clone();
-    let handlers2 = handlers.clone();
-    let handlers3 = handlers.clone();
-    let handlers4 = handlers.clone();
-    let handlers5 = handlers.clone();
+    // Load configuration
+    let config = AppConfig::from_env()?;
+    info!("Starting REST service with JWT authentication");
+
+    // Initialize authentication components
+    let local_provider = Arc::new(LocalUserProvider::new());
+
+    // Create session configuration
+    let session_config = SessionConfig {
+        jwt_secret: config.jwt_secret.clone(),
+        jwt_ttl: chrono::Duration::hours(24),
+        refresh_enabled: true,
+        algorithm: jsonwebtoken::Algorithm::HS256,
+    };
+
+    // Create session service with permissions provider
+    let session_service = Arc::new(
+        SessionService::new(session_config)
+            .with_permissions(Arc::new(ExamplePermissions) as Arc<dyn UserPermissions>),
+    );
+
+    // Register the local provider with the session service
+    session_service
+        .register_provider(Box::new(LocalUserProvider::new()) as Box<dyn IdentityProvider>)
+        .await;
+
+    // Create application state
+    let app_state = AppState {
+        session_service: session_service.clone(),
+        local_provider: local_provider.clone(),
+    };
+
+    // Create handlers
+    let user_handlers = UserHandlers::new();
+    let auth_handlers = AuthHandlers::new(app_state);
+
+    // Create JWT auth provider for the service
+    let jwt_auth_provider = JwtAuthProvider::new(session_service);
+
+    // Build the service router with authentication handlers
+    let user_handlers1 = user_handlers.clone();
+    let user_handlers2 = user_handlers.clone();
+    let user_handlers3 = user_handlers.clone();
+    let user_handlers4 = user_handlers.clone();
+    let user_handlers5 = user_handlers.clone();
+
+    let auth_handlers1 = auth_handlers.clone();
+    let auth_handlers2 = auth_handlers.clone();
+    let auth_handlers3 = auth_handlers.clone();
+    let auth_handlers4 = auth_handlers.clone();
 
     let app = UserServiceBuilder::new()
+        .auth_provider(jwt_auth_provider)
+        // Authentication handlers
+        .post_auth_register_handler(move |request| {
+            let handlers = auth_handlers1.clone();
+            async move { handlers.register_user(request).await }
+        })
+        .post_auth_login_handler(move |request| {
+            let handlers = auth_handlers2.clone();
+            async move { handlers.login_user(request).await }
+        })
+        .post_auth_logout_handler(move |user, _| {
+            let handlers = auth_handlers3.clone();
+            async move { handlers.logout_user(user).await }
+        })
+        .get_auth_me_handler(move |user, _| {
+            let handlers = auth_handlers4.clone();
+            async move { handlers.get_user_info(&user).await }
+        })
+        // User management handlers
         .get_users_handler(move || {
-            let handlers = handlers1.clone();
+            let handlers = user_handlers1.clone();
             async move { handlers.get_users().await }
         })
         .post_users_handler(move |user, request| {
-            let handlers = handlers2.clone();
+            let handlers = user_handlers2.clone();
             async move { handlers.create_user(user, request).await }
         })
         .get_users_by_id_handler(move |user, id| {
-            let handlers = handlers3.clone();
+            let handlers = user_handlers3.clone();
             async move { handlers.get_user(&user, id).await }
         })
         .put_users_by_id_handler(move |user, id, request| {
-            let handlers = handlers4.clone();
+            let handlers = user_handlers4.clone();
             async move { handlers.update_user(user, id, request).await }
         })
         .delete_users_by_id_handler(move |user, id| {
-            let handlers = handlers5.clone();
+            let handlers = user_handlers5.clone();
             async move { handlers.delete_user(user, id).await }
         })
         .build();
+
+    // Add some test users
+    info!("Adding test users");
+    local_provider
+        .add_user(
+            "admin".to_string(),
+            "admin123".to_string(),
+            Some("admin@example.com".to_string()),
+            Some("Administrator".to_string()),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to add admin user: {}", e))?;
+
+    local_provider
+        .add_user(
+            "user".to_string(),
+            "user123".to_string(),
+            Some("user@example.com".to_string()),
+            Some("Regular User".to_string()),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to add regular user: {}", e))?;
 
     // Generate OpenAPI documentation
     if let Err(e) = generate_userservice_openapi_to_file() {
@@ -185,14 +506,30 @@ async fn main() {
     }
 
     // Start the server
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    println!("REST service running on http://0.0.0.0:3000");
+    let bind_addr = format!("{}:{}", config.server_host, config.server_port);
+    let listener = tokio::net::TcpListener::bind(&bind_addr)
+        .await
+        .context(format!("Failed to bind to {}", bind_addr))?;
+
+    println!("REST service running on http://{}", bind_addr);
     println!("Available endpoints:");
+    println!("  POST   /api/v1/auth/register  - Register new user");
+    println!("  POST   /api/v1/auth/login     - Login user");
+    println!("  POST   /api/v1/auth/logout    - Logout user (requires auth)");
+    println!("  GET    /api/v1/auth/me        - Get user info (requires auth)");
     println!("  GET    /api/v1/users          - List all users (no auth required)");
     println!("  POST   /api/v1/users          - Create user (requires admin permission)");
     println!("  GET    /api/v1/users/:id      - Get user by ID (requires user permission)");
     println!("  PUT    /api/v1/users/:id      - Update user (requires admin permission)");
     println!("  DELETE /api/v1/users/:id      - Delete user (requires admin permission)");
+    println!();
+    println!("Test users:");
+    println!("  Username: admin, Password: admin123 (has admin permissions)");
+    println!("  Username: user,  Password: user123  (has user permissions)");
 
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app)
+        .await
+        .context("Failed to start server")?;
+
+    Ok(())
 }

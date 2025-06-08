@@ -1518,7 +1518,15 @@ dependencies = [
 name = "rest-service-example"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
  "axum",
+ "chrono",
+ "dotenvy",
+ "jsonwebtoken",
+ "rust-identity-core",
+ "rust-identity-local",
+ "rust-identity-session",
  "rust-jsonrpc-core",
  "rust-rest-macro",
  "schemars",
@@ -1527,6 +1535,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
