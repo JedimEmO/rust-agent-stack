@@ -137,7 +137,6 @@ impl IdentityProvider for LocalUserProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
 
     async fn setup_test_provider() -> LocalUserProvider {
         let provider = LocalUserProvider::new();
