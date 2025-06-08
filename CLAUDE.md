@@ -12,6 +12,7 @@ cargo build
 cargo build -p rust-jsonrpc-macro
 cargo build -p rust-jsonrpc-core
 cargo build -p rust-jsonrpc-types
+cargo build -p rust-rest-macro
 cargo build -p openrpc-types
 
 # Run tests
@@ -21,6 +22,7 @@ cargo test
 cargo test -p rust-jsonrpc-macro
 cargo test -p rust-jsonrpc-core
 cargo test -p rust-jsonrpc-types
+cargo test -p rust-rest-macro
 cargo test -p openrpc-types
 
 # Run example applications
@@ -58,6 +60,7 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
 - **rust-jsonrpc-macro**: Procedural macro for type-safe JSON-RPC interfaces with auth integration and optional OpenRPC document generation
 - **rust-jsonrpc-core**: Core `AuthProvider` trait and auth types for JSON-RPC services  
 - **rust-jsonrpc-types**: Pure JSON-RPC 2.0 protocol types and utilities
+- **rust-rest-macro**: Procedural macro for type-safe REST APIs with auth integration and OpenAPI 3.0 generation
 - **openrpc-types**: Complete OpenRPC 1.3.2 specification types with validation, builders, and JSON Schema Draft 7 support
 
 #### Identity Management (`crates/identity/`)
@@ -101,9 +104,18 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
 - All crates follow the same version (0.1.0) and edition (2024)
 - Procedural macro crate can ONLY export macros, not runtime types or functions
 
+#### Critical Development Rules (Based on Sprint Retrospectives)
+1. **Test Early, Test Often**: ALWAYS run `cargo build` and `cargo test` immediately after any implementation - never assume code will compile
+2. **Specification First**: When implementing standards/specs, ask for specification location/requirements before starting any research or implementation
+3. **Incremental Implementation**: For complex features, break into smaller phases with compilation/testing checkpoints rather than implementing everything at once
+4. **Macro Testing**: Always test generated macro code with real routing scenarios and actual parameters (especially base_url)
+5. **End-to-End Validation**: Test complete flows during initial implementation, not as an afterthought
+
 #### Common Pitfalls
 - **Axum Router Nesting**: Use `.nest("/api", router)` not `.merge(router.nest("/api", Router::new()))` - the latter creates invalid nesting syntax
 - **Macro Base URL**: Always test generated macro code with the actual base_url parameter to catch routing issues
+- **String Type Mismatches**: Watch for bon builder string literal type mismatches (String vs &str)
+- **Move Semantics**: Pay attention to type annotations and move semantics in complex macro-generated code
 
 #### OpenRPC Document Generation
 The `jsonrpc_service` macro supports optional OpenRPC document generation for API documentation:
