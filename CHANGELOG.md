@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added - 2025-01-08
+- REST macro crate implementation with comprehensive REST API generation capabilities
+  - Complete rust-rest-macro procedural macro crate for type-safe REST endpoints with authentication integration
+  - Supports all HTTP methods (GET, POST, PUT, DELETE, PATCH) with path parameters and request bodies
+  - OpenAPI 3.0 document generation using schemars with configurable output paths
+  - Permission-based access control with JWT authentication through AuthProvider integration
+  - Generated service traits, builders, and axum router integration following JSON-RPC macro patterns
+  - Example application (rest-service-example) demonstrating comprehensive REST service implementation
+  - Full workspace integration with proper dependency management and testing infrastructure
+
+### Added - 2025-01-08
 - Kellnr registry configuration for local crate publishing
   - Configured kellnr as default registry in `.cargo/config.toml`
   - Registry URL set to `http://localhost:8000/api/v1/crates/`
