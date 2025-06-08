@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added - 2025-01-08
+- Static API documentation hosting with embedded explorer UI for REST services
+  - Complete static file hosting support integrated into rust-rest-macro crate
+  - Interactive API documentation with custom-built explorer UI replacing generic Swagger UI
+  - Embedded static assets using rust-embed for zero-dependency deployment
+  - JWT authentication integration directly in the explorer interface
+  - Responsive documentation UI with multiple theme support (default theme included)
+  - Automatic OpenAPI spec serving at configurable endpoints
+  - Optional feature with zero overhead when disabled - no performance impact
+  - Enhanced REST service example showcasing documentation hosting capabilities
+  - Configurable documentation paths and themes via macro parameters
+
 ### Enhanced - 2025-01-08
 - Sprint retrospective process with enhanced development guidelines based on observed patterns
   - Added Critical Development Rules section to CLAUDE.md based on sprint observation analysis

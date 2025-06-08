@@ -1,0 +1,2 @@
+This is a placeholder file for static assets.
+The actual assets will be added by the UI specialist.

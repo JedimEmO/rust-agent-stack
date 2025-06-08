@@ -30,3 +30,8 @@ jsonwebtoken = { workspace = true }
 tracing-subscriber = { workspace = true }
 schemars = { workspace = true }
 dotenvy = "0.15"
+
+# Static hosting dependencies (required when using serve_docs)
+tower-http = { workspace = true }
+mime_guess = { workspace = true }
+rust-embed = { workspace = true }

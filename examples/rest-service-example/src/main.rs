@@ -76,6 +76,9 @@ rest_service!({
     service_name: UserService,
     base_path: "/api/v1",
     openapi: true,
+    serve_docs: true,
+    docs_path: "/docs",
+    ui_theme: "default",
     endpoints: [
         // Authentication endpoints
         POST UNAUTHORIZED auth/register(RegisterUserRequest) -> AuthResponse,
@@ -512,7 +515,12 @@ async fn main() -> Result<()> {
         .context(format!("Failed to bind to {}", bind_addr))?;
 
     println!("REST service running on http://{}", bind_addr);
-    println!("Available endpoints:");
+    println!();
+    println!("📖 API Documentation:");
+    println!("  GET    /api/v1/docs           - Interactive API documentation (Swagger UI)");
+    println!("  GET    /api/v1/docs/openapi.json - OpenAPI 3.0 specification");
+    println!();
+    println!("🔗 Available endpoints:");
     println!("  POST   /api/v1/auth/register  - Register new user");
     println!("  POST   /api/v1/auth/login     - Login user");
     println!("  POST   /api/v1/auth/logout    - Logout user (requires auth)");
@@ -523,7 +531,7 @@ async fn main() -> Result<()> {
     println!("  PUT    /api/v1/users/:id      - Update user (requires admin permission)");
     println!("  DELETE /api/v1/users/:id      - Delete user (requires admin permission)");
     println!();
-    println!("Test users:");
+    println!("👤 Test users:");
     println!("  Username: admin, Password: admin123 (has admin permissions)");
     println!("  Username: user,  Password: user123  (has user permissions)");
 

@@ -3,6 +3,7 @@ use quote::quote;
 use syn::{Ident, LitStr, Token, Type, parse::Parse, parse_macro_input};
 
 mod openapi;
+mod static_hosting;
 
 /// Macro to generate a REST service with authentication support
 ///
@@ -46,6 +47,9 @@ mod openapi;
 ///     service_name: UserService,
 ///     base_path: "/api/v1",
 ///     openapi: true,
+///     serve_docs: true,
+///     docs_path: "/docs",
+///     ui_theme: "default",
 ///     endpoints: [
 ///         GET UNAUTHORIZED users() -> UsersResponse,
 ///         POST WITH_PERMISSIONS(["admin"]) users(CreateUserRequest) -> UserResponse,
@@ -70,6 +74,7 @@ struct ServiceDefinition {
     service_name: Ident,
     base_path: String,
     openapi: Option<OpenApiConfig>,
+    static_hosting: static_hosting::StaticHostingConfig,
     endpoints: Vec<EndpointDefinition>,
 }
 
@@ -152,10 +157,14 @@ impl Parse for ServiceDefinition {
         let base_path = base_path_lit.value();
         let _ = content.parse::<Token![,]>()?;
 
-        // Check if openapi field is present
+        // Parse optional fields (openapi, serve_docs, docs_path, ui_theme)
         let mut openapi = None;
-        if content.peek(Ident) {
+        let mut static_hosting = static_hosting::StaticHostingConfig::default();
+
+        // Parse optional fields
+        while content.peek(Ident) {
             let field_name = content.fork().parse::<Ident>()?;
+
             if field_name == "openapi" {
                 let _ = content.parse::<Ident>()?; // "openapi"
                 let _ = content.parse::<Token![:]>()?;
@@ -178,6 +187,31 @@ impl Parse for ServiceDefinition {
                 }
 
                 let _ = content.parse::<Token![,]>()?;
+            } else if field_name == "serve_docs" {
+                let _ = content.parse::<Ident>()?; // "serve_docs"
+                let _ = content.parse::<Token![:]>()?;
+                let enabled = content.parse::<syn::LitBool>()?;
+                static_hosting.serve_docs = enabled.value();
+                let _ = content.parse::<Token![,]>()?;
+            } else if field_name == "docs_path" {
+                let _ = content.parse::<Ident>()?; // "docs_path"
+                let _ = content.parse::<Token![:]>()?;
+                let path = content.parse::<LitStr>()?;
+                static_hosting.docs_path = path.value();
+                let _ = content.parse::<Token![,]>()?;
+            } else if field_name == "ui_theme" {
+                let _ = content.parse::<Ident>()?; // "ui_theme"
+                let _ = content.parse::<Token![:]>()?;
+                let theme = content.parse::<LitStr>()?;
+                static_hosting.ui_theme = theme.value();
+                let _ = content.parse::<Token![,]>()?;
+            } else if field_name == "endpoints" {
+                break; // Start parsing endpoints
+            } else {
+                return Err(syn::Error::new(
+                    field_name.span(),
+                    format!("Unknown field: {}", field_name),
+                ));
             }
         }
 
@@ -203,6 +237,7 @@ impl Parse for ServiceDefinition {
             service_name,
             base_path,
             openapi,
+            static_hosting,
             endpoints,
         })
     }
@@ -354,6 +389,10 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
     } else {
         (quote! {}, quote! {})
     };
+
+    // Generate static hosting code if enabled
+    let static_hosting_code =
+        static_hosting::generate_static_hosting_code(&service_def, &service_def.static_hosting);
 
     // Generate trait methods
     let trait_methods = service_def.endpoints.iter().map(|endpoint| {
@@ -507,6 +546,10 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         }
     });
 
+    // Generate static hosting route registration
+    let static_routes =
+        static_hosting::generate_static_routes(&service_def, &service_def.static_hosting);
+
     let output = quote! {
         /// Generated service trait
         pub trait #service_trait_name {
@@ -521,6 +564,7 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
 
         #openapi_code
         #schema_checks
+        #static_hosting_code
 
         impl #builder_name {
             /// Create a new builder
@@ -544,6 +588,9 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
                 let mut router = axum::Router::new();
 
                 #(#route_registrations)*
+
+                // Add static hosting routes if enabled
+                #static_routes
 
                 axum::Router::new().nest(#base_path, router)
             }

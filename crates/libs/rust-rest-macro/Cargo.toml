@@ -21,5 +21,10 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 schemars = { workspace = true }
 
+# Static file hosting dependencies
+tower-http = { workspace = true }
+mime_guess = { workspace = true }
+rust-embed = { workspace = true }
+
 [dev-dependencies]
 tokio = { workspace = true }
