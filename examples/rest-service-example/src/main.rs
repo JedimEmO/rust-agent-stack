@@ -122,8 +122,8 @@ rest_service!({
         // Authentication endpoints
         POST UNAUTHORIZED auth/register(RegisterUserRequest) -> AuthResponse,
         POST UNAUTHORIZED auth/login(LoginRequest) -> AuthResponse,
-        POST WITH_PERMISSIONS([]) auth/logout(()) -> (),
-        GET WITH_PERMISSIONS([]) auth/me(()) -> UserInfoResponse,
+        POST WITH_PERMISSIONS([]) auth/logout() -> (),
+        GET WITH_PERMISSIONS([]) auth/me() -> UserInfoResponse,
 
         // User management endpoints
         GET UNAUTHORIZED users() -> UsersResponse,
@@ -515,11 +515,11 @@ async fn main() -> Result<()> {
             let handlers = auth_handlers2.clone();
             async move { handlers.login_user(request).await }
         })
-        .post_auth_logout_handler(move |user, _| {
+        .post_auth_logout_handler(move |user| {
             let handlers = auth_handlers3.clone();
             async move { handlers.logout_user(user).await }
         })
-        .get_auth_me_handler(move |user, _| {
+        .get_auth_me_handler(move |user| {
             let handlers = auth_handlers4.clone();
             async move { handlers.get_user_info(&user).await }
         })
