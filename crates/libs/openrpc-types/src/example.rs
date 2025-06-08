@@ -177,7 +177,7 @@ pub struct ExamplePairing {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ExampleOrReference {
-    Example(Example),
+    Example(Box<Example>),
     Reference(Reference),
 }
 
@@ -261,7 +261,7 @@ impl Validate for ExamplePairing {
 impl Validate for ExampleOrReference {
     fn validate(&self) -> OpenRpcResult<()> {
         match self {
-            ExampleOrReference::Example(example) => example.validate(),
+            ExampleOrReference::Example(example) => example.as_ref().validate(),
             ExampleOrReference::Reference(reference) => reference.validate(),
         }
     }
@@ -270,7 +270,7 @@ impl Validate for ExampleOrReference {
 // Convenience constructors
 impl From<Example> for ExampleOrReference {
     fn from(example: Example) -> Self {
-        ExampleOrReference::Example(example)
+        ExampleOrReference::Example(Box::new(example))
     }
 }
 
@@ -331,10 +331,10 @@ mod tests {
     #[test]
     fn test_example_pairing_creation() {
         let params = vec![
-            ExampleOrReference::Example(Example::with_value("param1")),
-            ExampleOrReference::Example(Example::with_value(42)),
+            ExampleOrReference::Example(Box::new(Example::with_value("param1"))),
+            ExampleOrReference::Example(Box::new(Example::with_value(42))),
         ];
-        let result = ExampleOrReference::Example(Example::with_value("result"));
+        let result = ExampleOrReference::Example(Box::new(Example::with_value("result")));
 
         let pairing = ExamplePairing::new("test_pairing", params)
             .with_description("A test pairing")
@@ -348,7 +348,7 @@ mod tests {
 
     #[test]
     fn test_example_pairing_notification() {
-        let params = vec![ExampleOrReference::Example(Example::with_value("param"))];
+        let params = vec![ExampleOrReference::Example(Box::new(Example::with_value("param")))];
         let pairing = ExamplePairing::new("notification", params);
 
         assert!(pairing.is_notification());
@@ -356,7 +356,7 @@ mod tests {
 
     #[test]
     fn test_example_pairing_validation() {
-        let params = vec![ExampleOrReference::Example(Example::with_value("test"))];
+        let params = vec![ExampleOrReference::Example(Box::new(Example::with_value("test")))];
 
         // Valid pairing
         let pairing = ExamplePairing::new("valid", params.clone());
@@ -380,7 +380,7 @@ mod tests {
 
     #[test]
     fn test_example_pairing_builder() {
-        let params = vec![ExampleOrReference::Example(Example::with_value("test"))];
+        let params = vec![ExampleOrReference::Example(Box::new(Example::with_value("test")))];
         let pairing = ExamplePairing::builder()
             .name("test_pairing".to_string())
             .params(params)
@@ -408,7 +408,7 @@ mod tests {
 
     #[test]
     fn test_example_or_reference() {
-        let example_variant = ExampleOrReference::Example(Example::with_value("test"));
+        let example_variant = ExampleOrReference::Example(Box::new(Example::with_value("test")));
         let ref_variant = ExampleOrReference::Reference(Reference::example("TestExample"));
 
         // Test serialization

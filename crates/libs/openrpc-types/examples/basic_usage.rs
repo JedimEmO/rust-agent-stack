@@ -41,13 +41,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create a method
     let get_user_method = Method::new(
         "getUser",
-        vec![ContentDescriptorOrReference::ContentDescriptor(
+        vec![ContentDescriptorOrReference::ContentDescriptor(Box::new(
             user_id_param,
-        )],
+        ))],
     )
     .with_summary("Get user by ID")
     .with_description("Retrieves a user by their unique identifier")
-    .with_result(ContentDescriptorOrReference::ContentDescriptor(user_result))
+    .with_result(ContentDescriptorOrReference::ContentDescriptor(Box::new(user_result)))
     .with_param_structure(ParameterStructure::ByName);
 
     // Create the OpenRPC document

@@ -51,7 +51,7 @@ pub struct OpenRpc {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum MethodOrReference {
-    Method(Method),
+    Method(Box<Method>),
     Reference(Reference),
 }
 
@@ -139,7 +139,7 @@ impl OpenRpc {
             .iter()
             .filter_map(|method| {
                 match method {
-                    MethodOrReference::Method(m) => Some(m.name.clone()),
+                    MethodOrReference::Method(m) => Some(m.as_ref().name.clone()),
                     MethodOrReference::Reference(_) => None, // Can't extract name from reference
                 }
             })
@@ -183,9 +183,9 @@ impl Validate for OpenRpc {
         let method_names: Vec<String> = self
             .methods
             .iter()
-            .filter_map(|method| match method {
-                MethodOrReference::Method(m) => Some(m.name.clone()),
-                MethodOrReference::Reference(r) => Some(r.reference.clone()),
+            .map(|method| match method {
+                MethodOrReference::Method(m) => m.as_ref().name.clone(),
+                MethodOrReference::Reference(r) => r.reference.clone(),
             })
             .collect();
 
@@ -221,7 +221,7 @@ impl Validate for OpenRpc {
 impl Validate for MethodOrReference {
     fn validate(&self) -> OpenRpcResult<()> {
         match self {
-            MethodOrReference::Method(method) => method.validate(),
+            MethodOrReference::Method(method) => method.as_ref().validate(),
             MethodOrReference::Reference(reference) => reference.validate(),
         }
     }
@@ -230,7 +230,7 @@ impl Validate for MethodOrReference {
 // Convenience From implementations
 impl From<Method> for MethodOrReference {
     fn from(method: Method) -> Self {
-        MethodOrReference::Method(method)
+        MethodOrReference::Method(Box::new(method))
     }
 }
 
@@ -249,9 +249,9 @@ mod tests {
     #[test]
     fn test_openrpc_creation() {
         let info = Info::new("Test API", "1.0.0");
-        let methods = vec![MethodOrReference::Method(
+        let methods = vec![MethodOrReference::Method(Box::new(
             Method::new("test", vec![]).with_summary("Test method"),
-        )];
+        ))];
 
         let openrpc = OpenRpc::new("1.3.2", info, methods);
 
@@ -287,10 +287,10 @@ mod tests {
     #[test]
     fn test_openrpc_validation() {
         let info = Info::new("Test API", "1.0.0");
-        let methods = vec![MethodOrReference::Method(Method::new(
+        let methods = vec![MethodOrReference::Method(Box::new(Method::new(
             "validMethod",
             vec![],
-        ))];
+        )))];
 
         // Valid document
         let openrpc = OpenRpc::new("1.3.2", info, methods);
@@ -304,8 +304,8 @@ mod tests {
         // Invalid - duplicate method names
         let info = Info::new("Test API", "1.0.0");
         let methods = vec![
-            MethodOrReference::Method(Method::new("duplicate", vec![])),
-            MethodOrReference::Method(Method::new("duplicate", vec![])),
+            MethodOrReference::Method(Box::new(Method::new("duplicate", vec![]))),
+            MethodOrReference::Method(Box::new(Method::new("duplicate", vec![]))),
         ];
         let openrpc = OpenRpc::new("1.3.2", info, methods);
         assert!(openrpc.validate().is_err());
@@ -314,8 +314,8 @@ mod tests {
     #[test]
     fn test_method_names_extraction() {
         let methods = vec![
-            MethodOrReference::Method(Method::new("method1", vec![])),
-            MethodOrReference::Method(Method::new("method2", vec![])),
+            MethodOrReference::Method(Box::new(Method::new("method1", vec![]))),
+            MethodOrReference::Method(Box::new(Method::new("method2", vec![]))),
             MethodOrReference::Reference(Reference::new("#/components/methods/method3")),
         ];
 
@@ -348,13 +348,13 @@ mod tests {
         let method = Method::new(
             "getUser",
             vec![
-                crate::method::ContentDescriptorOrReference::ContentDescriptor(
+                crate::method::ContentDescriptorOrReference::ContentDescriptor(Box::new(
                     ContentDescriptor::new("id", Schema::string()),
-                ),
+                )),
             ],
         );
 
-        let openrpc = OpenRpc::v1_3_2(info, vec![MethodOrReference::Method(method)]);
+        let openrpc = OpenRpc::v1_3_2(info, vec![MethodOrReference::Method(Box::new(method))]);
 
         let json_value = serde_json::to_value(&openrpc).unwrap();
 
@@ -370,7 +370,7 @@ mod tests {
     #[test]
     fn test_method_or_reference_serialization() {
         // Test method variant
-        let method_variant = MethodOrReference::Method(Method::new("test", vec![]));
+        let method_variant = MethodOrReference::Method(Box::new(Method::new("test", vec![])));
         let json = serde_json::to_value(&method_variant).unwrap();
         assert!(json["name"] == "test");
 
@@ -423,14 +423,14 @@ mod tests {
 
         let method = Method::new(
             "createUser",
-            vec![crate::method::ContentDescriptorOrReference::ContentDescriptor(user_param)],
+            vec![crate::method::ContentDescriptorOrReference::ContentDescriptor(Box::new(user_param))],
         )
         .with_summary("Create a new user")
         .with_result(
-            crate::method::ContentDescriptorOrReference::ContentDescriptor(ContentDescriptor::new(
+            crate::method::ContentDescriptorOrReference::ContentDescriptor(Box::new(ContentDescriptor::new(
                 "userId",
                 Schema::string(),
-            )),
+            ))),
         );
 
         let components = Components::new().with_schema(
@@ -441,7 +441,7 @@ mod tests {
                 .with_property("email", Schema::string()),
         );
 
-        let openrpc = OpenRpc::v1_3_2(info, vec![MethodOrReference::Method(method)])
+        let openrpc = OpenRpc::v1_3_2(info, vec![MethodOrReference::Method(Box::new(method))])
             .with_server(server)
             .with_components(components);
 

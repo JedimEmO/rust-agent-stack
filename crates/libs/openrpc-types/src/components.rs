@@ -205,16 +205,16 @@ impl Components {
     pub fn is_empty(&self) -> bool {
         self.content_descriptors
             .as_ref()
-            .map_or(true, |m| m.is_empty())
-            && self.schemas.as_ref().map_or(true, |m| m.is_empty())
-            && self.examples.as_ref().map_or(true, |m| m.is_empty())
-            && self.links.as_ref().map_or(true, |m| m.is_empty())
-            && self.errors.as_ref().map_or(true, |m| m.is_empty())
+            .is_none_or(|m| m.is_empty())
+            && self.schemas.as_ref().is_none_or(|m| m.is_empty())
+            && self.examples.as_ref().is_none_or(|m| m.is_empty())
+            && self.links.as_ref().is_none_or(|m| m.is_empty())
+            && self.errors.as_ref().is_none_or(|m| m.is_empty())
             && self
                 .example_pairings
                 .as_ref()
-                .map_or(true, |m| m.is_empty())
-            && self.tags.as_ref().map_or(true, |m| m.is_empty())
+                .is_none_or(|m| m.is_empty())
+            && self.tags.as_ref().is_none_or(|m| m.is_empty())
             && self.extensions.is_empty()
     }
 

@@ -101,7 +101,7 @@ pub enum TagOrReference {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ContentDescriptorOrReference {
-    ContentDescriptor(ContentDescriptor),
+    ContentDescriptor(Box<ContentDescriptor>),
     Reference(Reference),
 }
 
@@ -117,7 +117,7 @@ pub enum ErrorOrReference {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum LinkOrReference {
-    Link(Link),
+    Link(Box<Link>),
     Reference(Reference),
 }
 
@@ -125,7 +125,7 @@ pub enum LinkOrReference {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ExamplePairingOrReference {
-    ExamplePairing(ExamplePairing),
+    ExamplePairing(Box<ExamplePairing>),
     Reference(Reference),
 }
 
@@ -327,7 +327,7 @@ impl Validate for Method {
         // Validate parameter names are unique
         self.params.validate_unique(
             |param| match param {
-                ContentDescriptorOrReference::ContentDescriptor(cd) => cd.name.clone(),
+                ContentDescriptorOrReference::ContentDescriptor(cd) => cd.as_ref().name.clone(),
                 ContentDescriptorOrReference::Reference(r) => r.reference.clone(),
             },
             "method parameters",
@@ -347,7 +347,7 @@ impl Validate for Method {
         let mut seen_optional = false;
         for param in &self.params {
             if let ContentDescriptorOrReference::ContentDescriptor(cd) = param {
-                if cd.is_required() {
+                if cd.as_ref().is_required() {
                     if seen_optional {
                         return Err(crate::error::OpenRpcError::validation(
                             "required parameters must be positioned before optional parameters",
@@ -463,7 +463,7 @@ impl Validate for TagOrReference {
 impl Validate for ContentDescriptorOrReference {
     fn validate(&self) -> OpenRpcResult<()> {
         match self {
-            ContentDescriptorOrReference::ContentDescriptor(cd) => cd.validate(),
+            ContentDescriptorOrReference::ContentDescriptor(cd) => cd.as_ref().validate(),
             ContentDescriptorOrReference::Reference(reference) => reference.validate(),
         }
     }
@@ -481,7 +481,7 @@ impl Validate for ErrorOrReference {
 impl Validate for LinkOrReference {
     fn validate(&self) -> OpenRpcResult<()> {
         match self {
-            LinkOrReference::Link(link) => link.validate(),
+            LinkOrReference::Link(link) => link.as_ref().validate(),
             LinkOrReference::Reference(reference) => reference.validate(),
         }
     }
@@ -490,7 +490,7 @@ impl Validate for LinkOrReference {
 impl Validate for ExamplePairingOrReference {
     fn validate(&self) -> OpenRpcResult<()> {
         match self {
-            ExamplePairingOrReference::ExamplePairing(example) => example.validate(),
+            ExamplePairingOrReference::ExamplePairing(example) => example.as_ref().validate(),
             ExamplePairingOrReference::Reference(reference) => reference.validate(),
         }
     }
@@ -499,7 +499,7 @@ impl Validate for ExamplePairingOrReference {
 // Convenience From implementations
 impl From<ContentDescriptor> for ContentDescriptorOrReference {
     fn from(cd: ContentDescriptor) -> Self {
-        ContentDescriptorOrReference::ContentDescriptor(cd)
+        ContentDescriptorOrReference::ContentDescriptor(Box::new(cd))
     }
 }
 
@@ -523,7 +523,7 @@ impl From<Reference> for ErrorOrReference {
 
 impl From<Link> for LinkOrReference {
     fn from(link: Link) -> Self {
-        LinkOrReference::Link(link)
+        LinkOrReference::Link(Box::new(link))
     }
 }
 
@@ -547,7 +547,7 @@ impl From<Reference> for TagOrReference {
 
 impl From<ExamplePairing> for ExamplePairingOrReference {
     fn from(example: ExamplePairing) -> Self {
-        ExamplePairingOrReference::ExamplePairing(example)
+        ExamplePairingOrReference::ExamplePairing(Box::new(example))
     }
 }
 
@@ -565,19 +565,19 @@ mod tests {
     #[test]
     fn test_method_creation() {
         let params = vec![
-            ContentDescriptorOrReference::ContentDescriptor(
+            ContentDescriptorOrReference::ContentDescriptor(Box::new(
                 ContentDescriptor::new("username", crate::Schema::string()).required(),
-            ),
-            ContentDescriptorOrReference::ContentDescriptor(
+            )),
+            ContentDescriptorOrReference::ContentDescriptor(Box::new(
                 ContentDescriptor::new("age", crate::Schema::integer()).optional(),
-            ),
+            )),
         ];
 
         let method = Method::new("createUser", params)
             .with_summary("Create a new user")
-            .with_result(ContentDescriptorOrReference::ContentDescriptor(
+            .with_result(ContentDescriptorOrReference::ContentDescriptor(Box::new(
                 ContentDescriptor::new("user", crate::Schema::object()),
-            ));
+            )));
 
         assert_eq!(method.name, "createUser");
         assert_eq!(method.params.len(), 2);
@@ -589,9 +589,9 @@ mod tests {
     fn test_method_notification() {
         let method = Method::new(
             "logMessage",
-            vec![ContentDescriptorOrReference::ContentDescriptor(
+            vec![ContentDescriptorOrReference::ContentDescriptor(Box::new(
                 ContentDescriptor::new("message", crate::Schema::string()),
-            )],
+            ))],
         );
 
         assert!(method.is_notification());
@@ -612,9 +612,9 @@ mod tests {
     #[test]
     fn test_method_validation() {
         // Valid method
-        let params = vec![ContentDescriptorOrReference::ContentDescriptor(
+        let params = vec![ContentDescriptorOrReference::ContentDescriptor(Box::new(
             ContentDescriptor::new("param1", crate::Schema::string()),
-        )];
+        ))];
         let method = Method::new("validMethod", params);
         assert!(method.validate().is_ok());
 
@@ -631,24 +631,24 @@ mod tests {
     fn test_parameter_ordering_validation() {
         // Valid - required before optional
         let params = vec![
-            ContentDescriptorOrReference::ContentDescriptor(
+            ContentDescriptorOrReference::ContentDescriptor(Box::new(
                 ContentDescriptor::new("required", crate::Schema::string()).required(),
-            ),
-            ContentDescriptorOrReference::ContentDescriptor(
+            )),
+            ContentDescriptorOrReference::ContentDescriptor(Box::new(
                 ContentDescriptor::new("optional", crate::Schema::string()).optional(),
-            ),
+            )),
         ];
         let method = Method::new("test", params);
         assert!(method.validate().is_ok());
 
         // Invalid - optional before required
         let params = vec![
-            ContentDescriptorOrReference::ContentDescriptor(
+            ContentDescriptorOrReference::ContentDescriptor(Box::new(
                 ContentDescriptor::new("optional", crate::Schema::string()).optional(),
-            ),
-            ContentDescriptorOrReference::ContentDescriptor(
+            )),
+            ContentDescriptorOrReference::ContentDescriptor(Box::new(
                 ContentDescriptor::new("required", crate::Schema::string()).required(),
-            ),
+            )),
         ];
         let method = Method::new("test", params);
         assert!(method.validate().is_err());
@@ -672,9 +672,9 @@ mod tests {
     fn test_method_serialization() {
         let method = Method::new(
             "getUser",
-            vec![ContentDescriptorOrReference::ContentDescriptor(
+            vec![ContentDescriptorOrReference::ContentDescriptor(Box::new(
                 ContentDescriptor::new("id", crate::Schema::string()),
-            )],
+            ))],
         )
         .with_summary("Get user by ID");
 
@@ -708,10 +708,10 @@ mod tests {
     #[test]
     fn test_union_types() {
         // Test ContentDescriptorOrReference
-        let cd_variant = ContentDescriptorOrReference::ContentDescriptor(ContentDescriptor::new(
+        let cd_variant = ContentDescriptorOrReference::ContentDescriptor(Box::new(ContentDescriptor::new(
             "test",
             crate::Schema::string(),
-        ));
+        )));
         let ref_variant =
             ContentDescriptorOrReference::Reference(Reference::content_descriptor("TestParam"));
 
@@ -738,21 +738,21 @@ mod tests {
     fn test_method_with_all_features() {
         let method = Method::new(
             "complexMethod",
-            vec![ContentDescriptorOrReference::ContentDescriptor(
+            vec![ContentDescriptorOrReference::ContentDescriptor(Box::new(
                 ContentDescriptor::new("param1", crate::Schema::string()).required(),
-            )],
+            ))],
         )
         .with_tag(TagOrReference::Tag(Tag::new("user")))
         .with_summary("Complex method")
         .with_description("A complex method with all features")
-        .with_result(ContentDescriptorOrReference::ContentDescriptor(
+        .with_result(ContentDescriptorOrReference::ContentDescriptor(Box::new(
             ContentDescriptor::new("result", crate::Schema::object()),
-        ))
+        )))
         .with_error(ErrorOrReference::Error(ErrorObject::new(
             1000,
             "Custom error",
         )))
-        .with_link(LinkOrReference::Link(Link::new("relatedMethod")))
+        .with_link(LinkOrReference::Link(Box::new(Link::new("relatedMethod"))))
         .by_name()
         .deprecated();
 

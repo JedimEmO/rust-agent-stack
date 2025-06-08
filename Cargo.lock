@@ -203,7 +203,7 @@ checksum = "55248b47b0caf0546f7988906588779981c43bb1bc9d0c44087278f80cdb44ba"
 
 [[package]]
 name = "basic-service"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "axum",
  "rust-jsonrpc-core",
@@ -637,7 +637,7 @@ checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 
 [[package]]
 name = "google-oauth-example"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1220,7 +1220,7 @@ checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 
 [[package]]
 name = "openrpc-types"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bon",
  "schemars",
@@ -1530,7 +1530,7 @@ dependencies = [
 
 [[package]]
 name = "rust-identity-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "serde",
@@ -1540,7 +1540,7 @@ dependencies = [
 
 [[package]]
 name = "rust-identity-local"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "argon2",
  "async-trait",
@@ -1554,7 +1554,7 @@ dependencies = [
 
 [[package]]
 name = "rust-identity-oauth2"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "axum",
@@ -1579,7 +1579,7 @@ dependencies = [
 
 [[package]]
 name = "rust-identity-session"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1596,7 +1596,7 @@ dependencies = [
 
 [[package]]
 name = "rust-jsonrpc-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -1610,7 +1610,7 @@ dependencies = [
 
 [[package]]
 name = "rust-jsonrpc-macro"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "axum",
  "bon",
@@ -1627,7 +1627,7 @@ dependencies = [
 
 [[package]]
 name = "rust-jsonrpc-types"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",

@@ -234,7 +234,7 @@ pub enum SchemaType {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum SchemaOrBool {
-    Schema(Schema),
+    Schema(Box<Schema>),
     Bool(bool),
 }
 
@@ -242,7 +242,7 @@ pub enum SchemaOrBool {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum SchemaOrReference {
-    Schema(Schema),
+    Schema(Box<Schema>),
     Reference(Reference),
 }
 
@@ -250,7 +250,7 @@ pub enum SchemaOrReference {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum SchemaOrStringArray {
-    Schema(Schema),
+    Schema(Box<Schema>),
     StringArray(Vec<String>),
 }
 
@@ -332,7 +332,7 @@ impl Schema {
 
     /// Set array items schema
     pub fn with_items(mut self, items: Schema) -> Self {
-        self.items = Some(Box::new(SchemaOrBool::Schema(items)));
+        self.items = Some(Box::new(SchemaOrBool::Schema(Box::new(items))));
         self
     }
 
@@ -350,7 +350,7 @@ impl Schema {
         self.properties
             .as_mut()
             .unwrap()
-            .insert(name.into(), SchemaOrReference::Schema(schema));
+            .insert(name.into(), SchemaOrReference::Schema(Box::new(schema)));
         self
     }
 
@@ -539,7 +539,7 @@ impl Validate for Schema {
         // Validate items schema
         if let Some(ref items) = self.items {
             match items.as_ref() {
-                SchemaOrBool::Schema(schema) => schema.validate()?,
+                SchemaOrBool::Schema(schema) => schema.as_ref().validate()?,
                 SchemaOrBool::Bool(_) => {} // Boolean is always valid
             }
         }
@@ -553,7 +553,7 @@ impl Validate for Schema {
                     ));
                 }
                 match schema_or_ref {
-                    SchemaOrReference::Schema(schema) => schema.validate()?,
+                    SchemaOrReference::Schema(schema) => schema.as_ref().validate()?,
                     SchemaOrReference::Reference(reference) => reference.validate()?,
                 }
             }
@@ -563,7 +563,7 @@ impl Validate for Schema {
         if let Some(ref all_of) = self.all_of {
             for schema_or_ref in all_of {
                 match schema_or_ref {
-                    SchemaOrReference::Schema(schema) => schema.validate()?,
+                    SchemaOrReference::Schema(schema) => schema.as_ref().validate()?,
                     SchemaOrReference::Reference(reference) => reference.validate()?,
                 }
             }
@@ -572,7 +572,7 @@ impl Validate for Schema {
         if let Some(ref any_of) = self.any_of {
             for schema_or_ref in any_of {
                 match schema_or_ref {
-                    SchemaOrReference::Schema(schema) => schema.validate()?,
+                    SchemaOrReference::Schema(schema) => schema.as_ref().validate()?,
                     SchemaOrReference::Reference(reference) => reference.validate()?,
                 }
             }
@@ -581,7 +581,7 @@ impl Validate for Schema {
         if let Some(ref one_of) = self.one_of {
             for schema_or_ref in one_of {
                 match schema_or_ref {
-                    SchemaOrReference::Schema(schema) => schema.validate()?,
+                    SchemaOrReference::Schema(schema) => schema.as_ref().validate()?,
                     SchemaOrReference::Reference(reference) => reference.validate()?,
                 }
             }
@@ -610,7 +610,7 @@ impl Validate for Schema {
 
         if let Some(ref not) = self.not {
             match not.as_ref() {
-                SchemaOrReference::Schema(schema) => schema.validate()?,
+                SchemaOrReference::Schema(schema) => schema.as_ref().validate()?,
                 SchemaOrReference::Reference(reference) => reference.validate()?,
             }
         }
@@ -720,7 +720,7 @@ mod tests {
     #[test]
     fn test_schema_or_reference() {
         let schema_ref = SchemaOrReference::Reference(Reference::schema("User"));
-        let schema_direct = SchemaOrReference::Schema(Schema::string());
+        let schema_direct = SchemaOrReference::Schema(Box::new(Schema::string()));
 
         let schema_ref_json = serde_json::to_value(&schema_ref).unwrap();
         let schema_direct_json = serde_json::to_value(&schema_direct).unwrap();

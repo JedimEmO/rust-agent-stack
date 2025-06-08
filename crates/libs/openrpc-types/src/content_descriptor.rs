@@ -47,7 +47,7 @@ pub struct ContentDescriptor {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ContentDescriptorSchema {
-    Schema(Schema),
+    Schema(Box<Schema>),
     Reference(Reference),
 }
 
@@ -59,7 +59,7 @@ impl ContentDescriptor {
             summary: None,
             description: None,
             required: None,
-            schema: ContentDescriptorSchema::Schema(schema),
+            schema: ContentDescriptorSchema::Schema(Box::new(schema)),
             deprecated: None,
             extensions: Extensions::new(),
         }
@@ -151,7 +151,7 @@ impl Validate for ContentDescriptor {
 
         // Validate schema
         match &self.schema {
-            ContentDescriptorSchema::Schema(schema) => schema.validate()?,
+            ContentDescriptorSchema::Schema(schema) => schema.as_ref().validate()?,
             ContentDescriptorSchema::Reference(reference) => reference.validate()?,
         }
 
@@ -165,7 +165,7 @@ impl Validate for ContentDescriptor {
 impl Validate for ContentDescriptorSchema {
     fn validate(&self) -> OpenRpcResult<()> {
         match self {
-            ContentDescriptorSchema::Schema(schema) => schema.validate(),
+            ContentDescriptorSchema::Schema(schema) => schema.as_ref().validate(),
             ContentDescriptorSchema::Reference(reference) => reference.validate(),
         }
     }
@@ -251,7 +251,7 @@ mod tests {
         let schema = Schema::string();
         let descriptor = ContentDescriptor::builder()
             .name("test".to_string())
-            .schema(ContentDescriptorSchema::Schema(schema))
+            .schema(ContentDescriptorSchema::Schema(Box::new(schema)))
             .required(true)
             .build();
 
@@ -281,7 +281,7 @@ mod tests {
     #[test]
     fn test_content_descriptor_schema_serialization() {
         // Test schema variant
-        let schema_variant = ContentDescriptorSchema::Schema(Schema::string());
+        let schema_variant = ContentDescriptorSchema::Schema(Box::new(Schema::string()));
         let json = serde_json::to_value(&schema_variant).unwrap();
         assert!(json["type"] == "string");
 
