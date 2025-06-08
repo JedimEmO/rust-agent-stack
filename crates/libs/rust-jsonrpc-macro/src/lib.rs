@@ -2,6 +2,8 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Ident, LitStr, Token, Type, parse::Parse, parse_macro_input};
 
+mod openrpc;
+
 /// Macro to generate a JSON-RPC service with authentication support
 ///
 /// This macro generates a service trait and builder that integrates with axum
@@ -21,7 +23,14 @@ pub fn jsonrpc_service(input: TokenStream) -> TokenStream {
 #[derive(Debug)]
 struct ServiceDefinition {
     service_name: Ident,
+    openrpc: Option<OpenRpcConfig>,
     methods: Vec<MethodDefinition>,
+}
+
+#[derive(Debug)]
+enum OpenRpcConfig {
+    Enabled,
+    WithPath(String),
 }
 
 #[derive(Debug)]
@@ -50,6 +59,35 @@ impl Parse for ServiceDefinition {
         let service_name = content.parse::<Ident>()?;
         let _ = content.parse::<Token![,]>()?;
 
+        // Check if openrpc field is present
+        let mut openrpc = None;
+        if content.peek(Ident) {
+            let field_name = content.fork().parse::<Ident>()?;
+            if field_name == "openrpc" {
+                let _ = content.parse::<Ident>()?; // "openrpc"
+                let _ = content.parse::<Token![:]>()?;
+
+                // Parse openrpc value - can be true/false or { output: "path" }
+                if content.peek(syn::LitBool) {
+                    let enabled = content.parse::<syn::LitBool>()?;
+                    if enabled.value() {
+                        openrpc = Some(OpenRpcConfig::Enabled);
+                    }
+                } else if content.peek(syn::token::Brace) {
+                    let openrpc_content;
+                    syn::braced!(openrpc_content in content);
+
+                    // Parse output: "path"
+                    let _ = openrpc_content.parse::<Ident>()?; // "output"
+                    let _ = openrpc_content.parse::<Token![:]>()?;
+                    let path = openrpc_content.parse::<LitStr>()?;
+                    openrpc = Some(OpenRpcConfig::WithPath(path.value()));
+                }
+
+                let _ = content.parse::<Token![,]>()?;
+            }
+        }
+
         // Parse methods: [...]
         let _ = content.parse::<Ident>()?; // "methods"
         let _ = content.parse::<Token![:]>()?;
@@ -70,6 +108,7 @@ impl Parse for ServiceDefinition {
 
         Ok(ServiceDefinition {
             service_name,
+            openrpc,
             methods,
         })
     }
@@ -141,6 +180,17 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
     let service_name = &service_def.service_name;
     let service_trait_name = quote::format_ident!("{}Trait", service_name);
     let builder_name = quote::format_ident!("{}Builder", service_name);
+
+    // Generate OpenRPC code if enabled in the macro input
+    let (openrpc_code, schema_checks) = if service_def.openrpc.is_some() {
+        let openrpc_config = service_def.openrpc.as_ref().unwrap();
+        (
+            openrpc::generate_openrpc_code(&service_def, openrpc_config),
+            openrpc::generate_schema_impl_checks(&service_def),
+        )
+    } else {
+        (quote! {}, quote! {})
+    };
 
     // Generate trait methods
     let trait_methods = service_def.methods.iter().map(|method| {
@@ -335,6 +385,9 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
             auth_provider: Option<Box<dyn rust_jsonrpc_core::AuthProvider>>,
             #(#builder_fields)*
         }
+
+        #openrpc_code
+        #schema_checks
 
         impl #builder_name {
             /// Create a new builder with the base URL

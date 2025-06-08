@@ -53,7 +53,7 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
 ### Current Crates
 
 #### JSON-RPC Libraries (`crates/libs/`)
-- **rust-jsonrpc-macro**: Procedural macro for type-safe JSON-RPC interfaces with auth integration
+- **rust-jsonrpc-macro**: Procedural macro for type-safe JSON-RPC interfaces with auth integration and optional OpenRPC document generation
 - **rust-jsonrpc-core**: Core `AuthProvider` trait and auth types for JSON-RPC services  
 - **rust-jsonrpc-types**: Pure JSON-RPC 2.0 protocol types and utilities
 
@@ -101,6 +101,38 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
 #### Common Pitfalls
 - **Axum Router Nesting**: Use `.nest("/api", router)` not `.merge(router.nest("/api", Router::new()))` - the latter creates invalid nesting syntax
 - **Macro Base URL**: Always test generated macro code with the actual base_url parameter to catch routing issues
+
+#### OpenRPC Document Generation
+The `jsonrpc_service` macro supports optional OpenRPC document generation for API documentation:
+
+```rust
+// Enable OpenRPC with default output (target/openrpc/{service_name}.json)
+jsonrpc_service!({
+    service_name: MyService,
+    openrpc: true,
+    methods: [
+        UNAUTHORIZED sign_in(SignInRequest) -> SignInResponse,
+        WITH_PERMISSIONS(["admin"]) delete_everything(()) -> (),
+    ]
+});
+
+// Enable OpenRPC with custom output path
+jsonrpc_service!({
+    service_name: MyService,
+    openrpc: { output: "docs/api.json" },
+    methods: [...]
+});
+```
+
+**Key Features:**
+- **Per-service control**: Each macro invocation can independently enable/disable OpenRPC generation
+- **Schema generation**: Uses `schemars` crate to generate JSON Schema for request/response types
+- **Authentication metadata**: Includes `x-authentication` and `x-permissions` extensions in the OpenRPC document
+- **Compile-time generation**: Documents are generated during compilation and written to specified paths
+
+**Requirements:**
+- All request/response types must implement `schemars::JsonSchema` trait
+- Generated functions: `generate_{service_name}_openrpc()` and `generate_{service_name}_openrpc_to_file()`
 
 #### Testing Guidelines  
 - **Security-First**: Include security testing (timing attacks, username enumeration) from initial implementation

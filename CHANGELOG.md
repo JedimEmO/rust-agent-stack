@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added - 2025-01-08
+- OpenRPC document generation support for jsonrpc_service macro
+  - Added optional `openrpc` field to macro invocation for per-service control
+  - Supports both default path (`target/openrpc/{service_name}.json`) and custom output paths
+  - Generates complete JSON Schema definitions using schemars crate for all request/response types
+  - Includes authentication metadata with OpenRPC extensions (`x-authentication`, `x-permissions`)
+  - Added comprehensive test coverage and examples demonstrating all features
+  - Updated CLAUDE.md documentation with usage examples and requirements
+  - Requires types to implement `schemars::JsonSchema` trait when OpenRPC generation is enabled
+
 ### Added - 2025-01-07
 - Sprint retrospective implementation with project guidelines optimization
   - Streamlined CLAUDE.md documentation from verbose descriptions to concise guidelines
