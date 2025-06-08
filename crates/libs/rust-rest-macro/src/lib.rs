@@ -621,9 +621,9 @@ fn generate_axum_handler(endpoint: &EndpointDefinition) -> proc_macro2::TokenStr
         }
     }
 
-    // Add request body extractor if present
+    // Add request body extractor if present - use Result to handle JSON parsing errors
     if endpoint.request_type.is_some() {
-        extractors.push(quote! { axum::extract::Json(body): axum::extract::Json<_> });
+        extractors.push(quote! { body_result: Result<axum::extract::Json<_>, axum::extract::rejection::JsonRejection> });
     }
 
     quote! {
@@ -648,12 +648,31 @@ fn generate_handler_body(endpoint: &EndpointDefinition) -> proc_macro2::TokenStr
                 }
             }
 
-            // Add request body if present
-            if endpoint.request_type.is_some() {
+            // Handle JSON body extraction with error handling
+            let json_handling = if endpoint.request_type.is_some() {
                 args.push(quote! { body });
-            }
+                quote! {
+                    // Handle JSON parsing errors
+                    let body = match body_result {
+                        Ok(json) => json.0,
+                        Err(_) => {
+                            use axum::response::IntoResponse;
+                            return (
+                                axum::http::StatusCode::BAD_REQUEST,
+                                axum::Json(serde_json::json!({
+                                    "error": "Invalid JSON"
+                                }))
+                            ).into_response();
+                        },
+                    };
+                }
+            } else {
+                quote! {}
+            };
 
             quote! {
+                #json_handling
+
                 match handler(#(#args),*).await {
                     Ok(result) => {
                         use axum::response::IntoResponse;
@@ -688,12 +707,31 @@ fn generate_handler_body(endpoint: &EndpointDefinition) -> proc_macro2::TokenStr
                 }
             }
 
-            // Add request body if present
-            if endpoint.request_type.is_some() {
+            // Handle JSON body extraction with error handling
+            let json_handling = if endpoint.request_type.is_some() {
                 args.push(quote! { body });
-            }
+                quote! {
+                    // Handle JSON parsing errors
+                    let body = match body_result {
+                        Ok(json) => json.0,
+                        Err(_) => {
+                            use axum::response::IntoResponse;
+                            return (
+                                axum::http::StatusCode::BAD_REQUEST,
+                                axum::Json(serde_json::json!({
+                                    "error": "Invalid JSON"
+                                }))
+                            ).into_response();
+                        },
+                    };
+                }
+            } else {
+                quote! {}
+            };
 
             quote! {
+                #json_handling
+
                 // Extract and validate auth token
                 let token = match headers
                     .get("Authorization")
@@ -737,20 +775,17 @@ fn generate_handler_body(endpoint: &EndpointDefinition) -> proc_macro2::TokenStr
                     },
                 };
 
-                // Check permissions
+                // Check permissions - REST uses OR logic (user needs ANY of the required permissions)
                 if !required_permissions.is_empty() {
-                    if let Some(provider) = &auth_provider {
-                        if provider.check_permissions(&user, &required_permissions).is_err() {
-                            {
-                                use axum::response::IntoResponse;
-                                return (
-                                    axum::http::StatusCode::FORBIDDEN,
-                                    axum::Json(serde_json::json!({
-                                        "error": "Insufficient permissions"
-                                    }))
-                                ).into_response();
-                            }
-                        }
+                    let has_permission = required_permissions.iter().any(|perm| user.permissions.contains(perm));
+                    if !has_permission {
+                        use axum::response::IntoResponse;
+                        return (
+                            axum::http::StatusCode::FORBIDDEN,
+                            axum::Json(serde_json::json!({
+                                "error": "Insufficient permissions"
+                            }))
+                        ).into_response();
                     }
                 }
 
