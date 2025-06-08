@@ -15,4 +15,4 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
-rust-jsonrpc-types = { path = "../rust-jsonrpc-types", version = "0.1.1" }
+rust-jsonrpc-types = { path = "../rust-jsonrpc-types", version = "0.1.1", registry = "kellnr" }
