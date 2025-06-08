@@ -7,7 +7,7 @@ description = "Example REST service using rust-rest-macro"
 [dependencies]
 # REST and JSON-RPC infrastructure
 rust-rest-macro = { path = "../../crates/libs/rust-rest-macro" }
-rust-jsonrpc-core = { path = "../../crates/libs/rust-jsonrpc-core" }
+rust-auth-core = { path = "../../crates/libs/rust-auth-core" }
 
 # Identity management
 rust-identity-core = { path = "../../crates/identity/rust-identity-core" }
@@ -22,7 +22,6 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-uuid = { workspace = true }
 chrono = { workspace = true }
 jsonwebtoken = { workspace = true }
 
@@ -30,8 +29,3 @@ jsonwebtoken = { workspace = true }
 tracing-subscriber = { workspace = true }
 schemars = { workspace = true }
 dotenvy = "0.15"
-
-# Static hosting dependencies (required when using serve_docs)
-tower-http = { workspace = true }
-mime_guess = { workspace = true }
-rust-embed = { workspace = true }

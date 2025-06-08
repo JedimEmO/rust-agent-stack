@@ -14,17 +14,10 @@ proc-macro = true
 syn = { workspace = true }
 quote = { workspace = true }
 proc-macro2 = { workspace = true }
-bon = { workspace = true }
 axum = { workspace = true }
-rust-jsonrpc-core = { path = "../rust-jsonrpc-core", version = "0.1.1", registry = "kellnr" }
 serde = { workspace = true }
-serde_json = { workspace = true }
 schemars = { workspace = true }
-
-# Static file hosting dependencies
-tower-http = { workspace = true }
-mime_guess = { workspace = true }
-rust-embed = { workspace = true }
+rust-auth-core = { path = "../rust-auth-core" }
 
 [dev-dependencies]
 tokio = { workspace = true }

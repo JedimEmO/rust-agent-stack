@@ -221,7 +221,7 @@ impl UserHandlers {
 
     async fn create_user(
         &self,
-        _user: rust_jsonrpc_core::AuthenticatedUser,
+        _user: rust_auth_core::AuthenticatedUser,
         request: CreateUserRequest,
     ) -> Result<UserResponse, Box<dyn std::error::Error + Send + Sync>> {
         let mut store = self.store.lock().unwrap();
@@ -237,7 +237,7 @@ impl UserHandlers {
 
     async fn get_user(
         &self,
-        _user: &rust_jsonrpc_core::AuthenticatedUser,
+        _user: &rust_auth_core::AuthenticatedUser,
         id: i32,
     ) -> Result<UserResponse, Box<dyn std::error::Error + Send + Sync>> {
         let store = self.store.lock().unwrap();
@@ -249,7 +249,7 @@ impl UserHandlers {
 
     async fn update_user(
         &self,
-        _user: rust_jsonrpc_core::AuthenticatedUser,
+        _user: rust_auth_core::AuthenticatedUser,
         id: i32,
         request: UpdateUserRequest,
     ) -> Result<UserResponse, Box<dyn std::error::Error + Send + Sync>> {
@@ -265,7 +265,7 @@ impl UserHandlers {
 
     async fn delete_user(
         &self,
-        _user: rust_jsonrpc_core::AuthenticatedUser,
+        _user: rust_auth_core::AuthenticatedUser,
         id: i32,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut store = self.store.lock().unwrap();
@@ -396,7 +396,7 @@ impl AuthHandlers {
 
     async fn logout_user(
         &self,
-        user: rust_jsonrpc_core::AuthenticatedUser,
+        user: rust_auth_core::AuthenticatedUser,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         info!("User logout: {}", user.user_id);
 
@@ -412,7 +412,7 @@ impl AuthHandlers {
 
     async fn get_user_info(
         &self,
-        user: &rust_jsonrpc_core::AuthenticatedUser,
+        user: &rust_auth_core::AuthenticatedUser,
     ) -> Result<UserInfoResponse, Box<dyn std::error::Error + Send + Sync>> {
         Ok(UserInfoResponse {
             user_id: user.user_id.clone(),

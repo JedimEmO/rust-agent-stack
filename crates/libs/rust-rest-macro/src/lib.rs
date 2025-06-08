@@ -16,7 +16,7 @@ mod static_hosting;
 ///
 /// # Example
 ///
-/// ```rust
+/// ```ignore
 /// use rust_rest_macro::rest_service;
 /// use serde::{Deserialize, Serialize};
 /// use schemars::JsonSchema;
@@ -405,7 +405,7 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         match &endpoint.auth {
             AuthRequirement::Unauthorized => {}
             AuthRequirement::WithPermissions(_) => {
-                params.push(quote! { user: &rust_jsonrpc_core::AuthenticatedUser });
+                params.push(quote! { user: &rust_auth_core::AuthenticatedUser });
             }
         }
 
@@ -439,7 +439,7 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         match &endpoint.auth {
             AuthRequirement::Unauthorized => {}
             AuthRequirement::WithPermissions(_) => {
-                handler_params.push(quote! { rust_jsonrpc_core::AuthenticatedUser });
+                handler_params.push(quote! { rust_auth_core::AuthenticatedUser });
             }
         }
 
@@ -474,7 +474,7 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         match &endpoint.auth {
             AuthRequirement::Unauthorized => {}
             AuthRequirement::WithPermissions(_) => {
-                handler_params.push(quote! { rust_jsonrpc_core::AuthenticatedUser });
+                handler_params.push(quote! { rust_auth_core::AuthenticatedUser });
                 handler_args.push(quote! { user });
             }
         }
@@ -558,7 +558,7 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
 
         /// Generated builder for the REST service
         pub struct #builder_name {
-            auth_provider: Option<std::sync::Arc<dyn rust_jsonrpc_core::AuthProvider>>,
+            auth_provider: Option<std::sync::Arc<dyn rust_auth_core::AuthProvider>>,
             #(#builder_fields)*
         }
 
@@ -576,7 +576,7 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
             }
 
             /// Set the auth provider
-            pub fn auth_provider<T: rust_jsonrpc_core::AuthProvider>(mut self, provider: T) -> Self {
+            pub fn auth_provider<T: rust_auth_core::AuthProvider>(mut self, provider: T) -> Self {
                 self.auth_provider = Some(std::sync::Arc::new(provider));
                 self
             }

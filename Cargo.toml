@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/libs/rust-auth-core",
     "crates/libs/rust-jsonrpc-macro", 
     "crates/libs/rust-jsonrpc-core", 
     "crates/libs/rust-jsonrpc-types",

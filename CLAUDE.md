@@ -9,6 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 cargo build
 
 # Build specific crate
+cargo build -p rust-auth-core
 cargo build -p rust-jsonrpc-macro
 cargo build -p rust-jsonrpc-core
 cargo build -p rust-jsonrpc-types
@@ -19,6 +20,7 @@ cargo build -p openrpc-types
 cargo test
 
 # Run tests for specific crate
+cargo test -p rust-auth-core
 cargo test -p rust-jsonrpc-macro
 cargo test -p rust-jsonrpc-core
 cargo test -p rust-jsonrpc-types
@@ -56,9 +58,10 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
 
 ### Current Crates
 
-#### JSON-RPC Libraries (`crates/libs/`)
+#### Core Libraries (`crates/libs/`)
+- **rust-auth-core**: Shared authentication traits and types (`AuthProvider`, `AuthenticatedUser`, `AuthError`) used across JSON-RPC and REST services
 - **rust-jsonrpc-macro**: Procedural macro for type-safe JSON-RPC interfaces with auth integration and optional OpenRPC document generation
-- **rust-jsonrpc-core**: Core `AuthProvider` trait and auth types for JSON-RPC services  
+- **rust-jsonrpc-core**: Core traits and utilities for JSON-RPC services (re-exports auth types from rust-auth-core)
 - **rust-jsonrpc-types**: Pure JSON-RPC 2.0 protocol types and utilities
 - **rust-rest-macro**: Procedural macro for type-safe REST APIs with auth integration and OpenAPI 3.0 generation
 - **openrpc-types**: Complete OpenRPC 1.3.2 specification types with validation, builders, and JSON Schema Draft 7 support
@@ -92,12 +95,14 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
 - Use path dependencies for internal crates: `{ path = "../crate-name" }`
 
 #### Crate Organization
+- **rust-auth-core**: Shared authentication types and traits, minimal dependencies (serde, thiserror)
 - **rust-jsonrpc-types**: Pure protocol types, minimal dependencies (only serde)
-- **rust-jsonrpc-core**: Auth traits and runtime support, depends on types crate
+- **rust-jsonrpc-core**: JSON-RPC runtime support, depends on auth-core and types crate
 - **rust-jsonrpc-macro**: Procedural macro only, depends on syn/quote for parsing
+- **rust-rest-macro**: REST procedural macro, depends on auth-core for shared types
 - **rust-identity-core**: Core traits only, minimal dependencies
 - **rust-identity-local/oauth2**: Specific provider implementations, depend on core
-- **rust-identity-session**: JWT session management, integrates with both identity and jsonrpc-core
+- **rust-identity-session**: JWT session management, integrates with both identity and auth-core
 
 #### Development Notes
 - Edition 2024 is used (cutting edge Rust)

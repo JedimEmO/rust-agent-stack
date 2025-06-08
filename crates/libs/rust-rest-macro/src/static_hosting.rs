@@ -47,7 +47,6 @@ pub fn generate_static_hosting_code(
         service_name.to_string().to_lowercase()
     );
 
-    let assets_struct_name = quote::format_ident!("{}StaticAssets", service_name);
     let docs_handler_name =
         quote::format_ident!("{}_docs_handler", service_name.to_string().to_lowercase());
 
@@ -61,7 +60,7 @@ pub fn generate_static_hosting_code(
             let html_content = generate_docs_html(&spec_json, #ui_theme, #base_path, #docs_path);
             ::axum::response::Html(html_content)
         }
-        
+
         // Generate HTML content for the API explorer page
         fn generate_docs_html(openapi_spec: &str, theme: &str, base_path: &str, docs_path: &str) -> String {
             format!(

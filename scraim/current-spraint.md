@@ -39,6 +39,19 @@
 - Could have added unit tests for the nullable type handling to prevent future regressions
 - Schema normalization could be made configurable per service for flexibility
 
+## RPC/REST Macro Crate Refactoring (2025-01-08)
+
+### What Went Well
+- Architect role effectively analyzed the coupling problem and created comprehensive refactoring plan
+- Strategic delegation approach with clear technical specifications prevented implementation errors
+- Systematic execution by Coder following the detailed plan ensured smooth refactoring without compilation issues
+- Created clean separation with shared `rust-auth-core` crate eliminates unwanted dependencies between REST and JSON-RPC functionality
+- Maintained backward compatibility through re-exports, preserving existing API surface
+
+### What Could Have Gone Better
+- Could have identified this architectural coupling issue earlier during initial macro development
+- Integration testing across all affected crates could have been more comprehensive
+
 ## Local Auth Investigation (2025-01-08)
 
 ### What Went Well

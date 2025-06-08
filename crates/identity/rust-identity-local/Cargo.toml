@@ -7,6 +7,9 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/example/rust-agent-stack"
 homepage = "https://github.com/example/rust-agent-stack"
 
+[features]
+timing-tests = []
+
 [dependencies]
 rust-identity-core = { path = "../rust-identity-core", version = "0.1.1", registry = "kellnr" }
 

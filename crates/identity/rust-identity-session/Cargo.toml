@@ -9,7 +9,7 @@ homepage = "https://github.com/example/rust-agent-stack"
 
 [dependencies]
 rust-identity-core = { path = "../rust-identity-core", version = "0.1.1", registry = "kellnr" }
-rust-jsonrpc-core = { path = "../../libs/rust-jsonrpc-core", version = "0.1.1", registry = "kellnr" }
+rust-auth-core = { path = "../../libs/rust-auth-core" }
 
 async-trait = { workspace = true }
 chrono = { workspace = true }

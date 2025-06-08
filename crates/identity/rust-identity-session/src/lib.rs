@@ -3,8 +3,8 @@
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use rust_auth_core::{AuthError, AuthFuture, AuthProvider, AuthenticatedUser};
 use rust_identity_core::{IdentityError, IdentityProvider, UserPermissions};
-use rust_jsonrpc_core::{AuthError, AuthFuture, AuthProvider, AuthenticatedUser};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
