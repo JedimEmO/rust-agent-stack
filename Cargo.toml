@@ -4,13 +4,15 @@ members = [
     "crates/libs/rust-jsonrpc-macro", 
     "crates/libs/rust-jsonrpc-core", 
     "crates/libs/rust-jsonrpc-types",
+    "crates/libs/rust-rest-macro",
     "crates/libs/openrpc-types",
     "crates/identity/rust-identity-core",
     "crates/identity/rust-identity-local",
     "crates/identity/rust-identity-oauth2",
     "crates/identity/rust-identity-session",
     "examples/basic-service",
-    "examples/google-oauth-example"
+    "examples/google-oauth-example",
+    "examples/rest-service-example"
 ]
 
 [workspace.dependencies]
@@ -33,3 +35,4 @@ rand_core = { version = "0.6", features = ["std"] }
 uuid = { version = "1.11", features = ["v4", "serde"] }
 tokio-test = "0.4"
 schemars = "0.8"
+tracing-subscriber = "0.3"

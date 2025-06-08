@@ -1515,6 +1515,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "rest-service-example"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "rust-jsonrpc-core",
+ "rust-rest-macro",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "ring"
 version = "0.17.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1631,6 +1646,22 @@ version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "rust-rest-macro"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "bon",
+ "proc-macro2",
+ "quote",
+ "rust-jsonrpc-core",
+ "schemars",
+ "serde",
+ "serde_json",
+ "syn",
+ "tokio",
 ]
 
 [[package]]
