@@ -206,9 +206,9 @@ name = "basic-service"
 version = "0.1.1"
 dependencies = [
  "axum",
- "rust-jsonrpc-core",
- "rust-jsonrpc-macro",
- "rust-jsonrpc-types",
+ "ras-jsonrpc-core",
+ "ras-jsonrpc-macro",
+ "ras-jsonrpc-types",
  "serde",
  "serde_json",
  "tokio",
@@ -646,12 +646,12 @@ dependencies = [
  "dotenvy",
  "jsonwebtoken",
  "mime_guess",
- "rust-identity-core",
- "rust-identity-oauth2",
- "rust-identity-session",
- "rust-jsonrpc-core",
- "rust-jsonrpc-macro",
- "rust-jsonrpc-types",
+ "ras-identity-core",
+ "ras-identity-oauth2",
+ "ras-identity-session",
+ "ras-jsonrpc-core",
+ "ras-jsonrpc-macro",
+ "ras-jsonrpc-types",
  "serde",
  "serde_json",
  "tokio",
@@ -1489,6 +1489,146 @@ dependencies = [
 ]
 
 [[package]]
+name = "ras-auth-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "ras-identity-core"
+version = "0.1.1"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "ras-identity-local"
+version = "0.1.1"
+dependencies = [
+ "argon2",
+ "async-trait",
+ "rand_core",
+ "ras-identity-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-test",
+]
+
+[[package]]
+name = "ras-identity-oauth2"
+version = "0.1.1"
+dependencies = [
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "rand",
+ "ras-identity-core",
+ "ras-identity-session",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "tokio",
+ "tokio-test",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+ "wiremock",
+]
+
+[[package]]
+name = "ras-identity-session"
+version = "0.1.1"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "jsonwebtoken",
+ "ras-auth-core",
+ "ras-identity-core",
+ "ras-identity-local",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "ras-jsonrpc-core"
+version = "0.1.1"
+dependencies = [
+ "ras-auth-core",
+ "ras-jsonrpc-types",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "ras-jsonrpc-macro"
+version = "0.1.1"
+dependencies = [
+ "axum",
+ "bon",
+ "futures",
+ "proc-macro2",
+ "quote",
+ "rand",
+ "ras-identity-session",
+ "ras-jsonrpc-core",
+ "ras-jsonrpc-types",
+ "reqwest 0.12.19",
+ "schemars",
+ "serde",
+ "serde_json",
+ "syn",
+ "tokio",
+ "tower",
+]
+
+[[package]]
+name = "ras-jsonrpc-types"
+version = "0.1.1"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ras-rest-macro"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "futures",
+ "hyper 1.6.0",
+ "proc-macro2",
+ "quote",
+ "rand",
+ "ras-auth-core",
+ "ras-identity-session",
+ "ras-jsonrpc-core",
+ "reqwest 0.12.19",
+ "schemars",
+ "serde",
+ "serde_json",
+ "syn",
+ "tokio",
+ "tower",
+ "wiremock",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.5.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1618,11 +1758,11 @@ dependencies = [
  "chrono",
  "dotenvy",
  "jsonwebtoken",
- "rust-auth-core",
- "rust-identity-core",
- "rust-identity-local",
- "rust-identity-session",
- "rust-rest-macro",
+ "ras-auth-core",
+ "ras-identity-core",
+ "ras-identity-local",
+ "ras-identity-session",
+ "ras-rest-macro",
  "schemars",
  "serde",
  "serde_json",
@@ -1643,146 +1783,6 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "rust-auth-core"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "rust-identity-core"
-version = "0.1.1"
-dependencies = [
- "async-trait",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "rust-identity-local"
-version = "0.1.1"
-dependencies = [
- "argon2",
- "async-trait",
- "rand_core",
- "rust-identity-core",
- "serde",
- "serde_json",
- "tokio",
- "tokio-test",
-]
-
-[[package]]
-name = "rust-identity-oauth2"
-version = "0.1.1"
-dependencies = [
- "async-trait",
- "axum",
- "base64 0.22.1",
- "chrono",
- "rand",
- "reqwest 0.11.27",
- "rust-identity-core",
- "rust-identity-session",
- "serde",
- "serde_json",
- "sha2",
- "thiserror",
- "tokio",
- "tokio-test",
- "tracing",
- "tracing-subscriber",
- "url",
- "uuid",
- "wiremock",
-]
-
-[[package]]
-name = "rust-identity-session"
-version = "0.1.1"
-dependencies = [
- "async-trait",
- "chrono",
- "jsonwebtoken",
- "rust-auth-core",
- "rust-identity-core",
- "rust-identity-local",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "rust-jsonrpc-core"
-version = "0.1.1"
-dependencies = [
- "rust-auth-core",
- "rust-jsonrpc-types",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "rust-jsonrpc-macro"
-version = "0.1.1"
-dependencies = [
- "axum",
- "bon",
- "futures",
- "proc-macro2",
- "quote",
- "rand",
- "reqwest 0.12.19",
- "rust-identity-session",
- "rust-jsonrpc-core",
- "rust-jsonrpc-types",
- "schemars",
- "serde",
- "serde_json",
- "syn",
- "tokio",
- "tower",
-]
-
-[[package]]
-name = "rust-jsonrpc-types"
-version = "0.1.1"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "rust-rest-macro"
-version = "0.1.0"
-dependencies = [
- "axum",
- "chrono",
- "futures",
- "hyper 1.6.0",
- "proc-macro2",
- "quote",
- "rand",
- "reqwest 0.12.19",
- "rust-auth-core",
- "rust-identity-session",
- "rust-jsonrpc-core",
- "schemars",
- "serde",
- "serde_json",
- "syn",
- "tokio",
- "tower",
- "wiremock",
 ]
 
 [[package]]

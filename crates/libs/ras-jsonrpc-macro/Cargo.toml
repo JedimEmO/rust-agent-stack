@@ -1,0 +1,31 @@
+[package]
+name = "ras-jsonrpc-macro"
+version = "0.1.1"
+edition = "2024"
+description = "Procedural macro for type-safe JSON-RPC interfaces with auth integration and OpenRPC document generation"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/example/rust-agent-stack"
+homepage = "https://github.com/example/rust-agent-stack"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { workspace = true }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }
+bon = { workspace = true }
+axum = { workspace = true }
+ras-jsonrpc-core = { path = "../ras-jsonrpc-core", version = "0.1.1", registry = "kellnr" }
+ras-jsonrpc-types = { path = "../ras-jsonrpc-types", version = "0.1.1", registry = "kellnr" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+schemars = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+reqwest = { workspace = true }
+tower = { workspace = true }
+rand = { workspace = true }
+ras-identity-session = { path = "../../identity/ras-identity-session" }
+futures = { workspace = true }

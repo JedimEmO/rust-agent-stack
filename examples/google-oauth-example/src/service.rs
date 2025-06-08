@@ -1,6 +1,6 @@
 use axum::Router;
-use rust_jsonrpc_core::AuthProvider;
-use rust_jsonrpc_macro::jsonrpc_service;
+use ras_jsonrpc_core::AuthProvider;
+use ras_jsonrpc_macro::jsonrpc_service;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
@@ -268,7 +268,7 @@ pub fn create_api_router<A: AuthProvider + Clone + Send + Sync + 'static>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rust_jsonrpc_core::{AuthFuture, AuthenticatedUser};
+    use ras_jsonrpc_core::{AuthFuture, AuthenticatedUser};
     use std::collections::HashSet;
 
     // Mock auth provider for testing

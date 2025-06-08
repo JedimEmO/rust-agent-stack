@@ -6,14 +6,14 @@ publish = false
 
 [dependencies]
 # JSON-RPC infrastructure
-rust-jsonrpc-macro = { path = "../../crates/libs/rust-jsonrpc-macro" }
-rust-jsonrpc-core = { path = "../../crates/libs/rust-jsonrpc-core" }
-rust-jsonrpc-types = { path = "../../crates/libs/rust-jsonrpc-types" }
+ras-jsonrpc-macro = { path = "../../crates/libs/ras-jsonrpc-macro" }
+ras-jsonrpc-core = { path = "../../crates/libs/ras-jsonrpc-core" }
+ras-jsonrpc-types = { path = "../../crates/libs/ras-jsonrpc-types" }
 
 # Identity management
-rust-identity-core = { path = "../../crates/identity/rust-identity-core" }
-rust-identity-oauth2 = { path = "../../crates/identity/rust-identity-oauth2" }
-rust-identity-session = { path = "../../crates/identity/rust-identity-session" }
+ras-identity-core = { path = "../../crates/identity/ras-identity-core" }
+ras-identity-oauth2 = { path = "../../crates/identity/ras-identity-oauth2" }
+ras-identity-session = { path = "../../crates/identity/ras-identity-session" }
 
 # Web framework and utilities
 axum = { workspace = true }

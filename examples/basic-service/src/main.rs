@@ -1,6 +1,6 @@
 use axum::{Router, routing::get};
-use rust_jsonrpc_core::{AuthFuture, AuthProvider, AuthenticatedUser};
-use rust_jsonrpc_macro::jsonrpc_service;
+use ras_jsonrpc_core::{AuthFuture, AuthProvider, AuthenticatedUser};
+use ras_jsonrpc_macro::jsonrpc_service;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -48,7 +48,7 @@ impl AuthProvider for MyAuthProvider {
                     metadata: None,
                 })
             } else {
-                Err(rust_jsonrpc_core::AuthError::InvalidToken)
+                Err(ras_jsonrpc_core::AuthError::InvalidToken)
             }
         })
     }

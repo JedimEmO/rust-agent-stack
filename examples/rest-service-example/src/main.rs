@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use rust_identity_core::{IdentityProvider, IdentityResult, UserPermissions, VerifiedIdentity};
-use rust_identity_local::LocalUserProvider;
-use rust_identity_session::{JwtAuthProvider, SessionConfig, SessionService};
-use rust_rest_macro::rest_service;
+use ras_identity_core::{IdentityProvider, IdentityResult, UserPermissions, VerifiedIdentity};
+use ras_identity_local::LocalUserProvider;
+use ras_identity_session::{JwtAuthProvider, SessionConfig, SessionService};
+use ras_rest_macro::rest_service;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -221,7 +221,7 @@ impl UserHandlers {
 
     async fn create_user(
         &self,
-        _user: rust_auth_core::AuthenticatedUser,
+        _user: ras_auth_core::AuthenticatedUser,
         request: CreateUserRequest,
     ) -> Result<UserResponse, Box<dyn std::error::Error + Send + Sync>> {
         let mut store = self.store.lock().unwrap();
@@ -237,7 +237,7 @@ impl UserHandlers {
 
     async fn get_user(
         &self,
-        _user: &rust_auth_core::AuthenticatedUser,
+        _user: &ras_auth_core::AuthenticatedUser,
         id: i32,
     ) -> Result<UserResponse, Box<dyn std::error::Error + Send + Sync>> {
         let store = self.store.lock().unwrap();
@@ -249,7 +249,7 @@ impl UserHandlers {
 
     async fn update_user(
         &self,
-        _user: rust_auth_core::AuthenticatedUser,
+        _user: ras_auth_core::AuthenticatedUser,
         id: i32,
         request: UpdateUserRequest,
     ) -> Result<UserResponse, Box<dyn std::error::Error + Send + Sync>> {
@@ -265,7 +265,7 @@ impl UserHandlers {
 
     async fn delete_user(
         &self,
-        _user: rust_auth_core::AuthenticatedUser,
+        _user: ras_auth_core::AuthenticatedUser,
         id: i32,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut store = self.store.lock().unwrap();
@@ -396,7 +396,7 @@ impl AuthHandlers {
 
     async fn logout_user(
         &self,
-        user: rust_auth_core::AuthenticatedUser,
+        user: ras_auth_core::AuthenticatedUser,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         info!("User logout: {}", user.user_id);
 
@@ -412,7 +412,7 @@ impl AuthHandlers {
 
     async fn get_user_info(
         &self,
-        user: &rust_auth_core::AuthenticatedUser,
+        user: &ras_auth_core::AuthenticatedUser,
     ) -> Result<UserInfoResponse, Box<dyn std::error::Error + Send + Sync>> {
         Ok(UserInfoResponse {
             user_id: user.user_id.clone(),

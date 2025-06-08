@@ -1,16 +1,16 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/libs/rust-auth-core",
-    "crates/libs/rust-jsonrpc-macro", 
-    "crates/libs/rust-jsonrpc-core", 
-    "crates/libs/rust-jsonrpc-types",
-    "crates/libs/rust-rest-macro",
+    "crates/libs/ras-auth-core",
+    "crates/libs/ras-jsonrpc-macro", 
+    "crates/libs/ras-jsonrpc-core", 
+    "crates/libs/ras-jsonrpc-types",
+    "crates/libs/ras-rest-macro",
     "crates/libs/openrpc-types",
-    "crates/identity/rust-identity-core",
-    "crates/identity/rust-identity-local",
-    "crates/identity/rust-identity-oauth2",
-    "crates/identity/rust-identity-session",
+    "crates/identity/ras-identity-core",
+    "crates/identity/ras-identity-local",
+    "crates/identity/ras-identity-oauth2",
+    "crates/identity/ras-identity-session",
     "examples/basic-service",
     "examples/google-oauth-example",
     "examples/rest-service-example"

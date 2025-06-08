@@ -5,9 +5,9 @@ edition = "2024"
 publish = false
 
 [dependencies]
-rust-jsonrpc-macro = { path = "../../crates/libs/rust-jsonrpc-macro" }
-rust-jsonrpc-core = { path = "../../crates/libs/rust-jsonrpc-core" }
-rust-jsonrpc-types = { path = "../../crates/libs/rust-jsonrpc-types" }
+ras-jsonrpc-macro = { path = "../../crates/libs/ras-jsonrpc-macro" }
+ras-jsonrpc-core = { path = "../../crates/libs/ras-jsonrpc-core" }
+ras-jsonrpc-types = { path = "../../crates/libs/ras-jsonrpc-types" }
 axum = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

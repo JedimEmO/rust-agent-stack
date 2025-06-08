@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use rust_identity_core::{IdentityError, UserPermissions, VerifiedIdentity};
+use ras_identity_core::{IdentityError, UserPermissions, VerifiedIdentity};
 use tracing::info;
 
 /// Custom permissions provider for Google OAuth2 users

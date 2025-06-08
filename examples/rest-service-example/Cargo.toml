@@ -2,17 +2,17 @@
 name = "rest-service-example"
 version = "0.1.0"
 edition = "2024"
-description = "Example REST service using rust-rest-macro"
+description = "Example REST service using ras-rest-macro"
 
 [dependencies]
 # REST and JSON-RPC infrastructure
-rust-rest-macro = { path = "../../crates/libs/rust-rest-macro" }
-rust-auth-core = { path = "../../crates/libs/rust-auth-core" }
+ras-rest-macro = { path = "../../crates/libs/ras-rest-macro" }
+ras-auth-core = { path = "../../crates/libs/ras-auth-core" }
 
 # Identity management
-rust-identity-core = { path = "../../crates/identity/rust-identity-core" }
-rust-identity-local = { path = "../../crates/identity/rust-identity-local" }
-rust-identity-session = { path = "../../crates/identity/rust-identity-session" }
+ras-identity-core = { path = "../../crates/identity/ras-identity-core" }
+ras-identity-local = { path = "../../crates/identity/ras-identity-local" }
+ras-identity-session = { path = "../../crates/identity/ras-identity-session" }
 
 # Web framework and utilities
 axum = { workspace = true }

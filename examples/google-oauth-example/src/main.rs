@@ -6,12 +6,12 @@ use axum::{
     response::{Html, Redirect},
     routing::{get, post},
 };
-use rust_identity_core::{IdentityError, IdentityProvider};
-use rust_identity_oauth2::{
+use ras_identity_core::{IdentityError, IdentityProvider};
+use ras_identity_oauth2::{
     InMemoryStateStore, OAuth2AuthPayload, OAuth2Config, OAuth2Provider, OAuth2ProviderConfig,
     OAuth2Response,
 };
-use rust_identity_session::{JwtAuthProvider, SessionConfig, SessionService};
+use ras_identity_session::{JwtAuthProvider, SessionConfig, SessionService};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;

@@ -9,22 +9,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 cargo build
 
 # Build specific crate
-cargo build -p rust-auth-core
-cargo build -p rust-jsonrpc-macro
-cargo build -p rust-jsonrpc-core
-cargo build -p rust-jsonrpc-types
-cargo build -p rust-rest-macro
+cargo build -p ras-auth-core
+cargo build -p ras-jsonrpc-macro
+cargo build -p ras-jsonrpc-core
+cargo build -p ras-jsonrpc-types
+cargo build -p ras-rest-macro
 cargo build -p openrpc-types
 
 # Run tests
 cargo test
 
 # Run tests for specific crate
-cargo test -p rust-auth-core
-cargo test -p rust-jsonrpc-macro
-cargo test -p rust-jsonrpc-core
-cargo test -p rust-jsonrpc-types
-cargo test -p rust-rest-macro
+cargo test -p ras-auth-core
+cargo test -p ras-jsonrpc-macro
+cargo test -p ras-jsonrpc-core
+cargo test -p ras-jsonrpc-types
+cargo test -p ras-rest-macro
 cargo test -p openrpc-types
 
 # Run example applications
@@ -59,18 +59,18 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
 ### Current Crates
 
 #### Core Libraries (`crates/libs/`)
-- **rust-auth-core**: Shared authentication traits and types (`AuthProvider`, `AuthenticatedUser`, `AuthError`) used across JSON-RPC and REST services
-- **rust-jsonrpc-macro**: Procedural macro for type-safe JSON-RPC interfaces with auth integration and optional OpenRPC document generation
-- **rust-jsonrpc-core**: Core traits and utilities for JSON-RPC services (re-exports auth types from rust-auth-core)
-- **rust-jsonrpc-types**: Pure JSON-RPC 2.0 protocol types and utilities
-- **rust-rest-macro**: Procedural macro for type-safe REST APIs with auth integration and OpenAPI 3.0 generation
+- **ras-auth-core**: Shared authentication traits and types (`AuthProvider`, `AuthenticatedUser`, `AuthError`) used across JSON-RPC and REST services
+- **ras-jsonrpc-macro**: Procedural macro for type-safe JSON-RPC interfaces with auth integration and optional OpenRPC document generation
+- **ras-jsonrpc-core**: Core traits and utilities for JSON-RPC services (re-exports auth types from ras-auth-core)
+- **ras-jsonrpc-types**: Pure JSON-RPC 2.0 protocol types and utilities
+- **ras-rest-macro**: Procedural macro for type-safe REST APIs with auth integration and OpenAPI 3.0 generation
 - **openrpc-types**: Complete OpenRPC 1.3.2 specification types with validation, builders, and JSON Schema Draft 7 support
 
 #### Identity Management (`crates/identity/`)
-- **rust-identity-core**: Core `IdentityProvider` and `UserPermissions` traits
-- **rust-identity-local**: Username/password auth with Argon2 hashing
-- **rust-identity-oauth2**: OAuth2 provider with Google support, PKCE, and state management
-- **rust-identity-session**: JWT session management and `JwtAuthProvider` implementation
+- **ras-identity-core**: Core `IdentityProvider` and `UserPermissions` traits
+- **ras-identity-local**: Username/password auth with Argon2 hashing
+- **ras-identity-oauth2**: OAuth2 provider with Google support, PKCE, and state management
+- **ras-identity-session**: JWT session management and `JwtAuthProvider` implementation
 
 #### Examples (`examples/`)
 - **google-oauth-example**: Full-stack OAuth2 demo with backend API and interactive frontend
@@ -95,14 +95,14 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
 - Use path dependencies for internal crates: `{ path = "../crate-name" }`
 
 #### Crate Organization
-- **rust-auth-core**: Shared authentication types and traits, minimal dependencies (serde, thiserror)
-- **rust-jsonrpc-types**: Pure protocol types, minimal dependencies (only serde)
-- **rust-jsonrpc-core**: JSON-RPC runtime support, depends on auth-core and types crate
-- **rust-jsonrpc-macro**: Procedural macro only, depends on syn/quote for parsing
-- **rust-rest-macro**: REST procedural macro, depends on auth-core for shared types
-- **rust-identity-core**: Core traits only, minimal dependencies
-- **rust-identity-local/oauth2**: Specific provider implementations, depend on core
-- **rust-identity-session**: JWT session management, integrates with both identity and auth-core
+- **ras-auth-core**: Shared authentication types and traits, minimal dependencies (serde, thiserror)
+- **ras-jsonrpc-types**: Pure protocol types, minimal dependencies (only serde)
+- **ras-jsonrpc-core**: JSON-RPC runtime support, depends on auth-core and types crate
+- **ras-jsonrpc-macro**: Procedural macro only, depends on syn/quote for parsing
+- **ras-rest-macro**: REST procedural macro, depends on auth-core for shared types
+- **ras-identity-core**: Core traits only, minimal dependencies
+- **ras-identity-local/oauth2**: Specific provider implementations, depend on core
+- **ras-identity-session**: JWT session management, integrates with both identity and auth-core
 
 #### Development Notes
 - Edition 2024 is used (cutting edge Rust)
@@ -178,7 +178,7 @@ The authentication system is designed with flexibility and security in mind:
    - Maintains active session registry (for revocation)
 
 ### Integration with JSON-RPC
-- `JwtAuthProvider` implements the `AuthProvider` trait from `rust-jsonrpc-core`
+- `JwtAuthProvider` implements the `AuthProvider` trait from `ras-jsonrpc-core`
 - This allows JWT-based authentication to work seamlessly with the JSON-RPC macro-generated services
 - The flow: Identity Provider → Session Service → JWT → JwtAuthProvider → JSON-RPC Service
 

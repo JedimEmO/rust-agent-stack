@@ -1,0 +1,24 @@
+[package]
+name = "ras-identity-session"
+version = "0.1.1"
+edition = "2024"
+description = "JWT session management and authentication provider implementation"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/example/rust-agent-stack"
+homepage = "https://github.com/example/rust-agent-stack"
+
+[dependencies]
+ras-identity-core = { path = "../ras-identity-core", version = "0.1.1", registry = "kellnr" }
+ras-auth-core = { path = "../../libs/ras-auth-core" }
+
+async-trait = { workspace = true }
+chrono = { workspace = true }
+jsonwebtoken = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+ras-identity-local = { path = "../ras-identity-local", version = "0.1.1", registry = "kellnr" }
