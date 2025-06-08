@@ -348,7 +348,9 @@ mod tests {
 
     #[test]
     fn test_example_pairing_notification() {
-        let params = vec![ExampleOrReference::Example(Box::new(Example::with_value("param")))];
+        let params = vec![ExampleOrReference::Example(Box::new(Example::with_value(
+            "param",
+        )))];
         let pairing = ExamplePairing::new("notification", params);
 
         assert!(pairing.is_notification());
@@ -356,7 +358,9 @@ mod tests {
 
     #[test]
     fn test_example_pairing_validation() {
-        let params = vec![ExampleOrReference::Example(Box::new(Example::with_value("test")))];
+        let params = vec![ExampleOrReference::Example(Box::new(Example::with_value(
+            "test",
+        )))];
 
         // Valid pairing
         let pairing = ExamplePairing::new("valid", params.clone());
@@ -380,7 +384,9 @@ mod tests {
 
     #[test]
     fn test_example_pairing_builder() {
-        let params = vec![ExampleOrReference::Example(Box::new(Example::with_value("test")))];
+        let params = vec![ExampleOrReference::Example(Box::new(Example::with_value(
+            "test",
+        )))];
         let pairing = ExamplePairing::builder()
             .name("test_pairing".to_string())
             .params(params)

@@ -423,14 +423,17 @@ mod tests {
 
         let method = Method::new(
             "createUser",
-            vec![crate::method::ContentDescriptorOrReference::ContentDescriptor(Box::new(user_param))],
+            vec![
+                crate::method::ContentDescriptorOrReference::ContentDescriptor(Box::new(
+                    user_param,
+                )),
+            ],
         )
         .with_summary("Create a new user")
         .with_result(
-            crate::method::ContentDescriptorOrReference::ContentDescriptor(Box::new(ContentDescriptor::new(
-                "userId",
-                Schema::string(),
-            ))),
+            crate::method::ContentDescriptorOrReference::ContentDescriptor(Box::new(
+                ContentDescriptor::new("userId", Schema::string()),
+            )),
         );
 
         let components = Components::new().with_schema(

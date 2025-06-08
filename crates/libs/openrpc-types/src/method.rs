@@ -708,10 +708,9 @@ mod tests {
     #[test]
     fn test_union_types() {
         // Test ContentDescriptorOrReference
-        let cd_variant = ContentDescriptorOrReference::ContentDescriptor(Box::new(ContentDescriptor::new(
-            "test",
-            crate::Schema::string(),
-        )));
+        let cd_variant = ContentDescriptorOrReference::ContentDescriptor(Box::new(
+            ContentDescriptor::new("test", crate::Schema::string()),
+        ));
         let ref_variant =
             ContentDescriptorOrReference::Reference(Reference::content_descriptor("TestParam"));
 
