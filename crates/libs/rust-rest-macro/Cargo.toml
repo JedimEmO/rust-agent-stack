@@ -1,0 +1,25 @@
+[package]
+name = "rust-rest-macro"
+version = "0.1.0"
+edition = "2024"
+description = "Procedural macro for type-safe REST APIs with auth integration and OpenAPI document generation"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/example/rust-agent-stack"
+homepage = "https://github.com/example/rust-agent-stack"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { workspace = true }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }
+bon = { workspace = true }
+axum = { workspace = true }
+rust-jsonrpc-core = { path = "../rust-jsonrpc-core", version = "0.1.1", registry = "kellnr" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+schemars = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
