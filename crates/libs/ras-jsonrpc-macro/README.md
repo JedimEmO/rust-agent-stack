@@ -15,6 +15,7 @@ This crate provides the `jsonrpc_service!` procedural macro that generates type-
 - ✅ **Builder Pattern**: Ergonomic service configuration using the `bon` crate
 - ✅ **Async Support**: Full async/await support throughout
 - ✅ **JSON-RPC 2.0 Compliant**: Complete protocol compliance with proper error handling
+- ✅ **OpenRPC Document Generation**: Automatic API documentation generation
 
 ## Usage
 
@@ -27,6 +28,9 @@ ras-jsonrpc-core = "0.1.0"  # For AuthProvider trait
 axum = "0.8"                  # For web server integration
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.0", features = ["full"] }
+
+# Optional: For OpenRPC document generation
+schemars = "0.8"              # Required if using openrpc feature
 ```
 
 ## Quick Start
@@ -139,6 +143,7 @@ async fn main() {
 ```rust
 jsonrpc_service!({
     service_name: ServiceName,  // Name of the generated service
+    openrpc: true,              // Optional: Enable OpenRPC generation
     methods: [
         // Method definitions...
     ]
@@ -275,6 +280,126 @@ The macro generates comprehensive error handling:
 - **Insufficient Permissions**: Missing permissions (-32002)
 - **Internal Errors**: Handler errors (-32603)
 
+## OpenRPC Document Generation
+
+The macro can automatically generate OpenRPC specification documents for your JSON-RPC API. This provides machine-readable API documentation that can be used by tools like the openrpc-to-bruno converter.
+
+### Enabling OpenRPC
+
+#### Default Output Path
+```rust
+jsonrpc_service!({
+    service_name: MyService,
+    openrpc: true,  // Generates to target/openrpc/myservice.json
+    methods: [
+        // ... method definitions ...
+    ]
+});
+```
+
+#### Custom Output Path
+```rust
+jsonrpc_service!({
+    service_name: MyService,
+    openrpc: { output: "docs/api/myservice.json" },
+    methods: [
+        // ... method definitions ...
+    ]
+});
+```
+
+### Generated Functions
+
+When OpenRPC is enabled, the macro generates two additional functions:
+
+```rust
+// Generate OpenRPC document as a serde_json::Value
+pub fn generate_myservice_openrpc() -> serde_json::Value
+
+// Generate and write OpenRPC document to file
+pub fn generate_myservice_openrpc_to_file() -> Result<(), std::io::Error>
+```
+
+### Requirements
+
+All request and response types must implement the `schemars::JsonSchema` trait:
+
+```rust
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct MyRequest {
+    /// Field documentation appears in the schema
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    optional_field: Option<String>,
+}
+```
+
+### OpenRPC Output
+
+The generated OpenRPC document includes:
+
+- **Service metadata**: Title, version, description
+- **Method specifications**: Name, parameters, results
+- **JSON Schemas**: Complete type definitions with descriptions
+- **Authentication metadata**: `x-authentication` and `x-permissions` extensions for each method
+
+### Example
+
+```rust
+use ras_jsonrpc_macro::jsonrpc_service;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct CreateUserRequest {
+    /// User's email address
+    email: String,
+    /// User's display name
+    name: String,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct User {
+    id: String,
+    email: String,
+    name: String,
+}
+
+jsonrpc_service!({
+    service_name: UserService,
+    openrpc: true,
+    methods: [
+        WITH_PERMISSIONS(["admin"]) create_user(CreateUserRequest) -> User,
+    ]
+});
+
+// In your main function or build script:
+fn main() {
+    // Generate and save the OpenRPC document
+    if let Err(e) = generate_userservice_openrpc_to_file() {
+        eprintln!("Failed to generate OpenRPC: {}", e);
+    }
+}
+```
+
+This generates an OpenRPC document at `target/openrpc/userservice.json` with:
+- Complete method documentation
+- JSON schemas for all types
+- Authentication requirements (`x-authentication: true`)
+- Permission requirements (`x-permissions: ["admin"]`)
+
+### Converting to Bruno Collections
+
+The generated OpenRPC documents can be converted to Bruno API testing collections using the `openrpc-to-bruno` tool:
+
+```bash
+cargo install openrpc-to-bruno
+openrpc-to-bruno -i target/openrpc/userservice.json -o bruno-collection
+```
+
 ## Integration
 
 This crate works seamlessly with:
@@ -290,6 +415,7 @@ See the [`examples/`](../../examples/) directory for complete working examples:
 
 - [`basic-service`](../../examples/basic-service) - Complete service with authentication
 - [`usage.rs`](examples/usage.rs) - Standalone usage example
+- [`openrpc_demo.rs`](examples/openrpc_demo.rs) - OpenRPC document generation example
 
 ## License
 
