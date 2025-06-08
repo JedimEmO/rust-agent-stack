@@ -1,5 +1,6 @@
 [registries]
 kellnr = { index = "http://localhost:8000/crate-index/" }
+token = "rGHuge8eJbqswR2kaVqlQ9lKYx95MANf"
 
 [registry]
 default = "kellnr"
