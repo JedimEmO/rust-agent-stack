@@ -1,15 +1,16 @@
 use axum::Router;
 use ras_jsonrpc_core::AuthProvider;
 use ras_jsonrpc_macro::jsonrpc_service;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
 /// Request to get current user information
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct GetUserInfoRequest {}
 
 /// Response containing user information
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, JsonSchema)]
 pub struct GetUserInfoResponse {
     pub user_id: String,
     pub permissions: Vec<String>,
@@ -17,7 +18,7 @@ pub struct GetUserInfoResponse {
 }
 
 /// Request to create a new document (admin only)
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct CreateDocumentRequest {
     pub title: String,
     pub content: String,
@@ -25,21 +26,21 @@ pub struct CreateDocumentRequest {
 }
 
 /// Response for document creation
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, JsonSchema)]
 pub struct CreateDocumentResponse {
     pub document_id: String,
     pub created_at: String,
 }
 
 /// Request to list documents
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ListDocumentsRequest {
     pub limit: Option<u32>,
     pub offset: Option<u32>,
 }
 
 /// Document information
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct DocumentInfo {
     pub id: String,
     pub title: String,
@@ -48,31 +49,31 @@ pub struct DocumentInfo {
 }
 
 /// Response for listing documents
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, JsonSchema)]
 pub struct ListDocumentsResponse {
     pub documents: Vec<DocumentInfo>,
     pub total: u32,
 }
 
 /// Request to delete a document (admin only)
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct DeleteDocumentRequest {
     pub document_id: String,
 }
 
 /// Response for document deletion
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, JsonSchema)]
 pub struct DeleteDocumentResponse {
     pub success: bool,
     pub message: String,
 }
 
 /// Request to get system status (system admin only)
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct GetSystemStatusRequest {}
 
 /// System status information
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct SystemStatus {
     pub uptime_seconds: u64,
     pub memory_usage_mb: u64,
@@ -81,7 +82,7 @@ pub struct SystemStatus {
 }
 
 /// Response for system status
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct GetSystemStatusResponse {
     pub status: SystemStatus,
 }
@@ -100,11 +101,11 @@ impl Default for GetSystemStatusResponse {
 }
 
 /// Request to access beta features
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct GetBetaFeaturesRequest {}
 
 /// Beta feature information
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct BetaFeature {
     pub name: String,
     pub description: String,
@@ -112,7 +113,7 @@ pub struct BetaFeature {
 }
 
 /// Response for beta features
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, JsonSchema)]
 pub struct GetBetaFeaturesResponse {
     pub features: Vec<BetaFeature>,
 }
@@ -120,6 +121,7 @@ pub struct GetBetaFeaturesResponse {
 // Define the JSON-RPC service using the macro
 jsonrpc_service!({
     service_name: GoogleOAuth2Service,
+    openrpc: true,
     methods: [
         // Public endpoints (require authentication but no specific permissions)
         WITH_PERMISSIONS([]) get_user_info(GetUserInfoRequest) -> GetUserInfoResponse,
@@ -143,6 +145,15 @@ jsonrpc_service!({
 pub fn create_api_router<A: AuthProvider + Clone + Send + Sync + 'static>(
     auth_provider: A,
 ) -> Router<()> {
+    // Generate OpenRPC documentation file
+    if let Err(e) = generate_googleoauth2service_openrpc_to_file() {
+        tracing::error!("Failed to generate OpenRPC documentation: {}", e);
+    } else {
+        tracing::info!(
+            "Generated OpenRPC documentation at target/openrpc/googleoauth2service.json"
+        );
+    }
+
     GoogleOAuth2ServiceBuilder::new("/rpc")
         .auth_provider(auth_provider)
         .get_user_info_handler(|user, _request| async move {
