@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed - 2025-01-08
+- Fixed REST service example authentication provider sharing issue
+  - Resolved authentication failures after user registration due to provider instance isolation
+  - Implemented SharedUserProvider wrapper to ensure consistent provider state across service components
+  - Fixed issue where LocalUserProvider instance used for registration differed from SessionService instance
+  - Authentication now works correctly for both pre-configured test users (admin/admin123, user/user123) and newly registered users
+  - Enhanced code organization with proper provider lifecycle management
+
+### Fixed - 2025-01-08
 - Fixed REST API documentation schema display for optional fields showing as empty objects
   - Enhanced OpenAPI schema generation to convert `"type": ["string", "null"]` format to `"type": "string", "nullable": true"` for better Swagger UI compatibility
   - Improved JavaScript schema processing in documentation UI to handle array type definitions (e.g., `["string", "null"]`)

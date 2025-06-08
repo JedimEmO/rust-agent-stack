@@ -60,7 +60,9 @@ impl LocalUserProvider {
         };
 
         let mut users = self.users.write().await;
+
         users.insert(username, user);
+
         Ok(())
     }
 

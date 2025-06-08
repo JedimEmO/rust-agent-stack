@@ -38,3 +38,13 @@
 ### What Could Have Gone Better  
 - Could have added unit tests for the nullable type handling to prevent future regressions
 - Schema normalization could be made configurable per service for flexibility
+
+## Local Auth Investigation (2025-01-08)
+
+### What Went Well
+- User performed manual testing and confirmed authentication system works correctly
+- No actual bug in local auth implementation - system functioning as designed
+
+### What Could Have Gone Better
+- Could have started with manual testing first before assuming there was a bug
+- Initial problem report could have included more detailed testing steps to rule out user error

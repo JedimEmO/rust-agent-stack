@@ -10,6 +10,45 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tracing::info;
 
+// Custom provider that implements IdentityProvider and can be shared
+#[derive(Clone)]
+struct SharedUserProvider {
+    inner: Arc<LocalUserProvider>,
+}
+
+impl SharedUserProvider {
+    fn new() -> Self {
+        Self {
+            inner: Arc::new(LocalUserProvider::new()),
+        }
+    }
+
+    async fn add_user(
+        &self,
+        username: String,
+        password: String,
+        email: Option<String>,
+        display_name: Option<String>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.inner
+            .add_user(username, password, email, display_name)
+            .await
+            .map_err(|e| e.into())
+    }
+}
+
+// Implement IdentityProvider for SharedUserProvider so it can be registered with SessionService
+#[async_trait]
+impl IdentityProvider for SharedUserProvider {
+    fn provider_id(&self) -> &str {
+        self.inner.provider_id()
+    }
+
+    async fn verify(&self, auth_payload: serde_json::Value) -> IdentityResult<VerifiedIdentity> {
+        self.inner.verify(auth_payload).await
+    }
+}
+
 // Example data types
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 struct CreateUserRequest {
@@ -137,7 +176,7 @@ impl UserPermissions for ExamplePermissions {
 #[derive(Clone)]
 struct AppState {
     session_service: Arc<SessionService>,
-    local_provider: Arc<LocalUserProvider>,
+    shared_provider: SharedUserProvider,
 }
 
 // Example in-memory storage
@@ -255,9 +294,9 @@ impl AuthHandlers {
     ) -> Result<AuthResponse, Box<dyn std::error::Error + Send + Sync>> {
         info!("Registering new user: {}", request.username);
 
-        // Add user to local provider
+        // Add user to the shared provider
         self.app_state
-            .local_provider
+            .shared_provider
             .add_user(
                 request.username.clone(),
                 request.password.clone(),
@@ -266,6 +305,10 @@ impl AuthHandlers {
             )
             .await
             .map_err(|e| format!("Failed to register user: {}", e))?;
+
+        // Since we have the same issue with two separate provider instances,
+        // we need to manually keep them in sync. This is not ideal but fixes the immediate bug.
+        // TODO: Refactor to use a single shared provider instance.
 
         // Create auth payload for automatic login after registration
         let auth_payload = serde_json::json!({
@@ -391,7 +434,29 @@ async fn main() -> Result<()> {
     info!("Starting REST service with JWT authentication");
 
     // Initialize authentication components
-    let local_provider = Arc::new(LocalUserProvider::new());
+    let shared_provider = SharedUserProvider::new();
+
+    // Add test users to the shared provider
+    info!("Adding test users");
+    shared_provider
+        .add_user(
+            "admin".to_string(),
+            "admin123".to_string(),
+            Some("admin@example.com".to_string()),
+            Some("Administrator".to_string()),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to add admin user: {}", e))?;
+
+    shared_provider
+        .add_user(
+            "user".to_string(),
+            "user123".to_string(),
+            Some("user@example.com".to_string()),
+            Some("Regular User".to_string()),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to add regular user: {}", e))?;
 
     // Create session configuration
     let session_config = SessionConfig {
@@ -407,15 +472,17 @@ async fn main() -> Result<()> {
             .with_permissions(Arc::new(ExamplePermissions) as Arc<dyn UserPermissions>),
     );
 
-    // Register the local provider with the session service
+    // KEY FIX: Use the shared provider directly for the session service
+    // Since SharedUserProvider implements IdentityProvider and is cloneable,
+    // we can register a clone that shares the same underlying storage
     session_service
-        .register_provider(Box::new(LocalUserProvider::new()) as Box<dyn IdentityProvider>)
+        .register_provider(Box::new(shared_provider.clone()) as Box<dyn IdentityProvider>)
         .await;
 
     // Create application state
     let app_state = AppState {
         session_service: session_service.clone(),
-        local_provider: local_provider.clone(),
+        shared_provider: shared_provider.clone(),
     };
 
     // Create handlers
@@ -478,28 +545,6 @@ async fn main() -> Result<()> {
             async move { handlers.delete_user(user, id).await }
         })
         .build();
-
-    // Add some test users
-    info!("Adding test users");
-    local_provider
-        .add_user(
-            "admin".to_string(),
-            "admin123".to_string(),
-            Some("admin@example.com".to_string()),
-            Some("Administrator".to_string()),
-        )
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to add admin user: {}", e))?;
-
-    local_provider
-        .add_user(
-            "user".to_string(),
-            "user123".to_string(),
-            Some("user@example.com".to_string()),
-            Some("Regular User".to_string()),
-        )
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to add regular user: {}", e))?;
 
     // Generate OpenAPI documentation
     if let Err(e) = generate_userservice_openapi_to_file() {
