@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed - 2025-01-09
+- Fixed OpenRPC specification parsing to support extension fields and JSON Schema compatibility
+  - Removed deny_unknown_fields restrictions from Method and Schema structs in openrpc-types crate
+  - Added $schema field support to Schema struct for proper JSON Schema Draft 7 compatibility
+  - Enables proper parsing of OpenRPC documents with x-authentication and x-permissions extensions
+  - Bruno API collection generator now properly supports OpenRPC files with custom authentication metadata
+
+### Enhanced - 2025-01-09
+- Enhanced OpenRPC document generation functionality to actually generate files
+  - Modified google-oauth-example to call OpenRPC generation functions during service creation
+  - Added JsonSchema derives to all request/response types for proper schema generation
+  - Created test infrastructure to verify end-to-end OpenRPC generation works correctly
+  - OpenRPC documents now properly written to target/openrpc/ directory when enabled
+
+### Fixed - 2025-01-09
+- Fixed Bruno API collection JSON formatting to be properly indented and valid
+  - Corrected JSON body indentation in .bru files to use proper 2-space indentation within body:json blocks
+  - Generated Bruno collections are now properly formatted and compatible with Bruno API client
+  - Resolves validation errors when importing generated collections into Bruno
+
+### Documentation - 2025-01-09
+- Added comprehensive OpenRPC generation documentation to ras-jsonrpc-macro README
+  - Documented OpenRPC generation feature with complete usage examples and configuration options
+  - Included requirements for JsonSchema trait implementation on request/response types
+  - Added examples for both boolean and custom path OpenRPC generation configurations
+  - Explained generated function signatures and integration patterns
+
 ### Enhanced - 2025-01-08
 - Refactored permission system to support AND/OR logic groups for both REST and JSON-RPC macros
   - Changed permission syntax from flat array to nested groups with OR logic between groups and AND logic within groups
