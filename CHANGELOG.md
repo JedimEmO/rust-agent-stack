@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Refactored - 2025-01-08
+- Architectural refactoring to eliminate coupling between RPC and REST macro crates
+  - Created new `rust-auth-core` crate as shared foundation for authentication types and traits
+  - Moved `AuthProvider`, `AuthenticatedUser`, `AuthError`, and related types from `rust-jsonrpc-core` to `rust-auth-core`
+  - Updated `rust-rest-macro` to depend on `rust-auth-core` instead of `rust-jsonrpc-core`, eliminating unwanted cross-dependencies
+  - Updated `rust-identity-session` and other affected crates to use shared authentication types
+  - Maintained full backward compatibility through re-exports in `rust-jsonrpc-core`
+  - Enhanced codebase maintainability with clear separation of concerns between authentication logic and protocol-specific implementations
+  - Improved workspace architecture enabling future protocol extensions (gRPC, etc.) without introducing coupling
+  - Updated documentation and build commands to reflect new crate structure
+
 ### Fixed - 2025-01-08
 - Fixed REST service example authentication provider sharing issue
   - Resolved authentication failures after user registration due to provider instance isolation
