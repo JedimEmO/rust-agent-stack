@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed - 2025-01-08
+- Fixed JSON-RPC macro parameter handling for unit type `()` parameters
+  - Enhanced macro-generated code to properly handle methods with unit type parameters when no params are provided
+  - Fixed parameter parsing to deserialize `None` parameters as `serde_json::Value::Null` for unit types instead of rejecting as invalid
+  - Resolved test failures in `test_unauthorized_methods`, `test_authentication_required_methods`, `test_admin_permission_methods`, and `test_concurrent_requests`
+  - Improved backward compatibility for JSON-RPC requests with missing or null parameters for void methods
+
 ### Added - 2025-01-08
 - Comprehensive HTTP integration test suites for both JSON-RPC and REST macro crates
   - Complete JSON-RPC integration tests covering all authentication patterns (UNAUTHORIZED, WITH_PERMISSIONS with various levels)

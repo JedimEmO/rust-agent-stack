@@ -295,7 +295,9 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
                                 serde_json::from_value(params)
                                     .map_err(|e| rust_jsonrpc_types::JsonRpcError::invalid_params(e.to_string()))?
                             } else {
-                                return Err(rust_jsonrpc_types::JsonRpcError::invalid_params("Missing parameters".to_string()));
+                                // For unit type (), we can deserialize from null
+                                serde_json::from_value(serde_json::Value::Null)
+                                    .map_err(|e| rust_jsonrpc_types::JsonRpcError::invalid_params(e.to_string()))?
                             };
 
                             // Call handler
@@ -352,7 +354,9 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
                                 serde_json::from_value(params)
                                     .map_err(|e| rust_jsonrpc_types::JsonRpcError::invalid_params(e.to_string()))?
                             } else {
-                                return Err(rust_jsonrpc_types::JsonRpcError::invalid_params("Missing parameters".to_string()));
+                                // For unit type (), we can deserialize from null
+                                serde_json::from_value(serde_json::Value::Null)
+                                    .map_err(|e| rust_jsonrpc_types::JsonRpcError::invalid_params(e.to_string()))?
                             };
 
                             // Call handler
