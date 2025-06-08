@@ -777,8 +777,8 @@ fn generate_handler_body(endpoint: &EndpointDefinition) -> proc_macro2::TokenStr
 
                 // Check permissions - REST uses OR logic (user needs ANY of the required permissions)
                 if !required_permissions.is_empty() {
-                    let has_permission = required_permissions.iter().any(|perm| user.permissions.contains(perm));
-                    if !has_permission {
+                    let has_permission = auth_provider.as_ref().unwrap().check_permissions(&user, &required_permissions);
+                    if has_permission.is_err() {
                         use axum::response::IntoResponse;
                         return (
                             axum::http::StatusCode::FORBIDDEN,
