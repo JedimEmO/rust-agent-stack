@@ -1,0 +1,12 @@
+[registries]
+kellnr = { index = "http://localhost:8000/crate-index/" }
+
+[registry]
+default = "kellnr"
+
+[net]
+retry = 3
+offline = false
+
+[build]
+incremental = true
