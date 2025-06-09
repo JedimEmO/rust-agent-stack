@@ -13,6 +13,10 @@ cargo build -p ras-auth-core
 cargo build -p ras-jsonrpc-macro
 cargo build -p ras-jsonrpc-core
 cargo build -p ras-jsonrpc-types
+cargo build -p ras-jsonrpc-bidirectional-types
+cargo build -p ras-jsonrpc-bidirectional-server
+cargo build -p ras-jsonrpc-bidirectional-client
+cargo build -p ras-jsonrpc-bidirectional-macro
 cargo build -p ras-rest-macro
 cargo build -p openrpc-types
 
@@ -24,11 +28,17 @@ cargo test -p ras-auth-core
 cargo test -p ras-jsonrpc-macro
 cargo test -p ras-jsonrpc-core
 cargo test -p ras-jsonrpc-types
+cargo test -p ras-jsonrpc-bidirectional-types
+cargo test -p ras-jsonrpc-bidirectional-server
+cargo test -p ras-jsonrpc-bidirectional-client
+cargo test -p ras-jsonrpc-bidirectional-macro
 cargo test -p ras-rest-macro
 cargo test -p openrpc-types
 
 # Run example applications
 cargo run -p google-oauth-example
+cargo run -p bidirectional-chat-server
+cargo run -p bidirectional-chat-client
 
 # Check code without building
 cargo check
@@ -63,6 +73,10 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
 - **ras-jsonrpc-macro**: Procedural macro for type-safe JSON-RPC interfaces with auth integration and optional OpenRPC document generation
 - **ras-jsonrpc-core**: Core traits and utilities for JSON-RPC services (re-exports auth types from ras-auth-core)
 - **ras-jsonrpc-types**: Pure JSON-RPC 2.0 protocol types and utilities
+- **ras-jsonrpc-bidirectional-types**: Core types for bidirectional JSON-RPC communication over WebSockets
+- **ras-jsonrpc-bidirectional-server**: WebSocket server runtime with Axum integration for bidirectional JSON-RPC
+- **ras-jsonrpc-bidirectional-client**: Cross-platform WebSocket client (native + WASM) for bidirectional JSON-RPC
+- **ras-jsonrpc-bidirectional-macro**: Procedural macro for generating bidirectional WebSocket JSON-RPC services
 - **ras-rest-macro**: Procedural macro for type-safe REST APIs with auth integration and OpenAPI 3.0 generation
 - **openrpc-types**: Complete OpenRPC 1.3.2 specification types with validation, builders, and JSON Schema Draft 7 support
 
@@ -74,6 +88,7 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
 
 #### Examples (`examples/`)
 - **google-oauth-example**: Full-stack OAuth2 demo with backend API and interactive frontend
+- **bidirectional-chat**: Real-time chat system demonstrating bidirectional JSON-RPC over WebSockets
 
 ### Key Design Decisions
 1. **Procedural Macro Architecture**: Using proc-macros for JSON-RPC suggests focus on ergonomic, type-safe RPC interfaces with compile-time validation
@@ -154,6 +169,49 @@ jsonrpc_service!({
 - All request/response types must implement `schemars::JsonSchema` trait
 - Generated functions: `generate_{service_name}_openrpc()` and `generate_{service_name}_openrpc_to_file()`
 
+#### Bidirectional JSON-RPC over WebSockets
+The `jsonrpc_bidirectional_service!` macro enables type-safe, bidirectional JSON-RPC communication over WebSockets:
+
+```rust
+jsonrpc_bidirectional_service!({
+    service_name: ChatService,
+    openrpc: true,
+    
+    // Client -> Server methods (with authentication/permissions)
+    client_to_server: [
+        WITH_PERMISSIONS(["user"]) send_message(SendMessageRequest) -> SendMessageResponse,
+        WITH_PERMISSIONS(["admin"]) kick_user(KickUserRequest) -> KickUserResponse,
+    ],
+    
+    // Server -> Client notifications (no response expected)  
+    server_to_client: [
+        message_received(MessageReceivedNotification),
+        user_joined(UserJoinedNotification),
+        user_left(UserLeftNotification),
+    ]
+});
+```
+
+**Generated Components:**
+- **Server trait**: Service implementation interface with handler methods
+- **Server builder**: WebSocket service configuration with Axum integration
+- **Client struct**: Type-safe client with method calls and notification handlers
+- **Message enums**: Type-safe communication in both directions
+- **OpenRPC docs**: Optional documentation generation for client_to_server methods
+
+**Authentication Model:**
+- JWT authentication during WebSocket handshake (Authorization header)
+- Persistent auth context for connection lifetime
+- Permission-based access control for client_to_server methods
+- Automatic connection cleanup on token expiration
+
+**Key Features:**
+- Cross-platform client support (native + WASM using conditional compilation)
+- Connection management with subscription/broadcast patterns
+- Heartbeat/keepalive for connection health
+- Automatic reconnection with exponential backoff
+- Integration with existing auth system (ras-auth-core, ras-identity-*)
+
 #### Testing Guidelines  
 - **Security-First**: Include security testing (timing attacks, username enumeration) from initial implementation
 - **End-to-End Testing**: Always test complete flows (e.g., OAuth2 flow from start to finish) during implementation
@@ -221,3 +279,22 @@ Full-stack OAuth2 demo with Google integration, showcasing complete authenticati
 ```
 
 **Key Features:** OAuth2 + PKCE, role-based permissions, JSON-RPC API, responsive web UI
+
+### Bidirectional Chat Example (`examples/bidirectional-chat/`)
+
+Real-time chat system demonstrating bidirectional JSON-RPC communication over WebSockets with JWT authentication.
+
+**Quick Start:**
+```bash
+# 1. Start the server
+cargo run -p bidirectional-chat-server
+
+# 2. Register a user and login (in another terminal)
+cargo run -p bidirectional-chat-client register --username alice
+cargo run -p bidirectional-chat-client login --username alice
+
+# 3. Start interactive chat session
+cargo run -p bidirectional-chat-client chat
+```
+
+**Key Features:** Bidirectional WebSockets, real-time messaging, JWT authentication, permission-based access control, cross-platform client support

@@ -8,10 +8,7 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
     let client_builder_name = quote::format_ident!("{}ClientBuilder", service_name);
 
     // Generate client methods
-    let client_methods = service_def
-        .methods
-        .iter()
-        .map(generate_client_method);
+    let client_methods = service_def.methods.iter().map(generate_client_method);
 
     let client_methods_with_timeout = service_def
         .methods

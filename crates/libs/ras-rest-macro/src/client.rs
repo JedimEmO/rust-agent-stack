@@ -9,10 +9,7 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
     let base_path = &service_def.base_path;
 
     // Generate client methods
-    let client_methods = service_def
-        .endpoints
-        .iter()
-        .map(generate_client_method);
+    let client_methods = service_def.endpoints.iter().map(generate_client_method);
 
     let client_methods_with_timeout = service_def
         .endpoints

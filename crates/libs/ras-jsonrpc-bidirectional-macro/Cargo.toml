@@ -1,0 +1,40 @@
+[package]
+name = "ras-jsonrpc-bidirectional-macro"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { workspace = true }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }
+serde_json = { workspace = true }
+
+
+[features]
+default = ["server", "client"]
+server = []
+client = []
+
+[dev-dependencies]
+ras-jsonrpc-bidirectional-types = { path = "../ras-jsonrpc-bidirectional-types" }
+ras-jsonrpc-bidirectional-server = { path = "../ras-jsonrpc-bidirectional-server" }
+ras-jsonrpc-bidirectional-client = { path = "../ras-jsonrpc-bidirectional-client" }
+ras-auth-core = { path = "../ras-auth-core" }
+ras-jsonrpc-types = { path = "../ras-jsonrpc-types" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+axum = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures = { workspace = true }
+rand = { workspace = true }
+url = { workspace = true }
+http = { workspace = true }
+async-trait = { workspace = true }
+uuid = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }

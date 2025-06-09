@@ -11,3 +11,6 @@ offline = false
 
 [build]
 incremental = true
+
+[profile.debug]
+panic = "abort"

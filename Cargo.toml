@@ -5,6 +5,10 @@ members = [
     "crates/libs/ras-jsonrpc-macro",
     "crates/libs/ras-jsonrpc-core",
     "crates/libs/ras-jsonrpc-types",
+    "crates/libs/ras-jsonrpc-bidirectional-types",
+    "crates/libs/ras-jsonrpc-bidirectional-macro",
+    "crates/libs/ras-jsonrpc-bidirectional-server",
+    "crates/libs/ras-jsonrpc-bidirectional-client",
     "crates/libs/ras-rest-macro",
     "crates/libs/openrpc-types",
     "crates/identity/ras-identity-core",
@@ -15,7 +19,7 @@ members = [
     "examples/basic-service",
     "examples/google-oauth-example/server",
     "examples/rest-service-example",
-    "examples/google-oauth-example/api"
+    "examples/google-oauth-example/api",
 ]
 
 [workspace.dependencies]
@@ -50,3 +54,19 @@ tower = { version = "0.5", features = ["util"] }
 hyper = { version = "1.0", features = ["full"] }
 rand = "0.8"
 futures = "0.3"
+dashmap = "6.1"
+# WebSocket dependencies
+tokio-tungstenite = "0.21"
+url = "2.4"
+http = "1.0"
+# Client dependencies
+dialoguer = "0.11"
+console = "0.15"
+axum-extra = "0.9"
+futures-util = "0.3"
+dotenvy = "0.15"
+# WASM dependencies  
+web-sys = "0.3"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
