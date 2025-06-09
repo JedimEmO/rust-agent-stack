@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed - 2025-01-09
+- Fixed OpenRPC schema generation to comply with JSON-RPC specification
+  - Schema definitions now properly use components/schemas instead of $defs
+  - Service-specific helper functions prevent naming conflicts in generated code
+  - All schema references updated to use standard #/components/schemas/ format
+
 ### Added - 2025-01-09
 - New OpenRPC-to-Bruno conversion tool for generating Bruno API collections from OpenRPC specifications
   - Complete CLI tool `openrpc-to-bruno` for converting OpenRPC 1.3.2 documents to Bruno collections

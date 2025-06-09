@@ -39,6 +39,16 @@ pub fn generate_openrpc_code(
         }
     };
 
+    // Generate unique function names for each service
+    let flatten_fn_name = quote::format_ident!(
+        "_flatten_schema_defs_{}",
+        service_name.to_string().to_lowercase()
+    );
+    let update_refs_fn_name = quote::format_ident!(
+        "_update_refs_recursive_{}",
+        service_name.to_string().to_lowercase()
+    );
+
     // Collect unique types for schema generation
     let mut unique_types = std::collections::HashMap::new();
     for method in &service_def.methods {
@@ -69,14 +79,19 @@ pub fn generate_openrpc_code(
                         .replace(" ", "_")
                 );
                 quote! {
-                    fn #fn_name() -> serde_json::Value {
+                    fn #fn_name() -> (serde_json::Value, std::collections::HashMap<String, serde_json::Value>) {
                         let schema = schemars::schema_for!(#type_tokens);
-                        serde_json::to_value(&schema).unwrap_or_else(|_| {
+                        let schema_value = serde_json::to_value(&schema).unwrap_or_else(|_| {
                             serde_json::json!({
                                 "type": "object",
                                 "description": format!("Schema for {}", #type_name)
                             })
-                        })
+                        });
+
+                        // Extract $defs and flatten them
+                        let mut extracted_defs = std::collections::HashMap::new();
+                        let flattened_schema = #flatten_fn_name(schema_value, &mut extracted_defs);
+                        (flattened_schema, extracted_defs)
                     }
                 }
             }
@@ -105,7 +120,12 @@ pub fn generate_openrpc_code(
                         .replace(" ", "_")
                 );
                 quote! {
-                    schemas.insert(#type_name.to_string(), #fn_name());
+                    let (schema, defs) = #fn_name();
+                    schemas.insert(#type_name.to_string(), schema);
+                    // Merge extracted defs into the main schemas collection
+                    for (def_name, def_schema) in defs {
+                        schemas.insert(def_name, def_schema);
+                    }
                 }
             }
         })
@@ -150,6 +170,57 @@ pub fn generate_openrpc_code(
             permissions: Vec<String>,
             request_type_name: String,
             response_type_name: String,
+        }
+
+        /// Helper function to flatten $defs from a schema and extract them into a separate collection
+        fn #flatten_fn_name(
+            mut schema: serde_json::Value,
+            extracted_defs: &mut std::collections::HashMap<String, serde_json::Value>
+        ) -> serde_json::Value {
+            if let Some(obj) = schema.as_object_mut() {
+                // If this schema has $defs, extract them
+                if let Some(defs) = obj.remove("$defs") {
+                    if let Some(defs_obj) = defs.as_object() {
+                        for (def_name, def_schema) in defs_obj {
+                            // Recursively flatten nested $defs in the extracted definitions
+                            let flattened_def = #flatten_fn_name(def_schema.clone(), extracted_defs);
+                            extracted_defs.insert(def_name.clone(), flattened_def);
+                        }
+                    }
+                }
+
+                // Update all $ref paths to point to components/schemas
+                #update_refs_fn_name(&mut schema);
+            }
+
+            schema
+        }
+
+        /// Recursively update all $ref paths from #/$defs/ to #/components/schemas/
+        fn #update_refs_fn_name(value: &mut serde_json::Value) {
+            match value {
+                serde_json::Value::Object(obj) => {
+                    for (key, val) in obj.iter_mut() {
+                        if key == "$ref" {
+                            if let Some(ref_str) = val.as_str() {
+                                if ref_str.starts_with("#/$defs/") {
+                                    *val = serde_json::Value::String(
+                                        ref_str.replace("#/$defs/", "#/components/schemas/")
+                                    );
+                                }
+                            }
+                        } else {
+                            #update_refs_fn_name(val);
+                        }
+                    }
+                }
+                serde_json::Value::Array(arr) => {
+                    for item in arr.iter_mut() {
+                        #update_refs_fn_name(item);
+                    }
+                }
+                _ => {}
+            }
         }
 
         // Generate schema functions for each type
