@@ -25,6 +25,7 @@ impl Default for BrunoCollection {
 /// Bruno environment variables file (.bru)
 #[derive(Debug)]
 pub struct BrunoEnvironment {
+    #[allow(dead_code)]
     pub name: String,
     pub variables: HashMap<String, String>,
 }
@@ -71,13 +72,16 @@ pub struct BrunoRequest {
 #[derive(Debug)]
 pub enum BrunoRequestBody {
     Json(String),
+    #[allow(dead_code)]
     Text(String),
 }
 
 #[derive(Debug)]
 pub enum BrunoAuth {
     Bearer { token: String },
+    #[allow(dead_code)]
     Basic { username: String, password: String },
+    #[allow(dead_code)]
     None,
 }
 

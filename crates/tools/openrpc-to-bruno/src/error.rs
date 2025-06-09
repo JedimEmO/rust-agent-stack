@@ -14,6 +14,7 @@ pub enum ToolError {
     OpenRpcParse(#[from] serde_json::Error),
 
     #[error("Invalid OpenRPC specification: {0}")]
+    #[allow(dead_code)]
     OpenRpcValidation(String),
 
     #[error("Failed to create output directory {path}: {source}")]
@@ -32,12 +33,14 @@ pub enum ToolError {
     },
 
     #[error("Invalid base URL: {0}")]
+    #[allow(dead_code)]
     InvalidBaseUrl(String),
 
     #[error("OpenRPC specification has no methods defined")]
     NoMethodsDefined,
 
     #[error("Failed to resolve OpenRPC references: {0}")]
+    #[allow(dead_code)]
     ReferenceResolution(String),
 
     #[error("Unsupported OpenRPC feature: {0}")]
