@@ -1,0 +1,17 @@
+[package]
+name = "api"
+version = "0.1.0"
+edition = "2024"
+publish = ["kellnr"]
+
+[dependencies]
+# JSON-RPC infrastructure
+ras-jsonrpc-macro = { path = "../../../crates/libs/ras-jsonrpc-macro" }
+ras-jsonrpc-core = { path = "../../../crates/libs/ras-jsonrpc-core" }
+ras-jsonrpc-types = { path = "../../../crates/libs/ras-jsonrpc-types" }
+
+# Web framework and utilities
+axum = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+schemars.workspace = true

@@ -360,10 +360,7 @@ async fn main() -> Result<()> {
         .route("/success", get(success_handler))
         .route("/error", get(error_handler))
         .route("/api-docs", get(api_docs_handler))
-        .nest_service(
-            "/static",
-            ServeDir::new("examples/google-oauth-example/static"),
-        )
+        .nest_service("/static", ServeDir::new("../static"))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)

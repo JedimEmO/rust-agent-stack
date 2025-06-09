@@ -1,5 +1,5 @@
+use api::*;
 use axum::Router;
-use google_oauth_example::api::*;
 use ras_jsonrpc_core::AuthProvider;
 use tracing::info;
 
@@ -7,15 +7,6 @@ use tracing::info;
 pub fn create_api_router<A: AuthProvider + Clone + Send + Sync + 'static>(
     auth_provider: A,
 ) -> Router<()> {
-    // Generate OpenRPC documentation file
-    if let Err(e) = generate_googleoauth2service_openrpc_to_file() {
-        tracing::error!("Failed to generate OpenRPC documentation: {}", e);
-    } else {
-        tracing::info!(
-            "Generated OpenRPC documentation at target/openrpc/googleoauth2service.json"
-        );
-    }
-
     GoogleOAuth2ServiceBuilder::new("/rpc")
         .auth_provider(auth_provider)
         .get_user_info_handler(|user, _request| async move {

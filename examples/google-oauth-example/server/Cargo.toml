@@ -4,19 +4,17 @@ version = "0.1.1"
 edition = "2024"
 publish = false
 
-[lib]
-path = "src/lib.rs"
-
 [dependencies]
+api = { path = "../api"}
 # JSON-RPC infrastructure
-ras-jsonrpc-macro = { path = "../../crates/libs/ras-jsonrpc-macro" }
-ras-jsonrpc-core = { path = "../../crates/libs/ras-jsonrpc-core" }
-ras-jsonrpc-types = { path = "../../crates/libs/ras-jsonrpc-types" }
+ras-jsonrpc-macro = { path = "../../../crates/libs/ras-jsonrpc-macro" }
+ras-jsonrpc-core = { path = "../../../crates/libs/ras-jsonrpc-core" }
+ras-jsonrpc-types = { path = "../../../crates/libs/ras-jsonrpc-types" }
 
 # Identity management
-ras-identity-core = { path = "../../crates/identity/ras-identity-core" }
-ras-identity-oauth2 = { path = "../../crates/identity/ras-identity-oauth2" }
-ras-identity-session = { path = "../../crates/identity/ras-identity-session" }
+ras-identity-core = { path = "../../../crates/identity/ras-identity-core" }
+ras-identity-oauth2 = { path = "../../../crates/identity/ras-identity-oauth2" }
+ras-identity-session = { path = "../../../crates/identity/ras-identity-session" }
 
 # Web framework and utilities
 axum = { workspace = true }
@@ -37,3 +35,7 @@ tower = "0.5"
 tower-http = { version = "0.6", features = ["fs", "cors"] }
 dotenvy = "0.15"
 mime_guess = "2.0"
+
+[build-dependencies]
+api = { path = "../api"}
+serde_json.workspace = true
