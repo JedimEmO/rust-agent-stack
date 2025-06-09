@@ -78,9 +78,14 @@ pub enum BrunoRequestBody {
 
 #[derive(Debug)]
 pub enum BrunoAuth {
-    Bearer { token: String },
+    Bearer {
+        token: String,
+    },
     #[allow(dead_code)]
-    Basic { username: String, password: String },
+    Basic {
+        username: String,
+        password: String,
+    },
     #[allow(dead_code)]
     None,
 }
