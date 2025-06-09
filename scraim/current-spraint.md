@@ -112,3 +112,15 @@
 ### What Could Have Gone Better
 - Could have chosen the ras- naming convention from project inception to avoid need for large-scale renaming operation
 - Automated tooling for dependency graph analysis could have made planning phase more efficient
+
+## OpenRPC Schema Generation Fix (2025-01-09)
+
+### What Went Well
+- Clear problem identification: `$defs` usage violates JSON-RPC specification requirements for `components` section
+- Targeted fix in macro generation code with proper schema flattening and reference updating logic
+- Service-specific helper functions prevent naming conflicts when multiple services are defined in same module
+- All 206 tests continue passing with proper backward compatibility maintained
+
+### What Could Have Gone Better
+- Could have validated OpenRPC specification compliance during initial OpenRPC generation feature development
+- Automated OpenRPC document validation could prevent future specification violations
