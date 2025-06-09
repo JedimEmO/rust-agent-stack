@@ -4,6 +4,9 @@ version = "0.1.1"
 edition = "2024"
 publish = false
 
+[lib]
+path = "src/lib.rs"
+
 [dependencies]
 # JSON-RPC infrastructure
 ras-jsonrpc-macro = { path = "../../crates/libs/ras-jsonrpc-macro" }
@@ -26,6 +29,7 @@ async-trait = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 jsonwebtoken = { workspace = true }
+schemars.workspace = true
 
 # Additional dependencies for this example
 tracing-subscriber = "0.3"
