@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added - 2025-01-09
+- New OpenRPC-to-Bruno conversion tool for generating Bruno API collections from OpenRPC specifications
+  - Complete CLI tool `openrpc-to-bruno` for converting OpenRPC 1.3.2 documents to Bruno collections
+  - Supports authentication extraction with Bearer token configuration
+  - Generates environment variables and collection metadata automatically
+  - Comprehensive test suite with integration tests for conversion accuracy
+  - Handles method parameter conversion with proper JSON schema validation
+  - Bruno collection format support with proper .bru file generation
+  - Command-line interface with configurable output directories and collection naming
+
+### Refactored - 2025-01-09
+- Restructured Google OAuth example into multi-crate architecture for better separation of concerns
+  - Split into separate `api` and `server` crates with clean API boundary separation
+  - API crate contains service definitions and OpenRPC generation logic
+  - Server crate focuses on HTTP routing, authentication, and frontend serving
+  - Build-time OpenRPC generation moved to build.rs for automatic documentation updates
+  - Improved static file serving with relative paths for better deployment flexibility
+  - Enhanced example structure provides clearer patterns for real-world applications
+
+### Enhanced - 2025-01-09
+- Updated workspace configuration and dependencies to support new tooling and improved development experience
+  - Added clap workspace dependency for consistent CLI tooling across the project
+  - Updated schemars to 1.0.0-alpha.20 for improved JSON Schema Draft 7 compatibility
+  - Enhanced workspace member organization with tools and multi-crate example structure
+  - Fixed import ordering in integration tests following Rust style guidelines
+  - Improved Cargo.lock with new dependencies for CLI tools and testing infrastructure
+
 ### Fixed - 2025-01-09
 - Fixed OpenRPC specification parsing to support extension fields and JSON Schema compatibility
   - Removed deny_unknown_fields restrictions from Method and Schema structs in openrpc-types crate
