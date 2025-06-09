@@ -2,6 +2,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Ident, LitStr, Token, Type, parse::Parse, parse_macro_input};
 
+mod client;
 mod openrpc;
 
 /// Macro to generate a JSON-RPC service with authentication support
@@ -200,10 +201,6 @@ impl Parse for MethodDefinition {
 }
 
 fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_macro2::TokenStream> {
-    let service_name = &service_def.service_name;
-    let service_trait_name = quote::format_ident!("{}Trait", service_name);
-    let builder_name = quote::format_ident!("{}Builder", service_name);
-
     // Generate OpenRPC code if enabled in the macro input
     let (openrpc_code, schema_checks) = if service_def.openrpc.is_some() {
         let openrpc_config = service_def.openrpc.as_ref().unwrap();
@@ -214,6 +211,27 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
     } else {
         (quote! {}, quote! {})
     };
+
+    // Generate server code - this will be conditionally compiled by the user
+    let server_code = generate_server_code(&service_def);
+
+    // Generate client code - this will be conditionally compiled by the user
+    let client_code = crate::client::generate_client_code(&service_def);
+
+    let output = quote! {
+        #openrpc_code
+        #schema_checks
+        #server_code
+        #client_code
+    };
+
+    Ok(output)
+}
+
+fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenStream {
+    let service_name = &service_def.service_name;
+    let service_trait_name = quote::format_ident!("{}Trait", service_name);
+    let builder_name = quote::format_ident!("{}Builder", service_name);
 
     // Generate trait methods
     let trait_methods = service_def.methods.iter().map(|method| {
@@ -436,12 +454,14 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         }
     });
 
-    let output = quote! {
+    quote! {
+        #[cfg(feature = "server")]
         /// Generated service trait
         pub trait #service_trait_name {
             #(#trait_methods)*
         }
 
+        #[cfg(feature = "server")]
         /// Generated builder for the JSON-RPC service
         pub struct #builder_name {
             base_url: String,
@@ -449,9 +469,7 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
             #(#builder_fields)*
         }
 
-        #openrpc_code
-        #schema_checks
-
+        #[cfg(feature = "server")]
         impl #builder_name {
             /// Create a new builder with the base URL
             pub fn new(base_url: impl Into<String>) -> Self {
@@ -517,7 +535,5 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
                 }
             }
         }
-    };
-
-    Ok(output)
+    }
 }

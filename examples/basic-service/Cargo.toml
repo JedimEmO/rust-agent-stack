@@ -4,8 +4,13 @@ version = "0.1.1"
 edition = "2024"
 publish = false
 
+[features]
+default = ["server"]
+server = []
+client = []
+
 [dependencies]
-ras-jsonrpc-macro = { path = "../../crates/libs/ras-jsonrpc-macro" }
+ras-jsonrpc-macro = { path = "../../crates/libs/ras-jsonrpc-macro", features = ["server"] }
 ras-jsonrpc-core = { path = "../../crates/libs/ras-jsonrpc-core" }
 ras-jsonrpc-types = { path = "../../crates/libs/ras-jsonrpc-types" }
 axum = { workspace = true }

@@ -4,9 +4,14 @@ version = "0.1.0"
 edition = "2024"
 publish = ["kellnr"]
 
+[features]
+default = ["server"]
+server = []
+client = []
+
 [dependencies]
 # JSON-RPC infrastructure
-ras-jsonrpc-macro = { path = "../../../crates/libs/ras-jsonrpc-macro" }
+ras-jsonrpc-macro = { path = "../../../crates/libs/ras-jsonrpc-macro", features = ["server"] }
 ras-jsonrpc-core = { path = "../../../crates/libs/ras-jsonrpc-core" }
 ras-jsonrpc-types = { path = "../../../crates/libs/ras-jsonrpc-types" }
 

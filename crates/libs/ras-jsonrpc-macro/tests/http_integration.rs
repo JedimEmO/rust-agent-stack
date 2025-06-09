@@ -585,3 +585,35 @@ async fn test_openrpc_generation() {
     assert!(permissions.contains(&json!("admin")));
     assert!(permissions.contains(&json!("moderator")));
 }
+
+#[cfg(feature = "client")]
+#[tokio::test]
+async fn test_client_generation() {
+    // Test that client generation compiles and produces valid API
+    let client_result = TestServiceClientBuilder::new()
+        .server_url("http://localhost:9999/rpc")
+        .with_timeout(std::time::Duration::from_millis(1000))
+        .build();
+
+    assert!(client_result.is_ok());
+
+    let mut client = client_result.unwrap();
+    client.set_bearer_token(Some("test-token"));
+    assert_eq!(client.bearer_token(), Some("test-token"));
+
+    // Try to call a method - this should fail with connection error but proves the API works
+    let request = SignInRequest {
+        email: "test@example.com".to_string(),
+        password: "password".to_string(),
+    };
+
+    let result = client.sign_in(request.clone()).await;
+    // Should get a connection error since server doesn't exist
+    assert!(result.is_err());
+
+    // Test timeout version
+    let result = client
+        .sign_in_with_timeout(request, std::time::Duration::from_millis(100))
+        .await;
+    assert!(result.is_err());
+}

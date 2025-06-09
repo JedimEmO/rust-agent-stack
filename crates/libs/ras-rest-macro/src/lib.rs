@@ -2,6 +2,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Ident, LitStr, Token, Type, parse::Parse, parse_macro_input};
 
+mod client;
 mod openapi;
 mod static_hosting;
 
@@ -417,6 +418,9 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
     let static_hosting_code =
         static_hosting::generate_static_hosting_code(&service_def, &service_def.static_hosting);
 
+    // Generate client code
+    let client_code = crate::client::generate_client_code(&service_def);
+
     // Generate trait methods
     let trait_methods = service_def.endpoints.iter().map(|endpoint| {
         let handler_name = &endpoint.handler_name;
@@ -585,11 +589,13 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         static_hosting::generate_static_routes(&service_def, &service_def.static_hosting);
 
     let output = quote! {
+        #[cfg(feature = "server")]
         /// Generated service trait
         pub trait #service_trait_name {
             #(#trait_methods)*
         }
 
+        #[cfg(feature = "server")]
         /// Generated builder for the REST service
         pub struct #builder_name {
             auth_provider: Option<std::sync::Arc<dyn ras_auth_core::AuthProvider>>,
@@ -600,6 +606,7 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         #schema_checks
         #static_hosting_code
 
+        #[cfg(feature = "server")]
         impl #builder_name {
             /// Create a new builder
             pub fn new() -> Self {
@@ -629,6 +636,8 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
                 axum::Router::new().nest(#base_path, router)
             }
         }
+
+        #client_code
     };
 
     Ok(output)

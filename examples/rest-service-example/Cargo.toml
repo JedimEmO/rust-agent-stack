@@ -4,9 +4,14 @@ version = "0.1.0"
 edition = "2024"
 description = "Example REST service using ras-rest-macro"
 
+[features]
+default = ["server"]
+server = []
+client = []
+
 [dependencies]
 # REST and JSON-RPC infrastructure
-ras-rest-macro = { path = "../../crates/libs/ras-rest-macro" }
+ras-rest-macro = { path = "../../crates/libs/ras-rest-macro", features = ["server"] }
 ras-auth-core = { path = "../../crates/libs/ras-auth-core" }
 
 # Identity management

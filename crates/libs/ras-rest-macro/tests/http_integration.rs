@@ -868,3 +868,23 @@ async fn test_new_permission_logic() {
         "Moderator token should succeed for delete - has moderator"
     );
 }
+
+#[tokio::test]
+async fn test_generated_rest_client() {
+    let (base_url, _handle) = create_rest_test_server().await;
+    let mut client = TestRestServiceClientBuilder::new()
+        .server_url(base_url)
+        .build()
+        .unwrap();
+
+    client.set_bearer_token(Some("superuser-token"));
+
+    let resp = client.get_users().await.expect("failed to get users");
+
+    assert_eq!(resp.total, 2);
+
+    let resp = client
+        .delete_users_by_id_with_timeout(resp.users[0].id.unwrap(), None)
+        .await
+        .expect("failed to get users");
+}
