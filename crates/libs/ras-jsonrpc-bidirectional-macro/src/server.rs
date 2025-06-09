@@ -11,6 +11,9 @@ pub fn generate_server_code(
     let handler_name = quote::format_ident!("{}Handler", service_name);
     let builder_name = quote::format_ident!("{}Builder", service_name);
 
+    // Generate a client manager trait that provides access to typed client handles
+    let client_manager_trait_name = quote::format_ident!("{}ClientManager", service_name);
+
     // Generate trait methods for client_to_server handlers
     let trait_methods = service_def.client_to_server.iter().map(|method| {
         let method_name = &method.name;
@@ -20,12 +23,12 @@ pub fn generate_server_code(
         match &method.auth {
             AuthRequirement::Unauthorized => {
                 quote! {
-                    async fn #method_name(&self, request: #request_type) -> Result<#response_type, Box<dyn std::error::Error + Send + Sync>>;
+                    async fn #method_name(&self, client_id: ras_jsonrpc_bidirectional_types::ConnectionId, connection_manager: &dyn ras_jsonrpc_bidirectional_types::ConnectionManager, request: #request_type) -> Result<#response_type, Box<dyn std::error::Error + Send + Sync>>;
                 }
             }
             AuthRequirement::WithPermissions(_) => {
                 quote! {
-                    async fn #method_name(&self, user: &ras_auth_core::AuthenticatedUser, request: #request_type) -> Result<#response_type, Box<dyn std::error::Error + Send + Sync>>;
+                    async fn #method_name(&self, client_id: ras_jsonrpc_bidirectional_types::ConnectionId, connection_manager: &dyn ras_jsonrpc_bidirectional_types::ConnectionManager, user: &ras_auth_core::AuthenticatedUser, request: #request_type) -> Result<#response_type, Box<dyn std::error::Error + Send + Sync>>;
                 }
             }
         }
@@ -66,8 +69,8 @@ pub fn generate_server_code(
                                 .map_err(|e| ras_jsonrpc_bidirectional_server::ServerError::InvalidRequest(format!("Invalid params: {}", e)))?
                         };
 
-                        // Call handler
-                        match self.service.#method_name(params).await {
+                        // Call handler with client ID and connection manager reference
+                        match self.service.#method_name(context.id, self.connection_manager.as_ref(), params).await {
                             Ok(result) => {
                                 let result_value = serde_json::to_value(result)
                                     .map_err(|e| ras_jsonrpc_bidirectional_server::ServerError::Internal(e.to_string()))?;
@@ -145,8 +148,8 @@ pub fn generate_server_code(
                                 .map_err(|e| ras_jsonrpc_bidirectional_server::ServerError::InvalidRequest(format!("Invalid params: {}", e)))?
                         };
 
-                        // Call handler
-                        match self.service.#method_name(&user, params).await {
+                        // Call handler with client ID, connection manager reference, and user
+                        match self.service.#method_name(context.id, self.connection_manager.as_ref(), &user, params).await {
                             Ok(result) => {
                                 let result_value = serde_json::to_value(result)
                                     .map_err(|e| ras_jsonrpc_bidirectional_server::ServerError::Internal(e.to_string()))?;
@@ -182,13 +185,95 @@ pub fn generate_server_code(
         }
     });
 
+    // Generate typed client handle for server-side management
+    let client_handle_name = quote::format_ident!("{}ClientHandle", service_name);
+    let client_handle_methods = service_def.server_to_client.iter().map(|notification| {
+        let notification_name = &notification.name;
+        let params_type = &notification.params_type;
+        let method_name = quote::format_ident!("{}", notification_name);
+        let notification_str = notification_name.to_string();
+
+        quote! {
+            /// Send a notification to this specific client
+            pub async fn #method_name(&self, params: #params_type) -> ras_jsonrpc_bidirectional_types::Result<()> {
+                let notification = ras_jsonrpc_bidirectional_types::ServerNotification {
+                    method: #notification_str.to_string(),
+                    params: serde_json::to_value(params)
+                        .map_err(ras_jsonrpc_bidirectional_types::BidirectionalError::from)?,
+                    metadata: None,
+                };
+
+                let message = ras_jsonrpc_bidirectional_types::BidirectionalMessage::ServerNotification(notification);
+                self.connection_manager.send_to_connection(self.client_id, message).await
+            }
+        }
+    });
+
     quote! {
+        #[cfg(feature = "server")]
+        /// Typed client handle for server-side client management
+        #[derive(Debug, Clone)]
+        pub struct #client_handle_name<M: ras_jsonrpc_bidirectional_types::ConnectionManager + 'static> {
+            client_id: ras_jsonrpc_bidirectional_types::ConnectionId,
+            connection_manager: std::sync::Arc<M>,
+        }
+
+        #[cfg(feature = "server")]
+        impl<M: ras_jsonrpc_bidirectional_types::ConnectionManager + 'static> #client_handle_name<M> {
+            /// Create a new client handle
+            pub fn new(client_id: ras_jsonrpc_bidirectional_types::ConnectionId, connection_manager: std::sync::Arc<M>) -> Self {
+                Self { client_id, connection_manager }
+            }
+
+            /// Get the client connection ID
+            pub fn client_id(&self) -> ras_jsonrpc_bidirectional_types::ConnectionId {
+                self.client_id
+            }
+
+            /// Check if this client is still connected
+            pub async fn is_connected(&self) -> bool {
+                self.connection_manager.get_connection(self.client_id).await
+                    .map(|conn| conn.is_some())
+                    .unwrap_or(false)
+            }
+
+            /// Get connection information for this client
+            pub async fn get_connection_info(&self) -> ras_jsonrpc_bidirectional_types::Result<Option<ras_jsonrpc_bidirectional_types::ConnectionInfo>> {
+                self.connection_manager.get_connection(self.client_id).await
+            }
+
+            /// Disconnect this client
+            pub async fn disconnect(&self) -> ras_jsonrpc_bidirectional_types::Result<()> {
+                self.connection_manager.remove_connection(self.client_id).await
+            }
+
+            #(#client_handle_methods)*
+        }
+
         #[cfg(feature = "server")]
         /// Generated bidirectional service trait
         #[async_trait::async_trait]
         pub trait #service_trait_name: Send + Sync + 'static {
             #(#trait_methods)*
             #(#notification_methods)*
+
+            /// Called when a client connects
+            async fn on_client_connected(&self, client_id: ras_jsonrpc_bidirectional_types::ConnectionId, connection_manager: &dyn ras_jsonrpc_bidirectional_types::ConnectionManager) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+                let _ = (client_id, connection_manager);
+                Ok(())
+            }
+
+            /// Called when a client disconnects
+            async fn on_client_disconnected(&self, client_id: ras_jsonrpc_bidirectional_types::ConnectionId, connection_manager: &dyn ras_jsonrpc_bidirectional_types::ConnectionManager) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+                let _ = (client_id, connection_manager);
+                Ok(())
+            }
+
+            /// Called when a client authenticates
+            async fn on_client_authenticated(&self, client_id: ras_jsonrpc_bidirectional_types::ConnectionId, connection_manager: &dyn ras_jsonrpc_bidirectional_types::ConnectionManager, user: &ras_auth_core::AuthenticatedUser) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+                let _ = (client_id, connection_manager, user);
+                Ok(())
+            }
         }
 
         #[cfg(feature = "server")]
@@ -205,6 +290,41 @@ pub fn generate_server_code(
                 connection_manager: std::sync::Arc<M>,
             ) -> Self {
                 Self { service, connection_manager }
+            }
+
+            /// Get a typed client handle for a connection
+            pub async fn get_client(&self, client_id: ras_jsonrpc_bidirectional_types::ConnectionId) -> Option<#client_handle_name<M>> {
+                // Check if connection exists
+                if self.connection_manager.get_connection(client_id).await
+                    .map(|conn| conn.is_some())
+                    .unwrap_or(false) {
+                    Some(#client_handle_name::new(client_id, self.connection_manager.clone()))
+                } else {
+                    None
+                }
+            }
+
+            /// Get all connected client handles
+            pub async fn get_all_clients(&self) -> Result<Vec<#client_handle_name<M>>, ras_jsonrpc_bidirectional_types::BidirectionalError> {
+                let connections = self.connection_manager.get_all_connections().await?;
+                Ok(connections.into_iter()
+                    .map(|conn| #client_handle_name::new(conn.id, self.connection_manager.clone()))
+                    .collect())
+            }
+
+            /// Handle client connection event
+            pub async fn on_client_connected(&self, client_id: ras_jsonrpc_bidirectional_types::ConnectionId) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+                self.service.on_client_connected(client_id, self.connection_manager.as_ref()).await
+            }
+
+            /// Handle client disconnection event
+            pub async fn on_client_disconnected(&self, client_id: ras_jsonrpc_bidirectional_types::ConnectionId) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+                self.service.on_client_disconnected(client_id, self.connection_manager.as_ref()).await
+            }
+
+            /// Handle client authentication event
+            pub async fn on_client_authenticated(&self, client_id: ras_jsonrpc_bidirectional_types::ConnectionId, user: &ras_auth_core::AuthenticatedUser) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+                self.service.on_client_authenticated(client_id, self.connection_manager.as_ref(), user).await
             }
 
             #(#default_notification_impls)*

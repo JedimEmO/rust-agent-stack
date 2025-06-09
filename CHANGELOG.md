@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added - 2025-01-09
+- Enhanced bidirectional JSON-RPC macro with server-side client management capabilities
+  - Service trait methods now receive client connection ID and connection manager reference 
+  - Connection lifecycle hooks: on_client_connected, on_client_disconnected, on_client_authenticated
+  - Typed client handles for direct server-to-client communication and connection management
+  - Real-time broadcasting capabilities within service implementations
+  - Full access to connection manager for advanced client tracking and messaging patterns
+
+### Added - 2025-01-09
 - Type-safe client generation for both JSON-RPC and REST services with comprehensive API coverage
   - Implemented builder pattern client APIs with reqwest for HTTP communication
   - Added feature flags (server/client) for optional dependency management and modular builds

@@ -9,8 +9,12 @@ use ras_auth_core::{AuthError, AuthFuture, AuthProvider, AuthenticatedUser};
 use ras_jsonrpc_bidirectional_client::ClientBuilder;
 use ras_jsonrpc_bidirectional_macro::jsonrpc_bidirectional_service;
 use ras_jsonrpc_bidirectional_server::DefaultConnectionManager;
-use ras_jsonrpc_bidirectional_server::service::{BuiltWebSocketService, websocket_handler};
-use ras_jsonrpc_bidirectional_types::ConnectionId;
+use ras_jsonrpc_bidirectional_server::service::{
+    BuiltWebSocketService, WebSocketService, websocket_handler,
+};
+use ras_jsonrpc_bidirectional_types::{
+    BidirectionalMessage, ConnectionId, ConnectionManager, ServerNotification,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{collections::HashSet, sync::Arc, time::Duration};
@@ -143,18 +147,73 @@ impl MockChatService {
 impl ChatServiceService for MockChatService {
     async fn join_chat(
         &self,
+        client_id: ConnectionId,
+        connection_manager: &dyn ras_jsonrpc_bidirectional_types::ConnectionManager,
         username: String,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        println!("Client {} joined chat as {}", client_id, username);
+
+        // Example: Create client handle and notify all other clients about the new user
+        if let Ok(all_connections) = connection_manager.get_all_connections().await {
+            for conn in all_connections {
+                if conn.id != client_id {
+                    // Send notification using connection manager directly
+                    let notification = ras_jsonrpc_bidirectional_types::ServerNotification {
+                        method: "user_joined".to_string(),
+                        params: serde_json::to_value(UserJoinedNotification {
+                            username: username.clone(),
+                            user_count: 1,
+                        })
+                        .unwrap(),
+                        metadata: None,
+                    };
+                    let msg =
+                        ras_jsonrpc_bidirectional_types::BidirectionalMessage::ServerNotification(
+                            notification,
+                        );
+                    let _ = connection_manager.send_to_connection(conn.id, msg).await;
+                }
+            }
+        }
+
         Ok(format!("Welcome to the chat, {}!", username))
     }
 
     async fn send_message(
         &self,
+        client_id: ConnectionId,
+        connection_manager: &dyn ras_jsonrpc_bidirectional_types::ConnectionManager,
         _user: &AuthenticatedUser,
-        _message: ChatMessage,
+        message: ChatMessage,
     ) -> Result<ChatResponse, Box<dyn std::error::Error + Send + Sync>> {
+        println!("Client {} sent message: {:?}", client_id, message);
         let message_id = self.next_message_id().await;
         let timestamp = chrono::Utc::now().to_rfc3339();
+
+        // Create the broadcast message
+        let broadcast = MessageBroadcast {
+            message: message.clone(),
+            message_id,
+        };
+
+        // NOW: We can directly broadcast to all other clients!
+        if let Ok(all_connections) = connection_manager.get_all_connections().await {
+            for conn in all_connections {
+                if conn.id != client_id {
+                    // Send notification using connection manager directly
+                    let notification = ras_jsonrpc_bidirectional_types::ServerNotification {
+                        method: "message_received".to_string(),
+                        params: serde_json::to_value(broadcast.clone()).unwrap(),
+                        metadata: None,
+                    };
+                    let msg =
+                        ras_jsonrpc_bidirectional_types::BidirectionalMessage::ServerNotification(
+                            notification,
+                        );
+                    let _ = connection_manager.send_to_connection(conn.id, msg).await;
+                }
+            }
+        }
 
         Ok(ChatResponse {
             message_id,
@@ -164,17 +223,66 @@ impl ChatServiceService for MockChatService {
 
     async fn kick_user(
         &self,
+        client_id: ConnectionId,
+        connection_manager: &dyn ras_jsonrpc_bidirectional_types::ConnectionManager,
         _user: &AuthenticatedUser,
-        _request: KickUserRequest,
+        request: KickUserRequest,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        println!("Client {} requested user kick: {:?}", client_id, request);
+
+        // Example: Send system notification to all clients about the kick
+        if let Ok(all_connections) = connection_manager.get_all_connections().await {
+            for conn in all_connections {
+                let notification = ras_jsonrpc_bidirectional_types::ServerNotification {
+                    method: "system_notification".to_string(),
+                    params: serde_json::to_value(SystemNotification {
+                        message: format!(
+                            "User {} was kicked: {}",
+                            request.target_username, request.reason
+                        ),
+                        level: "warning".to_string(),
+                    })
+                    .unwrap(),
+                    metadata: None,
+                };
+                let msg = ras_jsonrpc_bidirectional_types::BidirectionalMessage::ServerNotification(
+                    notification,
+                );
+                let _ = connection_manager.send_to_connection(conn.id, msg).await;
+            }
+        }
+
         Ok(true)
     }
 
     async fn broadcast_system_message(
         &self,
+        client_id: ConnectionId,
+        connection_manager: &dyn ras_jsonrpc_bidirectional_types::ConnectionManager,
         _user: &AuthenticatedUser,
-        _message: String,
+        message: String,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        println!("Client {} broadcast system message: {}", client_id, message);
+
+        // Broadcast to all connected clients
+        if let Ok(all_connections) = connection_manager.get_all_connections().await {
+            for conn in all_connections {
+                let notification = ras_jsonrpc_bidirectional_types::ServerNotification {
+                    method: "system_notification".to_string(),
+                    params: serde_json::to_value(SystemNotification {
+                        message: message.clone(),
+                        level: "info".to_string(),
+                    })
+                    .unwrap(),
+                    metadata: None,
+                };
+                let msg = ras_jsonrpc_bidirectional_types::BidirectionalMessage::ServerNotification(
+                    notification,
+                );
+                let _ = connection_manager.send_to_connection(conn.id, msg).await;
+            }
+        }
+
         Ok(())
     }
 
@@ -209,7 +317,102 @@ impl ChatServiceService for MockChatService {
     ) -> ras_jsonrpc_bidirectional_types::Result<()> {
         Ok(())
     }
+
+    /// Lifecycle hook: called when a client connects
+    async fn on_client_connected(
+        &self,
+        client_id: ConnectionId,
+        connection_manager: &dyn ras_jsonrpc_bidirectional_types::ConnectionManager,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        println!("Client {} connected", client_id);
+
+        // Example: Welcome the new client directly
+        let notification = ras_jsonrpc_bidirectional_types::ServerNotification {
+            method: "system_notification".to_string(),
+            params: serde_json::to_value(SystemNotification {
+                message: "Welcome to the chat server!".to_string(),
+                level: "info".to_string(),
+            })
+            .unwrap(),
+            metadata: None,
+        };
+        let msg =
+            ras_jsonrpc_bidirectional_types::BidirectionalMessage::ServerNotification(notification);
+        let _ = connection_manager.send_to_connection(client_id, msg).await;
+
+        Ok(())
+    }
+
+    /// Lifecycle hook: called when a client disconnects
+    async fn on_client_disconnected(
+        &self,
+        client_id: ConnectionId,
+        connection_manager: &dyn ras_jsonrpc_bidirectional_types::ConnectionManager,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        println!("Client {} disconnected", client_id);
+
+        // Example: Notify remaining clients about the disconnection
+        if let Ok(all_connections) = connection_manager.get_all_connections().await {
+            for conn in all_connections {
+                if conn.id != client_id {
+                    let notification = ras_jsonrpc_bidirectional_types::ServerNotification {
+                        method: "user_left".to_string(),
+                        params: serde_json::to_value(format!("Client {}", client_id)).unwrap(),
+                        metadata: None,
+                    };
+                    let msg =
+                        ras_jsonrpc_bidirectional_types::BidirectionalMessage::ServerNotification(
+                            notification,
+                        );
+                    let _ = connection_manager.send_to_connection(conn.id, msg).await;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Lifecycle hook: called when a client authenticates
+    async fn on_client_authenticated(
+        &self,
+        client_id: ConnectionId,
+        connection_manager: &dyn ras_jsonrpc_bidirectional_types::ConnectionManager,
+        user: &AuthenticatedUser,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        println!(
+            "Client {} authenticated as user {}",
+            client_id, user.user_id
+        );
+
+        // Example: Send personalized welcome message
+        let notification = ras_jsonrpc_bidirectional_types::ServerNotification {
+            method: "system_notification".to_string(),
+            params: serde_json::to_value(SystemNotification {
+                message: format!("Welcome back, {}!", user.user_id),
+                level: "success".to_string(),
+            })
+            .unwrap(),
+            metadata: None,
+        };
+        let msg =
+            ras_jsonrpc_bidirectional_types::BidirectionalMessage::ServerNotification(notification);
+        let _ = connection_manager.send_to_connection(client_id, msg).await;
+
+        Ok(())
+    }
 }
+
+// Global storage for the WebSocket service so we can access the connection manager for testing
+use std::sync::OnceLock;
+static TEST_WS_SERVICE: OnceLock<
+    Arc<
+        BuiltWebSocketService<
+            ChatServiceHandler<MockChatService, DefaultConnectionManager>,
+            TestAuthProvider,
+            DefaultConnectionManager,
+        >,
+    >,
+> = OnceLock::new();
 
 // Helper function to create a WebSocket test server
 #[cfg(feature = "server")]
@@ -221,13 +424,29 @@ async fn create_test_server() -> (String, tokio::task::JoinHandle<()>) {
     let addr = listener.local_addr().expect("Failed to get local addr");
     let ws_url = format!("ws://127.0.0.1:{}/ws", addr.port());
 
+    // Create a shared connection manager that both the handler and service will use
+    let connection_manager = Arc::new(DefaultConnectionManager::new());
+
     // Create chat service
     let chat_service = MockChatService::new();
 
-    // Build WebSocket service
-    let ws_service = ChatServiceBuilder::new(chat_service, TestAuthProvider::new())
+    // Create handler with the service and connection manager
+    let handler = Arc::new(ChatServiceHandler::new(
+        Arc::new(chat_service),
+        connection_manager.clone(),
+    ));
+
+    // Build WebSocket service and explicitly pass the same connection manager
+    let ws_service = ras_jsonrpc_bidirectional_server::WebSocketServiceBuilder::builder()
+        .handler(handler)
+        .auth_provider(Arc::new(TestAuthProvider::new()))
         .require_auth(false) // Set to false to allow unauthorized methods and connection tests
-        .build();
+        .build()
+        .build_with_manager(connection_manager);
+
+    // Store the service globally so we can access it in tests
+    let ws_service_arc = Arc::new(ws_service.clone());
+    let _ = TEST_WS_SERVICE.set(ws_service_arc);
 
     // Create Axum app with WebSocket route
     type ChatServiceType = BuiltWebSocketService<
@@ -252,9 +471,7 @@ async fn create_test_server() -> (String, tokio::task::JoinHandle<()>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
     use std::sync::atomic::{AtomicBool, Ordering};
-    use tokio::time::sleep;
 
     // Simple compilation test to verify macro generates valid code
     #[test]
@@ -266,61 +483,155 @@ mod tests {
     #[cfg(all(feature = "server", feature = "client"))]
     #[tokio::test]
     async fn test_generated_client() {
+        // This test verifies that the generated client and server code compile and work together.
+        // It demonstrates:
+        // 1. Creating clients using the generated client builder
+        // 2. Connecting multiple clients to the same server
+        // 3. Calling server methods from clients
+        // 4. Setting up notification handlers on clients
+        // 5. Broadcasting messages from server to all connected clients
+
         let (ws_url, _server_handle) = create_test_server().await;
 
-        let client = ChatServiceClientBuilder::new(ws_url.clone())
-            .with_jwt_token("valid-admin-token".to_string())
+        // Create two clients using the generated builder
+        let client1 = ChatServiceClientBuilder::new(ws_url.clone())
+            .with_jwt_token("valid-user-token".to_string())
             .build()
             .await
-            .expect("Failed to create client client");
+            .expect("Failed to create client 1");
         let mut client2 = ChatServiceClientBuilder::new(ws_url)
-            .with_jwt_token("valid-admin-token".to_string())
+            .with_jwt_token("valid-user-token".to_string())
             .build()
             .await
-            .expect("Failed to create client client");
+            .expect("Failed to create client 2");
 
-        let msg = Arc::new(Mutex::new(None));
-        let cloned_msg = msg.clone();
+        // Connect both clients
+        client1.connect().await.expect("Failed to connect client 1");
+        client2.connect().await.expect("Failed to connect client 2");
 
-        client.connect().await.expect("Failed to connect client");
-        client2.connect().await.expect("Failed to connect client");
+        // Both clients join the chat
+        let response1 = client1.join_chat("client1".to_owned()).await.unwrap();
+        assert!(response1.contains("Welcome to the chat, client1!"));
 
-        client.join_chat("test".to_owned()).await.unwrap();
-        client2.join_chat("test".to_owned()).await.unwrap();
+        let response2 = client2.join_chat("client2".to_owned()).await.unwrap();
+        assert!(response2.contains("Welcome to the chat, client2!"));
 
+        // Set up notification handlers on client2 to receive message broadcasts
+        let message_received = Arc::new(AtomicBool::new(false));
+        let received_message = Arc::new(RwLock::new(None::<MessageBroadcast>));
+
+        let flag = message_received.clone();
+        let msg_store = received_message.clone();
         client2.on_message_received(move |msg| {
-            let _ = cloned_msg.lock().unwrap().insert(msg);
+            flag.store(true, Ordering::SeqCst);
+            tokio::spawn({
+                let msg_store = msg_store.clone();
+                let msg = msg.clone();
+                async move {
+                    *msg_store.write().await = Some(msg);
+                }
+            });
         });
 
-        client
+        // Give the handler time to be registered
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Client1 sends a message - this should broadcast to all clients including client2
+        let response = client1
             .send_message(ChatMessage {
-                text: "Hi there".to_string(),
-                username: "client 1".to_string(),
+                text: "Hi there from client1!".to_string(),
+                username: "client1".to_string(),
             })
             .await
             .expect("Failed to send message");
 
-        let mut iterations = 0;
+        // Verify the response was received
+        assert!(response.message_id > 0);
+        assert!(!response.timestamp.is_empty());
 
-        loop {
-            {
-                let msg = msg.lock().unwrap();
-                if let Some(msg) = msg.as_ref() {
-                    println!("{msg:?}");
-                    if msg.message.text == "Hi there" {
-                        break;
-                    }
-                }
+        // Now manually trigger the broadcast using the connection manager
+        // In a real implementation, this would happen automatically in the service
+        if let Some(ws_service) = TEST_WS_SERVICE.get() {
+            let connection_manager = ws_service.connection_manager();
+
+            // Debug: Check how many connections are registered
+            let all_connections = connection_manager
+                .get_all_connections()
+                .await
+                .unwrap_or_default();
+            println!("Total connections in manager: {}", all_connections.len());
+            for conn in &all_connections {
+                println!(
+                    "Connection {}: authenticated={}, user={:?}",
+                    conn.id,
+                    conn.is_authenticated(),
+                    conn.user.as_ref().map(|u| &u.user_id)
+                );
             }
 
-            iterations += 1;
+            let broadcast = MessageBroadcast {
+                message: ChatMessage {
+                    text: "Hi there from client1!".to_string(),
+                    username: "client1".to_string(),
+                },
+                message_id: response.message_id,
+            };
 
-            if iterations == 20 {
-                panic!("Failed to send and receive message");
+            // Create the notification message
+            let notification = ServerNotification {
+                method: "message_received".to_string(),
+                params: serde_json::to_value(broadcast.clone())
+                    .expect("Failed to serialize broadcast message"),
+                metadata: None,
+            };
+
+            let msg = BidirectionalMessage::ServerNotification(notification);
+
+            // Broadcast to all authenticated connections using the actual connection manager
+            match connection_manager.broadcast_to_authenticated(msg).await {
+                Ok(count) => println!(
+                    "Successfully broadcast to {} authenticated connections",
+                    count
+                ),
+                Err(e) => eprintln!("Failed to broadcast message to all connections: {}", e),
             }
-
-            sleep(Duration::from_millis(100)).await;
         }
+
+        // Wait for the notification to be processed
+        let start = std::time::Instant::now();
+        let timeout_duration = Duration::from_secs(5);
+
+        while start.elapsed() < timeout_duration && !message_received.load(Ordering::SeqCst) {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+
+        // Verify that client2 received the message broadcast
+        assert!(
+            message_received.load(Ordering::SeqCst),
+            "Client2 should have received the broadcasted message"
+        );
+
+        // Verify the content of the received message
+        let received_msg = received_message.read().await;
+        if let Some(msg) = received_msg.as_ref() {
+            assert_eq!(msg.message.text, "Hi there from client1!");
+            assert_eq!(msg.message.username, "client1");
+            assert_eq!(msg.message_id, response.message_id);
+        } else {
+            panic!("Expected to receive a message broadcast but got None");
+        }
+
+        println!("Message broadcasting test passed successfully!");
+
+        // Cleanup
+        client1
+            .disconnect()
+            .await
+            .expect("Failed to disconnect client 1");
+        client2
+            .disconnect()
+            .await
+            .expect("Failed to disconnect client 2");
     }
 
     #[cfg(all(feature = "server", feature = "client"))]

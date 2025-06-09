@@ -82,18 +82,18 @@ pub trait WebSocketService: Clone + Send + Sync + 'static {
                 info.set_user(user);
             }
 
+            // Create connection context
+            let context = Arc::new(ConnectionContext::new(connection_id, sender.clone()));
+            if let Some(user) = user {
+                context.set_user(user).await;
+            }
+
             // Add connection to manager
             service
                 .connection_manager()
                 .add_connection(info)
                 .await
                 .map_err(|e| ServerError::ConnectionError(e))?;
-
-            // Create connection context
-            let context = Arc::new(ConnectionContext::new(connection_id, sender));
-            if let Some(user) = user {
-                context.set_user(user).await;
-            }
 
             // Create and run WebSocket handler
             let handler = WebSocketHandler::new(service.handler(), context.clone(), message_rx);
