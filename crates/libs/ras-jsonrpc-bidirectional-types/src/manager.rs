@@ -10,6 +10,17 @@ pub trait ConnectionManager: Send + Sync {
     /// Add a new connection
     async fn add_connection(&self, info: ConnectionInfo) -> Result<()>;
 
+    /// Add a new connection with an existing message sender channel
+    /// Default implementation falls back to add_connection
+    async fn add_connection_with_sender(
+        &self,
+        info: ConnectionInfo,
+        _sender: Box<dyn std::any::Any + Send + Sync>,
+    ) -> Result<()> {
+        // Default implementation ignores the sender and falls back to add_connection
+        self.add_connection(info).await
+    }
+
     /// Remove a connection
     async fn remove_connection(&self, id: ConnectionId) -> Result<()>;
 
@@ -78,6 +89,28 @@ pub trait ConnectionManager: Send + Sync {
     async fn cleanup_stale_connections(&self) -> Result<usize> {
         Ok(0) // Default: no cleanup
     }
+
+    /// Register a pending request for server-to-client RPC calls
+    async fn register_pending_request(
+        &self,
+        connection_id: ConnectionId,
+        request_id: serde_json::Value,
+        response_sender: tokio::sync::oneshot::Sender<ras_jsonrpc_types::JsonRpcResponse>,
+    ) -> Result<()>;
+
+    /// Remove a pending request (used for cleanup)
+    async fn remove_pending_request(
+        &self,
+        connection_id: ConnectionId,
+        request_id: &serde_json::Value,
+    ) -> Result<Option<tokio::sync::oneshot::Sender<ras_jsonrpc_types::JsonRpcResponse>>>;
+
+    /// Handle an incoming response for a pending request
+    async fn handle_pending_response(
+        &self,
+        connection_id: ConnectionId,
+        response: ras_jsonrpc_types::JsonRpcResponse,
+    ) -> Result<bool>;
 }
 
 /// Extension trait for connection managers with convenience methods

@@ -27,6 +27,9 @@ jsonrpc_bidirectional_service!({
 
     server_to_client: [
         notification(String),
+    ],
+
+    server_to_client_calls: [
     ]
 });
 

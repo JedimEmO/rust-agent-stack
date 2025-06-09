@@ -52,6 +52,22 @@ pub enum BidirectionalError {
     /// Custom error
     #[error("{0}")]
     Custom(String),
+
+    /// Connection error (for RPC calls)
+    #[error("Connection error: {0}")]
+    ConnectionError(String),
+
+    /// Request timeout
+    #[error("Request timeout")]
+    Timeout,
+
+    /// RPC error response
+    #[error("RPC error: {0}")]
+    RpcError(String),
+
+    /// Invalid response
+    #[error("Invalid response: {0}")]
+    InvalidResponse(String),
 }
 
 impl BidirectionalError {

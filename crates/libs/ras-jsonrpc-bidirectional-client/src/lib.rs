@@ -38,7 +38,7 @@
 
 use async_trait::async_trait;
 use ras_jsonrpc_bidirectional_types::{BidirectionalMessage, ConnectionId};
-use ras_jsonrpc_types::JsonRpcResponse;
+use ras_jsonrpc_types::{JsonRpcRequest, JsonRpcResponse};
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -58,6 +58,16 @@ pub use error::ClientError;
 
 /// Type alias for notification handlers
 pub type NotificationHandler = Arc<dyn Fn(&str, &Value) + Send + Sync>;
+
+/// Type alias for RPC request handlers (server-to-client RPC calls)
+pub type RpcRequestHandler = Arc<
+    dyn Fn(
+            JsonRpcRequest,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = ras_jsonrpc_types::JsonRpcResponse> + Send>,
+        > + Send
+        + Sync,
+>;
 
 /// Type alias for connection event handlers
 pub type ConnectionEventHandler = Arc<dyn Fn(ConnectionEvent) + Send + Sync>;

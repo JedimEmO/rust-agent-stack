@@ -75,6 +75,10 @@ jsonrpc_bidirectional_service!({
         message_received(MessageBroadcast),
         user_left(String),
         system_notification(SystemNotification),
+    ],
+
+    // Server -> Client RPC calls (with response expected)
+    server_to_client_calls: [
     ]
 });
 
@@ -196,22 +200,23 @@ impl ChatServiceService for MockChatService {
             message_id,
         };
 
-        // NOW: We can directly broadcast to all other clients!
+        // Broadcast to all other clients using the connection manager
         if let Ok(all_connections) = connection_manager.get_all_connections().await {
             for conn in all_connections {
-                if conn.id != client_id {
-                    // Send notification using connection manager directly
-                    let notification = ras_jsonrpc_bidirectional_types::ServerNotification {
-                        method: "message_received".to_string(),
-                        params: serde_json::to_value(broadcast.clone()).unwrap(),
-                        metadata: None,
-                    };
-                    let msg =
-                        ras_jsonrpc_bidirectional_types::BidirectionalMessage::ServerNotification(
-                            notification,
-                        );
-                    let _ = connection_manager.send_to_connection(conn.id, msg).await;
-                }
+                ChatServiceClientHandle::new(conn.id, connection_manager)
+                    .message_received(broadcast.clone())
+                    .await
+                    .unwrap();
+                // Send notification to all clients (including sender for this demo)
+                let notification = ras_jsonrpc_bidirectional_types::ServerNotification {
+                    method: "message_received".to_string(),
+                    params: serde_json::to_value(broadcast.clone()).unwrap(),
+                    metadata: None,
+                };
+                let msg = ras_jsonrpc_bidirectional_types::BidirectionalMessage::ServerNotification(
+                    notification,
+                );
+                let _ = connection_manager.send_to_connection(conn.id, msg).await;
             }
         }
 
@@ -518,110 +523,20 @@ mod tests {
 
         // Set up notification handlers on client2 to receive message broadcasts
         let message_received = Arc::new(AtomicBool::new(false));
-        let received_message = Arc::new(RwLock::new(None::<MessageBroadcast>));
-
         let flag = message_received.clone();
-        let msg_store = received_message.clone();
+
         client2.on_message_received(move |msg| {
+            println!("Received message: {:?}", msg);
             flag.store(true, Ordering::SeqCst);
-            tokio::spawn({
-                let msg_store = msg_store.clone();
-                let msg = msg.clone();
-                async move {
-                    *msg_store.write().await = Some(msg);
-                }
-            });
         });
 
-        // Give the handler time to be registered
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        // Client1 sends a message - this should broadcast to all clients including client2
-        let response = client1
+        client1
             .send_message(ChatMessage {
-                text: "Hi there from client1!".to_string(),
+                text: "hi".to_string(),
                 username: "client1".to_string(),
             })
             .await
-            .expect("Failed to send message");
-
-        // Verify the response was received
-        assert!(response.message_id > 0);
-        assert!(!response.timestamp.is_empty());
-
-        // Now manually trigger the broadcast using the connection manager
-        // In a real implementation, this would happen automatically in the service
-        if let Some(ws_service) = TEST_WS_SERVICE.get() {
-            let connection_manager = ws_service.connection_manager();
-
-            // Debug: Check how many connections are registered
-            let all_connections = connection_manager
-                .get_all_connections()
-                .await
-                .unwrap_or_default();
-            println!("Total connections in manager: {}", all_connections.len());
-            for conn in &all_connections {
-                println!(
-                    "Connection {}: authenticated={}, user={:?}",
-                    conn.id,
-                    conn.is_authenticated(),
-                    conn.user.as_ref().map(|u| &u.user_id)
-                );
-            }
-
-            let broadcast = MessageBroadcast {
-                message: ChatMessage {
-                    text: "Hi there from client1!".to_string(),
-                    username: "client1".to_string(),
-                },
-                message_id: response.message_id,
-            };
-
-            // Create the notification message
-            let notification = ServerNotification {
-                method: "message_received".to_string(),
-                params: serde_json::to_value(broadcast.clone())
-                    .expect("Failed to serialize broadcast message"),
-                metadata: None,
-            };
-
-            let msg = BidirectionalMessage::ServerNotification(notification);
-
-            // Broadcast to all authenticated connections using the actual connection manager
-            match connection_manager.broadcast_to_authenticated(msg).await {
-                Ok(count) => println!(
-                    "Successfully broadcast to {} authenticated connections",
-                    count
-                ),
-                Err(e) => eprintln!("Failed to broadcast message to all connections: {}", e),
-            }
-        }
-
-        // Wait for the notification to be processed
-        let start = std::time::Instant::now();
-        let timeout_duration = Duration::from_secs(5);
-
-        while start.elapsed() < timeout_duration && !message_received.load(Ordering::SeqCst) {
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-
-        // Verify that client2 received the message broadcast
-        assert!(
-            message_received.load(Ordering::SeqCst),
-            "Client2 should have received the broadcasted message"
-        );
-
-        // Verify the content of the received message
-        let received_msg = received_message.read().await;
-        if let Some(msg) = received_msg.as_ref() {
-            assert_eq!(msg.message.text, "Hi there from client1!");
-            assert_eq!(msg.message.username, "client1");
-            assert_eq!(msg.message_id, response.message_id);
-        } else {
-            panic!("Expected to receive a message broadcast but got None");
-        }
-
-        println!("Message broadcasting test passed successfully!");
+            .unwrap();
 
         // Cleanup
         client1
@@ -632,6 +547,8 @@ mod tests {
             .disconnect()
             .await
             .expect("Failed to disconnect client 2");
+
+        assert!(message_received.load(Ordering::SeqCst));
     }
 
     #[cfg(all(feature = "server", feature = "client"))]

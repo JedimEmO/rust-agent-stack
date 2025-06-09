@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed - 2025-01-09
+- Fixed bidirectional WebSocket channel management synchronization issue causing test failures
+  - Extended ConnectionManager trait with add_connection_with_sender method for proper channel registration
+  - Fixed WebSocket service to register actual message channels instead of creating dummy channels
+  - Resolved "channel closed" errors and timeout issues in bidirectional communication tests
+  - Enhanced DefaultConnectionManager to handle real channel registration via downcasting
+  - All 22 bidirectional JSON-RPC tests now pass with proper connection management
+
 ### Added - 2025-01-09
 - Enhanced bidirectional JSON-RPC macro with server-side client management capabilities
   - Service trait methods now receive client connection ID and connection manager reference 

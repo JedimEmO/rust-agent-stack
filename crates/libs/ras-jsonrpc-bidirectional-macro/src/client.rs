@@ -82,6 +82,72 @@ pub fn generate_client_code(
         }
     });
 
+    // Generate RPC handler registration methods for server_to_client calls
+    let rpc_handlers = service_def.server_to_client_calls.iter().map(|method| {
+        let method_name = &method.name;
+        let request_type = &method.request_type;
+        let response_type = &method.response_type;
+        let handler_method_name = quote::format_ident!("on_{}", method_name);
+        let method_str = method_name.to_string();
+
+        quote! {
+            /// Register a handler for #method_name RPC calls from the server
+            pub fn #handler_method_name<F, Fut>(&mut self, handler: F)
+            where
+                F: Fn(#request_type) -> Fut + Send + Sync + 'static,
+                Fut: std::future::Future<Output = Result<#response_type, String>> + Send + 'static,
+            {
+                let handler = std::sync::Arc::new(move |request: ras_jsonrpc_types::JsonRpcRequest| {
+                    let handler = handler.clone();
+                    Box::pin(async move {
+                        // Parse request parameters
+                        let params: #request_type = if let Some(params) = request.params {
+                            match serde_json::from_value(params) {
+                                Ok(p) => p,
+                                Err(e) => {
+                                    return ras_jsonrpc_types::JsonRpcResponse::error(
+                                        ras_jsonrpc_types::JsonRpcError::new(-32602, format!("Invalid params: {}", e), None),
+                                        request.id
+                                    );
+                                }
+                            }
+                        } else {
+                            match serde_json::from_value(serde_json::Value::Null) {
+                                Ok(p) => p,
+                                Err(e) => {
+                                    return ras_jsonrpc_types::JsonRpcResponse::error(
+                                        ras_jsonrpc_types::JsonRpcError::new(-32602, format!("Invalid params: {}", e), None),
+                                        request.id
+                                    );
+                                }
+                            }
+                        };
+
+                        // Call handler
+                        match handler(params).await {
+                            Ok(result) => {
+                                match serde_json::to_value(result) {
+                                    Ok(result_value) => ras_jsonrpc_types::JsonRpcResponse::success(result_value, request.id),
+                                    Err(e) => ras_jsonrpc_types::JsonRpcResponse::error(
+                                        ras_jsonrpc_types::JsonRpcError::new(-32603, format!("Failed to serialize result: {}", e), None),
+                                        request.id
+                                    ),
+                                }
+                            }
+                            Err(error_msg) => {
+                                ras_jsonrpc_types::JsonRpcResponse::error(
+                                    ras_jsonrpc_types::JsonRpcError::new(-32000, error_msg, None),
+                                    request.id
+                                )
+                            }
+                        }
+                    }) as std::pin::Pin<Box<dyn std::future::Future<Output = ras_jsonrpc_types::JsonRpcResponse> + Send>>
+                });
+                self.client.on_rpc_request(#method_str, handler);
+            }
+        }
+    });
+
     // Generate client message enum types
     let client_to_server_methods = service_def.client_to_server.iter().map(|method| {
         let method_name = &method.name;
@@ -135,6 +201,8 @@ pub fn generate_client_code(
             #(#client_methods)*
 
             #(#notification_handlers)*
+
+            #(#rpc_handlers)*
 
             /// Connect to the WebSocket server
             pub async fn connect(&self) -> ras_jsonrpc_bidirectional_client::error::ClientResult<()> {

@@ -12,7 +12,7 @@ pub fn generate_server_code(
     let builder_name = quote::format_ident!("{}Builder", service_name);
 
     // Generate a client manager trait that provides access to typed client handles
-    let client_manager_trait_name = quote::format_ident!("{}ClientManager", service_name);
+    let _client_manager_trait_name = quote::format_ident!("{}ClientManager", service_name);
 
     // Generate trait methods for client_to_server handlers
     let trait_methods = service_def.client_to_server.iter().map(|method| {
@@ -187,7 +187,9 @@ pub fn generate_server_code(
 
     // Generate typed client handle for server-side management
     let client_handle_name = quote::format_ident!("{}ClientHandle", service_name);
-    let client_handle_methods = service_def.server_to_client.iter().map(|notification| {
+
+    // Generate notification methods for client handle
+    let client_handle_notification_methods = service_def.server_to_client.iter().map(|notification| {
         let notification_name = &notification.name;
         let params_type = &notification.params_type;
         let method_name = quote::format_ident!("{}", notification_name);
@@ -209,19 +211,79 @@ pub fn generate_server_code(
         }
     });
 
+    // Generate RPC call methods for client handle (server-to-client calls with return values)
+    let client_handle_call_methods = service_def.server_to_client_calls.iter().map(|method| {
+        let method_name = &method.name;
+        let request_type = &method.request_type;
+        let response_type = &method.response_type;
+        let method_str = method_name.to_string();
+
+        quote! {
+            /// Make an RPC call to this specific client and wait for response
+            pub async fn #method_name(&self, params: #request_type) -> Result<#response_type, ras_jsonrpc_bidirectional_types::BidirectionalError> {
+                // Generate request ID
+                let request_id = serde_json::Value::String(uuid::Uuid::new_v4().to_string());
+
+                // Create JSON-RPC request
+                let request = ras_jsonrpc_types::JsonRpcRequest {
+                    jsonrpc: "2.0".to_string(),
+                    method: #method_str.to_string(),
+                    params: Some(serde_json::to_value(params)
+                        .map_err(ras_jsonrpc_bidirectional_types::BidirectionalError::from)?),
+                    id: Some(request_id.clone()),
+                };
+
+                // Create pending request channel for response
+                let (response_sender, response_receiver) = tokio::sync::oneshot::channel();
+
+                // Register pending request with connection manager
+                if let Err(_) = self.connection_manager.register_pending_request(self.client_id, request_id.clone(), response_sender).await {
+                    return Err(ras_jsonrpc_bidirectional_types::BidirectionalError::ConnectionError("Failed to register pending request".to_string()));
+                }
+
+                // Send request
+                let message = ras_jsonrpc_bidirectional_types::BidirectionalMessage::Request(request);
+                if let Err(e) = self.connection_manager.send_to_connection(self.client_id, message).await {
+                    // Clean up pending request on send failure
+                    let _ = self.connection_manager.remove_pending_request(self.client_id, &request_id).await;
+                    return Err(e);
+                }
+
+                // Wait for response with timeout
+                let response = tokio::time::timeout(
+                    std::time::Duration::from_secs(30), // TODO: Make configurable
+                    response_receiver
+                ).await
+                .map_err(|_| ras_jsonrpc_bidirectional_types::BidirectionalError::Timeout)?
+                .map_err(|_| ras_jsonrpc_bidirectional_types::BidirectionalError::ConnectionError("Response channel closed".to_string()))?;
+
+                // Check for error response
+                if let Some(error) = response.error {
+                    return Err(ras_jsonrpc_bidirectional_types::BidirectionalError::RpcError(error.message));
+                }
+
+                // Parse response
+                let result = response.result
+                    .ok_or_else(|| ras_jsonrpc_bidirectional_types::BidirectionalError::InvalidResponse("Missing result".to_string()))?;
+
+                serde_json::from_value(result)
+                    .map_err(ras_jsonrpc_bidirectional_types::BidirectionalError::from)
+            }
+        }
+    });
+
     quote! {
         #[cfg(feature = "server")]
         /// Typed client handle for server-side client management
-        #[derive(Debug, Clone)]
-        pub struct #client_handle_name<M: ras_jsonrpc_bidirectional_types::ConnectionManager + 'static> {
+        pub struct #client_handle_name<'a> {
             client_id: ras_jsonrpc_bidirectional_types::ConnectionId,
-            connection_manager: std::sync::Arc<M>,
+            connection_manager: &'a dyn ras_jsonrpc_bidirectional_types::ConnectionManager,
         }
 
         #[cfg(feature = "server")]
-        impl<M: ras_jsonrpc_bidirectional_types::ConnectionManager + 'static> #client_handle_name<M> {
+        impl<'a> #client_handle_name<'a> {
             /// Create a new client handle
-            pub fn new(client_id: ras_jsonrpc_bidirectional_types::ConnectionId, connection_manager: std::sync::Arc<M>) -> Self {
+            pub fn new(client_id: ras_jsonrpc_bidirectional_types::ConnectionId, connection_manager: &'a dyn ras_jsonrpc_bidirectional_types::ConnectionManager) -> Self {
                 Self { client_id, connection_manager }
             }
 
@@ -247,7 +309,8 @@ pub fn generate_server_code(
                 self.connection_manager.remove_connection(self.client_id).await
             }
 
-            #(#client_handle_methods)*
+            #(#client_handle_notification_methods)*
+            #(#client_handle_call_methods)*
         }
 
         #[cfg(feature = "server")]
@@ -293,22 +356,22 @@ pub fn generate_server_code(
             }
 
             /// Get a typed client handle for a connection
-            pub async fn get_client(&self, client_id: ras_jsonrpc_bidirectional_types::ConnectionId) -> Option<#client_handle_name<M>> {
+            pub async fn get_client(&self, client_id: ras_jsonrpc_bidirectional_types::ConnectionId) -> Option<#client_handle_name<'_>> {
                 // Check if connection exists
                 if self.connection_manager.get_connection(client_id).await
                     .map(|conn| conn.is_some())
                     .unwrap_or(false) {
-                    Some(#client_handle_name::new(client_id, self.connection_manager.clone()))
+                    Some(#client_handle_name::new(client_id, self.connection_manager.as_ref()))
                 } else {
                     None
                 }
             }
 
             /// Get all connected client handles
-            pub async fn get_all_clients(&self) -> Result<Vec<#client_handle_name<M>>, ras_jsonrpc_bidirectional_types::BidirectionalError> {
+            pub async fn get_all_clients(&self) -> Result<Vec<#client_handle_name<'_>>, ras_jsonrpc_bidirectional_types::BidirectionalError> {
                 let connections = self.connection_manager.get_all_connections().await?;
                 Ok(connections.into_iter()
-                    .map(|conn| #client_handle_name::new(conn.id, self.connection_manager.clone()))
+                    .map(|conn| #client_handle_name::new(conn.id, self.connection_manager.as_ref()))
                     .collect())
             }
 

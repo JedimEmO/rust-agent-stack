@@ -32,6 +32,7 @@ struct BidirectionalServiceDefinition {
     service_name: Ident,
     client_to_server: Vec<MethodDefinition>,
     server_to_client: Vec<NotificationDefinition>,
+    server_to_client_calls: Vec<MethodDefinition>,
 }
 
 #[derive(Debug)]
@@ -104,10 +105,31 @@ impl Parse for BidirectionalServiceDefinition {
             }
         }
 
+        let _ = content.parse::<Token![,]>()?;
+
+        // Parse server_to_client_calls: [...]
+        let _ = content.parse::<Ident>()?; // "server_to_client_calls"
+        let _ = content.parse::<Token![:]>()?;
+
+        let server_to_client_calls_content;
+        syn::bracketed!(server_to_client_calls_content in content);
+
+        let mut server_to_client_calls = Vec::new();
+        while !server_to_client_calls_content.is_empty() {
+            let method = server_to_client_calls_content.parse::<MethodDefinition>()?;
+            server_to_client_calls.push(method);
+
+            // Handle optional trailing comma
+            if server_to_client_calls_content.peek(Token![,]) {
+                let _ = server_to_client_calls_content.parse::<Token![,]>()?;
+            }
+        }
+
         Ok(BidirectionalServiceDefinition {
             service_name,
             client_to_server,
             server_to_client,
+            server_to_client_calls,
         })
     }
 }

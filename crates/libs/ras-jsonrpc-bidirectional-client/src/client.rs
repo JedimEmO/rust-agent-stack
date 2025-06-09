@@ -2,7 +2,7 @@
 
 use crate::{
     ClientState, ConnectionEvent, ConnectionEventHandler, NotificationHandler, PendingRequest,
-    Subscription, WebSocketTransport,
+    RpcRequestHandler, Subscription, WebSocketTransport,
     config::{AuthConfig, ClientConfig, ReconnectConfig},
     error::{ClientError, ClientResult},
 };
@@ -36,6 +36,7 @@ pub struct Client {
     pending_requests: Arc<DashMap<Value, PendingRequest>>,
     subscriptions: Arc<DashMap<String, Subscription>>,
     notification_handlers: Arc<DashMap<String, NotificationHandler>>,
+    rpc_request_handlers: Arc<DashMap<String, RpcRequestHandler>>,
     connection_event_handlers: Arc<DashMap<String, ConnectionEventHandler>>,
     request_id_counter: Arc<AtomicU64>,
     shutdown_tx: Arc<RwLock<Option<oneshot::Sender<()>>>>,
@@ -63,6 +64,7 @@ impl Client {
             pending_requests: Arc::new(DashMap::new()),
             subscriptions: Arc::new(DashMap::new()),
             notification_handlers: Arc::new(DashMap::new()),
+            rpc_request_handlers: Arc::new(DashMap::new()),
             connection_event_handlers: Arc::new(DashMap::new()),
             request_id_counter: Arc::new(AtomicU64::new(1)),
             shutdown_tx: Arc::new(RwLock::new(None)),
@@ -278,6 +280,13 @@ impl Client {
         debug!("Registered connection event handler: {}", name);
     }
 
+    /// Register a handler for RPC requests from the server
+    pub fn on_rpc_request(&self, method: &str, handler: RpcRequestHandler) {
+        self.rpc_request_handlers
+            .insert(method.to_string(), handler);
+        debug!("Registered RPC request handler for method: {}", method);
+    }
+
     /// Get the current connection state
     pub async fn state(&self) -> ClientState {
         *self.state.read().await
@@ -333,9 +342,11 @@ impl Client {
         let pending_requests = Arc::clone(&self.pending_requests);
         let subscriptions = Arc::clone(&self.subscriptions);
         let notification_handlers = Arc::clone(&self.notification_handlers);
+        let rpc_request_handlers = Arc::clone(&self.rpc_request_handlers);
         let connection_event_handlers = Arc::clone(&self.connection_event_handlers);
         let connection_id = Arc::clone(&self.connection_id);
         let state = Arc::clone(&self.state);
+        let message_tx_clone = Arc::clone(&self.message_tx);
 
         tokio::spawn(async move {
             let mut receive_interval = tokio::time::interval(Duration::from_millis(10));
@@ -372,8 +383,10 @@ impl Client {
                                     &pending_requests,
                                     &subscriptions,
                                     &notification_handlers,
+                                    &rpc_request_handlers,
                                     &connection_event_handlers,
                                     &connection_id,
+                                    &message_tx_clone,
                                 ).await;
                             }
                             Ok(None) => {
@@ -398,8 +411,10 @@ impl Client {
         pending_requests: &DashMap<Value, PendingRequest>,
         subscriptions: &DashMap<String, Subscription>,
         notification_handlers: &DashMap<String, NotificationHandler>,
+        rpc_request_handlers: &DashMap<String, RpcRequestHandler>,
         connection_event_handlers: &DashMap<String, ConnectionEventHandler>,
         connection_id: &RwLock<Option<ConnectionId>>,
+        message_tx: &RwLock<Option<mpsc::Sender<BidirectionalMessage>>>,
     ) {
         match message {
             BidirectionalMessage::Response(response) => {
@@ -442,6 +457,45 @@ impl Client {
                     connection_event_handlers,
                 )
                 .await;
+            }
+            BidirectionalMessage::Request(request) => {
+                // Handle incoming RPC request from server
+                if let Some(id) = &request.id {
+                    if let Some(handler) = rpc_request_handlers.get(&request.method) {
+                        debug!("Handling RPC request: {}", request.method);
+                        let response = handler(request).await;
+
+                        // Send response back to server
+                        let response_message = BidirectionalMessage::Response(response);
+                        if let Some(tx) = message_tx.read().await.as_ref() {
+                            if let Err(e) = tx.send(response_message).await {
+                                error!("Failed to send RPC response: {}", e);
+                            }
+                        }
+                    } else {
+                        warn!("No handler registered for RPC method: {}", request.method);
+                        // Send method not found error
+                        let error_response = JsonRpcResponse::error(
+                            ras_jsonrpc_types::JsonRpcError::new(
+                                -32601,
+                                "Method not found".to_string(),
+                                None,
+                            ),
+                            request.id.clone(),
+                        );
+                        let response_message = BidirectionalMessage::Response(error_response);
+                        if let Some(tx) = message_tx.read().await.as_ref() {
+                            if let Err(e) = tx.send(response_message).await {
+                                error!("Failed to send error response: {}", e);
+                            }
+                        }
+                    }
+                } else {
+                    debug!(
+                        "Received RPC request without ID (notification): {}",
+                        request.method
+                    );
+                }
             }
             BidirectionalMessage::Pong => {
                 debug!("Received pong");

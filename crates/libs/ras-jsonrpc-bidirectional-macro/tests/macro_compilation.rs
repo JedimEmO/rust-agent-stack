@@ -49,6 +49,9 @@ jsonrpc_bidirectional_service!({
         user_joined(UserJoinedNotification),
         message_received(MessageBroadcast),
         system_notification(SystemNotification),
+    ],
+
+    server_to_client_calls: [
     ]
 });
 
@@ -62,6 +65,9 @@ jsonrpc_bidirectional_service!({
 
     server_to_client: [
         notification(String),
+    ],
+
+    server_to_client_calls: [
     ]
 });
 

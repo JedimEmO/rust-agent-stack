@@ -88,10 +88,10 @@ pub trait WebSocketService: Clone + Send + Sync + 'static {
                 context.set_user(user).await;
             }
 
-            // Add connection to manager
+            // Add connection to manager with the real sender
             service
                 .connection_manager()
-                .add_connection(info)
+                .add_connection_with_sender(info, Box::new(sender.clone()))
                 .await
                 .map_err(|e| ServerError::ConnectionError(e))?;
 

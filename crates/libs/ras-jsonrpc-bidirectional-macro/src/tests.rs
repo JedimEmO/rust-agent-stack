@@ -16,6 +16,8 @@ mod tests {
             server_to_client: [
                 user_notification(String),
                 status_update(u32),
+            ],
+            server_to_client_calls: [
             ]
         }"#;
 
@@ -41,6 +43,8 @@ mod tests {
             ],
             server_to_client: [
                 notification(u32),
+            ],
+            server_to_client_calls: [
             ]
         }"#;
 
@@ -57,7 +61,9 @@ mod tests {
             client_to_server: [
                 WITH_PERMISSIONS(["admin", "write"] | ["super_admin"]) complex_method(String) -> String,
             ],
-            server_to_client: []
+            server_to_client: [],
+            server_to_client_calls: [
+            ]
         }"#;
 
         let parsed: BidirectionalServiceDefinition = syn::parse_str(input).unwrap();

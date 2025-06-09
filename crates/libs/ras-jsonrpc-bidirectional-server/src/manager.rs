@@ -7,7 +7,8 @@ use ras_auth_core::AuthenticatedUser;
 use ras_jsonrpc_bidirectional_types::{
     BidirectionalMessage, ConnectionId, ConnectionInfo, ConnectionManager, Result,
 };
-use tokio::sync::mpsc;
+use std::collections::HashMap;
+use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, info, warn};
 
 /// Thread-safe connection manager using DashMap for high-performance concurrent access
@@ -18,6 +19,13 @@ pub struct DefaultConnectionManager {
 
     /// Topic subscriptions - maps topic to set of connection IDs
     subscriptions: DashMap<String, Vec<ConnectionId>>,
+
+    /// Pending requests for server-to-client RPC calls
+    /// Maps connection_id -> request_id -> response_sender
+    pending_requests: DashMap<
+        ConnectionId,
+        HashMap<serde_json::Value, oneshot::Sender<ras_jsonrpc_types::JsonRpcResponse>>,
+    >,
 }
 
 impl DefaultConnectionManager {
@@ -26,6 +34,7 @@ impl DefaultConnectionManager {
         Self {
             connections: DashMap::new(),
             subscriptions: DashMap::new(),
+            pending_requests: DashMap::new(),
         }
     }
 
@@ -56,7 +65,7 @@ impl DefaultConnectionManager {
     }
 
     /// Add a connection with its message sender for external management
-    pub async fn add_connection_with_sender(
+    pub async fn add_connection_with_sender_direct(
         &self,
         info: ConnectionInfo,
         sender: ChannelMessageSender,
@@ -83,6 +92,23 @@ impl ConnectionManager for DefaultConnectionManager {
         Ok(())
     }
 
+    async fn add_connection_with_sender(
+        &self,
+        info: ConnectionInfo,
+        sender: Box<dyn std::any::Any + Send + Sync>,
+    ) -> Result<()> {
+        // Try to downcast to ChannelMessageSender
+        if let Ok(channel_sender) = sender.downcast::<ChannelMessageSender>() {
+            self.connections
+                .insert(info.id, (info.clone(), *channel_sender));
+            info!("Added connection with sender: {}", info.id);
+            Ok(())
+        } else {
+            // Fallback to dummy sender if downcast fails
+            self.add_connection(info).await
+        }
+    }
+
     async fn remove_connection(&self, id: ConnectionId) -> Result<()> {
         if let Some((_, (info, _))) = self.connections.remove(&id) {
             // Remove from all topic subscriptions
@@ -95,6 +121,9 @@ impl ConnectionManager for DefaultConnectionManager {
                     }
                 }
             }
+
+            // Clean up pending requests for this connection
+            self.pending_requests.remove(&id);
 
             info!("Removed connection: {}", id);
         } else {
@@ -301,5 +330,61 @@ impl ConnectionManager for DefaultConnectionManager {
             sent_count, permission
         );
         Ok(sent_count)
+    }
+
+    async fn register_pending_request(
+        &self,
+        connection_id: ConnectionId,
+        request_id: serde_json::Value,
+        response_sender: oneshot::Sender<ras_jsonrpc_types::JsonRpcResponse>,
+    ) -> Result<()> {
+        self.pending_requests
+            .entry(connection_id)
+            .or_insert_with(HashMap::new)
+            .insert(request_id, response_sender);
+
+        debug!(
+            "Registered pending request for connection: {}",
+            connection_id
+        );
+        Ok(())
+    }
+
+    async fn remove_pending_request(
+        &self,
+        connection_id: ConnectionId,
+        request_id: &serde_json::Value,
+    ) -> Result<Option<oneshot::Sender<ras_jsonrpc_types::JsonRpcResponse>>> {
+        if let Some(mut entry) = self.pending_requests.get_mut(&connection_id) {
+            let sender = entry.remove(request_id);
+            if entry.is_empty() {
+                drop(entry);
+                self.pending_requests.remove(&connection_id);
+            }
+            debug!("Removed pending request for connection: {}", connection_id);
+            Ok(sender)
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn handle_pending_response(
+        &self,
+        connection_id: ConnectionId,
+        response: ras_jsonrpc_types::JsonRpcResponse,
+    ) -> Result<bool> {
+        if let Some(request_id) = &response.id {
+            if let Some(sender) = self
+                .remove_pending_request(connection_id, request_id)
+                .await?
+            {
+                if let Err(_) = sender.send(response) {
+                    warn!("Failed to send response to pending request - receiver dropped");
+                }
+                debug!("Handled pending response for connection: {}", connection_id);
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 }

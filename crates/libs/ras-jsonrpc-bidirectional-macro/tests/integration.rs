@@ -28,13 +28,14 @@ jsonrpc_bidirectional_service!({
     server_to_client: [
         user_notification(NotificationData),
         status_update(String),
+    ],
+
+    server_to_client_calls: [
     ]
 });
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_generated_code_compiles() {
         // This test ensures that the generated code compiles without errors
