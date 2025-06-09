@@ -83,7 +83,7 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
 5. **JWT-based Sessions**: Session management uses JWTs with configurable secrets and TTL, enabling stateless authentication across services
 
 ### Integration Points
-- **MCP (Model Context Protocol)**: Configured with Context7 for enhanced documentation access during development
+- **MCP (Model Context Protocol)**: Use the Context7 tool to find up-to-date documentation for dependencies.
 - **Potential JS/TS Integration**: `.gitignore` includes `node_modules/`, suggesting possible JavaScript/TypeScript components
 
 ### Development Guidelines

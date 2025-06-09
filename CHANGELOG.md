@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added - 2025-01-09
+- Type-safe client generation for both JSON-RPC and REST services with comprehensive API coverage
+  - Implemented builder pattern client APIs with reqwest for HTTP communication
+  - Added feature flags (server/client) for optional dependency management and modular builds
+  - Bearer token authentication support with get/set methods for secure API access
+  - Timeout configuration for both default and per-request timeout handling
+  - Cross-platform compatibility using reqwest for both x86 and WASM targets
+  - Generated client methods match server API signatures exactly for type safety
+  - Zero breaking changes with full backward compatibility for existing server-only code
+  - Optional client dependencies (reqwest) only loaded when client feature enabled
+  - Comprehensive test coverage for client generation and HTTP communication patterns
+
+### Fixed - 2025-01-09
+- Improved Bruno auth enum formatting for better code consistency
+  - Fixed formatting of BrunoAuth enum to use consistent brace style
+  - Enhanced readability with proper field alignment for Bearer and Basic auth types
+  - Maintained proper code formatting standards throughout bruno.rs module
+
 ### Fixed - 2025-01-09
 - Fixed OpenRPC schema generation to comply with JSON-RPC specification
   - Schema definitions now properly use components/schemas instead of $defs
