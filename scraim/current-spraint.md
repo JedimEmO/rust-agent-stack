@@ -1,5 +1,39 @@
 # Current Sprint Retrospective
 
+## ClientHandle API Design Analysis & Fix (2025-01-09)
+
+### What Went Well
+- Strategic orchestration: Architect provided comprehensive analysis of Arc vs reference design trade-offs
+- User requirements clarification: recognized that service trait method ergonomics was the real priority over handler usage patterns
+- Successful API redesign: modified ClientHandle to accept &dyn ConnectionManager with proper lifetime binding, enabling ergonomic usage within service trait methods
+- Comprehensive implementation: updated all related code (struct, constructor, handler methods) to work with the new reference-based API
+
+### What Could Have Gone Better
+- Should have initially designed the API with service trait method usage as the primary use case rather than handler method usage
+- Could have recognized earlier that lifetime-bound references are more appropriate for service trait contexts than Arc ownership
+
+## Bidirectional RPC Macro Test Failures Fix (2025-01-09)
+
+### What Went Well
+- Systematic approach: analyzed test failures, examined macro implementation, then updated all test files with correct API usage
+- Root cause clearly identified: tests were missing `server_to_client_calls` section required by updated macro structure reflecting server->client RPC refactoring
+- Comprehensive fix across all test files with proper syntax and API names, bringing test success rate from 0% to 100%
+- Clean code quality improvements: fixed unused variables and imports during the process
+
+### What Could Have Gone Better
+- Test maintenance should have been part of the original refactoring that added server->client RPC support
+- Could have caught the syntax issues earlier with CI that validates test compilation before merging
+
+## Bidirectional JSON-RPC Architecture Analysis (2025-01-09)
+
+### What Went Well
+- Comprehensive architectural analysis revealed the system does support server-to-client communication through connection manager and generated notification methods
+- Clear identification of existing patterns: connection context, handler pattern, broadcasting capabilities, and connection lifecycle hooks
+
+### What Could Have Gone Better
+- The patterns for service-to-notification access could be more ergonomic with better dependency injection and connection context integration
+- Documentation could better highlight the server-to-client communication mechanisms since they're not immediately obvious
+
 ## REST Service Example Local Auth Integration (2025-01-08)
 
 ### What Went Well
@@ -199,3 +233,26 @@
 ### What Could Have Gone Better
 - Permission error handling should have been designed correctly in the original macro generation rather than requiring post-implementation fixes
 - Timing-sensitive test scenarios could have been identified and handled during initial test development
+
+## Bidirectional Test Clarification Fix (2025-01-09)
+
+### What Went Well
+- Quick identification that test expectations didn't match actual system design - test expected automatic broadcasting that wasn't implemented
+- Clear architectural understanding: bidirectional system requires manual notification calls from service handlers, not automatic message forwarding
+- Proper test documentation update clarifies the actual purpose and removes misleading expectations about automatic broadcasting
+- Clean fix approach: updated test to validate what the system actually does rather than forcing undesigned behavior
+
+### What Could Have Gone Better
+- Test design should have aligned with system architecture from the beginning to avoid confusion about expected behavior
+- Could have included example implementation of how real broadcasting would work to guide future developers
+
+## Bidirectional WebSocket Test Failures Fix (2025-01-09)
+
+### What Went Well
+- Systematic debugging approach quickly identified root cause: connection manager was creating real channels but registering dummy channels instead
+- All 22 tests now pass after fixing the channel registration synchronization issue in the connection manager abstraction
+- Clear architectural understanding: WebSocket service needs to register actual message channels, not create new dummy ones
+
+### What Could Have Gone Better
+- Should have caught the connection manager abstraction mismatch during initial implementation instead of in testing phase
+- Need better integration testing during development to catch channel lifecycle issues earlier
