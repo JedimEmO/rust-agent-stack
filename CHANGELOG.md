@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added - 2025-01-13
+- Added ideate command for interactive brainstorming and execution planning
+  - New .claude/commands/ideate.md facilitates collaborative idea development
+  - Updated plan.md to emphasize brainstorming before work breakdown
+
+- Bidirectional chat example demonstrating real-time WebSocket communication
+  - Complete chat server with room management and message persistence
+  - CLI client with register/login/chat commands for interactive sessions
+  - JWT-based authentication with role-based permissions (user/admin)
+  - Persistent chat history using JSON file storage
+  - Type-safe bidirectional RPC using generated client/server code
+  - Updated CLAUDE.md with bidirectional macro implementation notes
+
 ### Fixed - 2025-01-09
 - Fixed bidirectional WebSocket channel management synchronization issue causing test failures
   - Extended ConnectionManager trait with add_connection_with_sender method for proper channel registration
