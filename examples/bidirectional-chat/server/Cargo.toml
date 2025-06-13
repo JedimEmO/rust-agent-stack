@@ -30,9 +30,15 @@ anyhow = { workspace = true }
 tower-http = { workspace = true, features = ["cors"] }
 dotenvy = { workspace = true }
 jsonwebtoken = { workspace = true }
+config = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+
+[[bin]]
+name = "test-config"
+path = "src/bin/test_config.rs"
 
 [features]
 default = ["server"]

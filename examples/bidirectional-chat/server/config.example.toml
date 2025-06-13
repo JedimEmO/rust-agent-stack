@@ -1,0 +1,139 @@
+# Bidirectional Chat Server Configuration
+# Copy this file to config.toml and modify as needed
+# Environment variables override these settings
+
+[server]
+# Host to bind to (can also use HOST env var)
+host = "127.0.0.1"
+# Port to bind to (can also use PORT env var)
+port = 3000
+
+[server.cors]
+# Allow any origin (set to false for production)
+allow_any_origin = true
+# If allow_any_origin is false, specify allowed origins
+allowed_origins = ["http://localhost:3000", "https://example.com"]
+
+[auth]
+# JWT secret key (REQUIRED for production, use JWT_SECRET env var)
+jwt_secret = "change-me-in-production"
+# JWT TTL in seconds (24 hours)
+jwt_ttl_seconds = 86400
+# Enable refresh tokens
+refresh_enabled = true
+# JWT algorithm (HS256, HS384, HS512)
+jwt_algorithm = "HS256"
+
+[chat]
+# Data directory for persistence (can also use CHAT_DATA_DIR env var)
+data_dir = "./chat_data"
+# Maximum message length in characters
+max_message_length = 1000
+# Maximum room name length in characters
+max_room_name_length = 50
+# Maximum users per room (0 = unlimited)
+max_users_per_room = 0
+# Persistence settings
+persist_messages = true
+persist_rooms = true
+persist_profiles = true
+
+# Default rooms to create on first startup
+[[chat.default_rooms]]
+id = "general"
+name = "General"
+description = "General discussion room"
+
+[[chat.default_rooms]]
+id = "random"
+name = "Random"
+description = "Random chat and off-topic discussions"
+
+[[chat.default_rooms]]
+id = "announcements"
+name = "Announcements"
+description = "Server announcements and updates"
+
+[logging]
+# Log level (trace, debug, info, warn, error)
+# Can also use RUST_LOG env var for more control
+level = "info"
+# Log format (pretty, json, compact)
+format = "pretty"
+# Include timestamps in logs
+timestamps = true
+# Include target module in logs
+target = true
+# Include line numbers in logs
+line_numbers = true
+# Include thread IDs in logs
+thread_ids = true
+
+[admin]
+# Auto-create admin users on startup
+auto_create = true
+
+# Admin users to create
+# Note: In production, use environment variables or secure key management
+# Example: CHAT__ADMIN__USERS__0__USERNAME=admin
+# Example: CHAT__ADMIN__USERS__0__PASSWORD=secure_password
+[[admin.users]]
+username = "admin"
+password = "admin123"  # Change this in production!
+email = "admin@example.com"
+display_name = "Administrator"
+permissions = ["admin", "moderator", "user"]
+
+[[admin.users]]
+username = "moderator"
+password = "mod123"  # Change this in production!
+email = "mod@example.com"
+display_name = "Moderator"
+permissions = ["moderator", "user"]
+
+[rate_limit]
+# Enable rate limiting
+enabled = false
+# Maximum messages per minute per user
+messages_per_minute = 30
+# Maximum concurrent connections per IP
+connections_per_ip = 10
+# Maximum login attempts per hour per IP
+login_attempts_per_hour = 20
+
+# Environment Variable Overrides
+# ============================
+# The following environment variables can be used to override config values:
+#
+# Server:
+# - HOST: Server host
+# - PORT: Server port
+# - CHAT__SERVER__CORS__ALLOW_ANY_ORIGIN: CORS allow any origin
+#
+# Auth:
+# - JWT_SECRET: JWT secret key (recommended for production)
+# - CHAT__AUTH__JWT_TTL_SECONDS: JWT TTL in seconds
+# - CHAT__AUTH__REFRESH_ENABLED: Enable refresh tokens
+# - CHAT__AUTH__JWT_ALGORITHM: JWT algorithm
+#
+# Chat:
+# - CHAT_DATA_DIR: Data directory for persistence
+# - CHAT__CHAT__MAX_MESSAGE_LENGTH: Maximum message length
+# - CHAT__CHAT__MAX_ROOM_NAME_LENGTH: Maximum room name length
+# - CHAT__CHAT__MAX_USERS_PER_ROOM: Maximum users per room
+#
+# Logging:
+# - RUST_LOG: Log level and filters
+# - CHAT__LOGGING__FORMAT: Log format
+#
+# Admin Users (example for first admin user):
+# - CHAT__ADMIN__USERS__0__USERNAME: Admin username
+# - CHAT__ADMIN__USERS__0__PASSWORD: Admin password
+# - CHAT__ADMIN__USERS__0__EMAIL: Admin email
+# - CHAT__ADMIN__USERS__0__DISPLAY_NAME: Admin display name
+#
+# Rate Limiting:
+# - CHAT__RATE_LIMIT__ENABLED: Enable rate limiting
+# - CHAT__RATE_LIMIT__MESSAGES_PER_MINUTE: Messages per minute
+# - CHAT__RATE_LIMIT__CONNECTIONS_PER_IP: Connections per IP
+# - CHAT__RATE_LIMIT__LOGIN_ATTEMPTS_PER_HOUR: Login attempts per hour
