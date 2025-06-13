@@ -25,8 +25,8 @@ Key deliverables:
 
 ## Sprint 2: Basic Terminal Client Implementation
 
-- [ ] Create `examples/bidirectional-chat-client/` with ratatui dependencies
-- [ ] Implement basic terminal UI layout with message area, input area, and user list
+- [x] Create `examples/bidirectional-chat-client/` with ratatui dependencies
+- [x] Implement basic terminal UI layout with message area, input area, and user list
 - [ ] Create CLI command structure (register, login, chat, logout)
 - [ ] Implement user registration flow with local auth provider
 - [ ] Implement login flow with JWT token storage and management
