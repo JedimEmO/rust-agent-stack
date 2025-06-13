@@ -29,3 +29,12 @@
 **What could have gone better:**
 - Integration tests required careful port management to avoid conflicts during parallel test execution
 - Had to refactor server internals to expose proper testing interfaces without breaking encapsulation
+
+## Sprint 2 Day 1: Terminal Client Foundation (2025-01-13)
+
+**What went well:**
+- Successfully created modular client architecture with clean separation between UI, client communication, auth, and config modules
+- Implemented complete ratatui-based terminal UI with proper layout including message area, user list, input field, and status bar
+
+**What could have gone better:**
+- Need to be careful about module visibility - had to update ui module exports to be public for proper access from main
