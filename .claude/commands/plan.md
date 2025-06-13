@@ -16,7 +16,8 @@ Key Principles for Task Execution:
 
 Make sure to update relevant CLAUDE.md files with relevant new knowledge!
 
-Your task is to break down the following instructions into well-understood pieces of work, small enough to be done in roughly 1 day of work:
+Your task is to brainstorm with me to come up with a plan to break down into well-understood pieces of work, small enough to be done in roughly 1 day of work.
+Make sure you get all the information you need from me before finalizing the plan!:
 
 <arguments>
 $ARGUMENTS
