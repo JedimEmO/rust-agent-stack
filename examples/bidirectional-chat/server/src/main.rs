@@ -31,7 +31,9 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 mod persistence;
-use persistence::{PersistedMessage, PersistedRoom, PersistenceManager};
+use persistence::{
+    PersistedCatAvatar, PersistedMessage, PersistedRoom, PersistedUserProfile, PersistenceManager,
+};
 
 // Chat room state
 #[derive(Debug, Clone)]
@@ -523,6 +525,180 @@ impl ChatServiceService for ChatServer {
         Ok(())
     }
 
+    async fn get_profile(
+        &self,
+        _client_id: ConnectionId,
+        _connection_manager: &dyn ConnectionManager,
+        _user: &AuthenticatedUser,
+        request: GetProfileRequest,
+    ) -> Result<GetProfileResponse, Box<dyn std::error::Error + Send + Sync>> {
+        // Load current state
+        let state = self.persistence.load_state().await?;
+
+        // Get profile from persistence or create default
+        let profile = if let Some(persisted) = state.user_profiles.get(&request.username) {
+            UserProfile {
+                username: persisted.username.clone(),
+                display_name: persisted.display_name.clone(),
+                avatar: CatAvatar {
+                    breed: match persisted.avatar.breed.as_str() {
+                        "tabby" => CatBreed::Tabby,
+                        "siamese" => CatBreed::Siamese,
+                        "persian" => CatBreed::Persian,
+                        "maine_coon" => CatBreed::MaineCoon,
+                        "british_shorthair" => CatBreed::BritishShorthair,
+                        "ragdoll" => CatBreed::Ragdoll,
+                        "sphynx" => CatBreed::Sphynx,
+                        "scottish_fold" => CatBreed::ScottishFold,
+                        "calico" => CatBreed::Calico,
+                        "tuxedo" => CatBreed::Tuxedo,
+                        _ => CatBreed::Tabby,
+                    },
+                    color: match persisted.avatar.color.as_str() {
+                        "orange" => CatColor::Orange,
+                        "black" => CatColor::Black,
+                        "white" => CatColor::White,
+                        "gray" => CatColor::Gray,
+                        "brown" => CatColor::Brown,
+                        "cream" => CatColor::Cream,
+                        "blue" => CatColor::Blue,
+                        "lilac" => CatColor::Lilac,
+                        "cinnamon" => CatColor::Cinnamon,
+                        "fawn" => CatColor::Fawn,
+                        _ => CatColor::Orange,
+                    },
+                    expression: match persisted.avatar.expression.as_str() {
+                        "happy" => CatExpression::Happy,
+                        "sleepy" => CatExpression::Sleepy,
+                        "curious" => CatExpression::Curious,
+                        "playful" => CatExpression::Playful,
+                        "content" => CatExpression::Content,
+                        "alert" => CatExpression::Alert,
+                        "grumpy" => CatExpression::Grumpy,
+                        "loving" => CatExpression::Loving,
+                        _ => CatExpression::Happy,
+                    },
+                },
+                created_at: persisted.created_at.to_rfc3339(),
+                last_seen: persisted.last_seen.to_rfc3339(),
+            }
+        } else {
+            // Create default profile
+            UserProfile {
+                username: request.username.clone(),
+                display_name: None,
+                avatar: CatAvatar {
+                    breed: CatBreed::Tabby,
+                    color: CatColor::Orange,
+                    expression: CatExpression::Happy,
+                },
+                created_at: Utc::now().to_rfc3339(),
+                last_seen: Utc::now().to_rfc3339(),
+            }
+        };
+
+        Ok(GetProfileResponse { profile })
+    }
+
+    async fn update_profile(
+        &self,
+        _client_id: ConnectionId,
+        _connection_manager: &dyn ConnectionManager,
+        user: &AuthenticatedUser,
+        request: UpdateProfileRequest,
+    ) -> Result<UpdateProfileResponse, Box<dyn std::error::Error + Send + Sync>> {
+        // Load current state
+        let mut state = self.persistence.load_state().await?;
+
+        // Get existing profile or create new one
+        let mut persisted_profile = state
+            .user_profiles
+            .get(&user.user_id)
+            .cloned()
+            .unwrap_or_else(|| PersistedUserProfile {
+                username: user.user_id.clone(),
+                display_name: None,
+                avatar: PersistedCatAvatar {
+                    breed: "tabby".to_string(),
+                    color: "orange".to_string(),
+                    expression: "happy".to_string(),
+                },
+                created_at: Utc::now(),
+                last_seen: Utc::now(),
+            });
+
+        // Update fields if provided
+        if let Some(display_name) = request.display_name {
+            persisted_profile.display_name = Some(display_name);
+        }
+
+        if let Some(avatar) = request.avatar {
+            persisted_profile.avatar = PersistedCatAvatar {
+                breed: format!("{:?}", avatar.breed).to_lowercase(),
+                color: format!("{:?}", avatar.color).to_lowercase(),
+                expression: format!("{:?}", avatar.expression).to_lowercase(),
+            };
+        }
+
+        // Update last seen
+        persisted_profile.last_seen = Utc::now();
+
+        // Save to persistence
+        state
+            .user_profiles
+            .insert(user.user_id.clone(), persisted_profile.clone());
+        self.persistence.save_state(&state).await?;
+
+        // Convert to response
+        let profile = UserProfile {
+            username: persisted_profile.username,
+            display_name: persisted_profile.display_name,
+            avatar: CatAvatar {
+                breed: match persisted_profile.avatar.breed.as_str() {
+                    "tabby" => CatBreed::Tabby,
+                    "siamese" => CatBreed::Siamese,
+                    "persian" => CatBreed::Persian,
+                    "maine_coon" => CatBreed::MaineCoon,
+                    "british_shorthair" => CatBreed::BritishShorthair,
+                    "ragdoll" => CatBreed::Ragdoll,
+                    "sphynx" => CatBreed::Sphynx,
+                    "scottish_fold" => CatBreed::ScottishFold,
+                    "calico" => CatBreed::Calico,
+                    "tuxedo" => CatBreed::Tuxedo,
+                    _ => CatBreed::Tabby,
+                },
+                color: match persisted_profile.avatar.color.as_str() {
+                    "orange" => CatColor::Orange,
+                    "black" => CatColor::Black,
+                    "white" => CatColor::White,
+                    "gray" => CatColor::Gray,
+                    "brown" => CatColor::Brown,
+                    "cream" => CatColor::Cream,
+                    "blue" => CatColor::Blue,
+                    "lilac" => CatColor::Lilac,
+                    "cinnamon" => CatColor::Cinnamon,
+                    "fawn" => CatColor::Fawn,
+                    _ => CatColor::Orange,
+                },
+                expression: match persisted_profile.avatar.expression.as_str() {
+                    "happy" => CatExpression::Happy,
+                    "sleepy" => CatExpression::Sleepy,
+                    "curious" => CatExpression::Curious,
+                    "playful" => CatExpression::Playful,
+                    "content" => CatExpression::Content,
+                    "alert" => CatExpression::Alert,
+                    "grumpy" => CatExpression::Grumpy,
+                    "loving" => CatExpression::Loving,
+                    _ => CatExpression::Happy,
+                },
+            },
+            created_at: persisted_profile.created_at.to_rfc3339(),
+            last_seen: persisted_profile.last_seen.to_rfc3339(),
+        };
+
+        Ok(UpdateProfileResponse { profile })
+    }
+
     // Notification stub methods (required by the trait but not used by server)
     async fn notify_message_received(
         &self,
@@ -830,11 +1006,11 @@ async fn main() -> Result<()> {
 
     // Create chat server with data directory for persistence
     let data_dir = std::env::var("CHAT_DATA_DIR").unwrap_or_else(|_| "./chat_data".to_string());
-    let chat_server = ChatServer::new(&data_dir).await?;
+    let chat_server = Arc::new(ChatServer::new(&data_dir).await?);
 
     // Create handler with the service and connection manager
     let handler = Arc::new(bidirectional_chat_api::ChatServiceHandler::new(
-        Arc::new(chat_server),
+        chat_server.clone(),
         connection_manager.clone(),
     ));
 
@@ -850,7 +1026,7 @@ async fn main() -> Result<()> {
     let auth_router = Router::new()
         .route("/auth/login", axum::routing::post(login_handler))
         .route("/auth/register", axum::routing::post(register_handler))
-        .with_state((session_service, identity_provider));
+        .with_state((session_service, identity_provider, chat_server.clone()));
 
     // Create WebSocket endpoint
     type ChatServiceType = BuiltWebSocketService<
@@ -885,10 +1061,9 @@ async fn main() -> Result<()> {
 
 // Login handler for authentication
 async fn login_handler(
-    axum::extract::State((session_service, _identity_provider)): axum::extract::State<(
-        Arc<SessionService>,
-        Arc<LocalUserProvider>,
-    )>,
+    axum::extract::State((session_service, _identity_provider, _chat_server)): axum::extract::State<
+        (Arc<SessionService>, Arc<LocalUserProvider>, Arc<ChatServer>),
+    >,
     axum::Json(payload): axum::Json<serde_json::Value>,
 ) -> Result<axum::Json<serde_json::Value>, axum::http::StatusCode> {
     // Extract provider_id from payload (default to "local")
@@ -921,10 +1096,9 @@ async fn login_handler(
 
 // Register handler for user registration
 async fn register_handler(
-    axum::extract::State((_session_service, identity_provider)): axum::extract::State<(
-        Arc<SessionService>,
-        Arc<LocalUserProvider>,
-    )>,
+    axum::extract::State((_session_service, identity_provider, _chat_server)): axum::extract::State<
+        (Arc<SessionService>, Arc<LocalUserProvider>, Arc<ChatServer>),
+    >,
     axum::Json(payload): axum::Json<serde_json::Value>,
 ) -> Result<axum::Json<serde_json::Value>, axum::http::StatusCode> {
     // Extract username and password

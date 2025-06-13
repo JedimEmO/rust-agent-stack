@@ -30,10 +30,27 @@ pub struct PersistedMessage {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersistedUserProfile {
+    pub username: String,
+    pub display_name: Option<String>,
+    pub avatar: PersistedCatAvatar,
+    pub created_at: DateTime<Utc>,
+    pub last_seen: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersistedCatAvatar {
+    pub breed: String,
+    pub color: String,
+    pub expression: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersistedState {
     pub rooms: HashMap<String, PersistedRoom>,
     pub messages: Vec<PersistedMessage>,
     pub next_message_id: u64,
+    pub user_profiles: HashMap<String, PersistedUserProfile>,
 }
 
 impl Default for PersistedState {
@@ -42,6 +59,7 @@ impl Default for PersistedState {
             rooms: HashMap::new(),
             messages: Vec::new(),
             next_message_id: 1,
+            user_profiles: HashMap::new(),
         }
     }
 }
