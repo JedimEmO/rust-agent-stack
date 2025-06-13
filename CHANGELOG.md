@@ -25,6 +25,12 @@ All notable changes to this project will be documented in this file.
   - Port management for parallel test execution
   - Complete test coverage of all server features
 
+- Enhanced persistence layer with structured logging
+  - Added tracing to all file operations and state management
+  - Error context with detailed failure messages
+  - Parse error tracking when loading corrupted messages
+  - Operation metrics for state loading/saving
+
 ### Added - 2025-01-13
 - Added ideate command for interactive brainstorming and execution planning
   - New .claude/commands/ideate.md facilitates collaborative idea development
