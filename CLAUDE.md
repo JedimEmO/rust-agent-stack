@@ -297,7 +297,7 @@ cargo run -p bidirectional-chat-client login --username alice
 cargo run -p bidirectional-chat-client chat
 ```
 
-**Key Features:** Bidirectional WebSockets, real-time messaging, JWT authentication, permission-based access control, cross-platform client support, persistent chat history
+**Key Features:** Bidirectional WebSockets, real-time messaging, JWT authentication, permission-based access control, cross-platform client support, persistent chat history, user profiles with cat avatar customization
 
 #### Bidirectional Macro Implementation Notes
 - **Generated Type Names**: The macro generates a trait named `{ServiceName}Service` (e.g., `ChatServiceService` for `ChatService`)
@@ -305,3 +305,4 @@ cargo run -p bidirectional-chat-client chat
 - **Required Fields**: Always include `server_to_client_calls` field even if empty (`server_to_client_calls: []`)
 - **Connection Management**: Use the `ConnectionManager` directly for sending notifications, not a generated client handle
 - **Persistence**: Chat history and room state can be persisted using simple JSON file storage with `serde_json`
+- **User Profiles**: Support for user profiles with cat avatar customization including breed (10 varieties), color (10 options), and expression (8 moods)
