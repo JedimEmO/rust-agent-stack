@@ -127,12 +127,85 @@ The chat uses bidirectional JSON-RPC 2.0 over WebSockets:
 
 ## Development
 
-### Environment Variables
+### Configuration
+
+The server supports configuration through:
+1. Configuration file (`config.toml`)
+2. Environment variables (take precedence)
+3. Command-line arguments (for future extension)
+
+#### Configuration File
+
+Copy `config.example.toml` to `config.toml` and modify as needed:
+
+```bash
+cp config.example.toml config.toml
+```
+
+Key configuration sections:
+- **Server**: Host, port, and CORS settings
+- **Auth**: JWT configuration and session management
+- **Chat**: Message limits, room settings, persistence
+- **Logging**: Log level and output format
+- **Admin**: Initial admin users and permissions
+- **Rate Limiting**: Request throttling (optional)
+
+#### Environment Variables
 
 Create a `.env` file in the server directory:
 ```env
+# Core settings
 JWT_SECRET=your-secret-key-here
+HOST=0.0.0.0
+PORT=3000
+
+# Chat settings
+CHAT_DATA_DIR=./chat_data
+CHAT__CHAT__MAX_MESSAGE_LENGTH=1000
+CHAT__CHAT__MAX_USERS_PER_ROOM=50
+
+# Logging
+RUST_LOG=info
+
+# Admin users (example)
+CHAT__ADMIN__USERS__0__USERNAME=admin
+CHAT__ADMIN__USERS__0__PASSWORD=secure_password
 ```
+
+See `config.example.toml` for a complete list of environment variables.
+
+### Production Configuration
+
+For production deployments:
+
+1. **Security**:
+   ```toml
+   [auth]
+   jwt_secret = "$(openssl rand -base64 32)"  # Generate secure secret
+   jwt_ttl_seconds = 3600  # Shorter TTL for production
+   
+   [server.cors]
+   allow_any_origin = false
+   allowed_origins = ["https://yourchatapp.com"]
+   ```
+
+2. **Rate Limiting**:
+   ```toml
+   [rate_limit]
+   enabled = true
+   messages_per_minute = 10
+   connections_per_ip = 5
+   login_attempts_per_hour = 10
+   ```
+
+3. **Persistence**:
+   ```toml
+   [chat]
+   data_dir = "/var/lib/chat-server/data"
+   persist_messages = true
+   persist_rooms = true
+   persist_profiles = true
+   ```
 
 ### Running Multiple Clients
 

@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added - 2025-01-13
+- Comprehensive configuration system for bidirectional chat server
+  - Flexible configuration supporting environment variables and TOML files
+  - Server, auth, chat, logging, admin, and rate limit settings
+  - Legacy environment variable support for backward compatibility
+  - Configuration validation with helpful error messages
+  - Example config file and test utility for validation
+
+- Structured logging with tracing for bidirectional chat server
+  - Configurable log levels and formats (pretty, JSON, compact)
+  - Structured logging with connection IDs, user info, and room details
+  - Debug/trace logging for detailed troubleshooting
+  - Configuration via RUST_LOG environment variable or config file
+
+- Comprehensive integration tests for bidirectional chat server
+  - Server integration tests covering startup, config, auth, and persistence
+  - WebSocket tests for connection lifecycle and authentication
+  - Concurrent user scenarios and permission handling tests
+  - Port management for parallel test execution
+  - Complete test coverage of all server features
+
+### Added - 2025-01-13
 - Added ideate command for interactive brainstorming and execution planning
   - New .claude/commands/ideate.md facilitates collaborative idea development
   - Updated plan.md to emphasize brainstorming before work breakdown
