@@ -17,6 +17,12 @@ All notable changes to this project will be documented in this file.
   - Type-safe bidirectional RPC using generated client/server code
   - Updated CLAUDE.md with bidirectional macro implementation notes
 
+- User profile system with cat avatar customization
+  - Added profile management endpoints (get_profile, update_profile)
+  - Support for 10 cat breeds, 10 colors, and 8 expressions
+  - Integrated profile persistence with existing state management
+  - Profile creation during user registration
+
 ### Fixed - 2025-01-09
 - Fixed bidirectional WebSocket channel management synchronization issue causing test failures
   - Extended ConnectionManager trait with add_connection_with_sender method for proper channel registration

@@ -4,6 +4,67 @@ use ras_jsonrpc_bidirectional_macro::jsonrpc_bidirectional_service;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+// User profile types
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct UserProfile {
+    pub username: String,
+    pub display_name: Option<String>,
+    pub avatar: CatAvatar,
+    pub created_at: String,
+    pub last_seen: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct CatAvatar {
+    pub breed: CatBreed,
+    pub color: CatColor,
+    pub expression: CatExpression,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CatBreed {
+    Tabby,
+    Siamese,
+    Persian,
+    MaineCoon,
+    BritishShorthair,
+    Ragdoll,
+    Sphynx,
+    ScottishFold,
+    Calico,
+    Tuxedo,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CatColor {
+    Orange,
+    Black,
+    White,
+    Gray,
+    Brown,
+    Cream,
+    Blue,
+    Lilac,
+    Cinnamon,
+    Fawn,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CatExpression {
+    Happy,
+    Sleepy,
+    Curious,
+    Playful,
+    Content,
+    Alert,
+    Grumpy,
+    Loving,
+}
+
 // Client -> Server request types
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -68,6 +129,29 @@ pub enum AnnouncementLevel {
     Error,
 }
 
+// Profile management types
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct GetProfileRequest {
+    pub username: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct GetProfileResponse {
+    pub profile: UserProfile,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct UpdateProfileRequest {
+    pub display_name: Option<String>,
+    pub avatar: Option<CatAvatar>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct UpdateProfileResponse {
+    pub profile: UserProfile,
+}
+
 // Server -> Client notification types
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -130,6 +214,8 @@ jsonrpc_bidirectional_service!({
         WITH_PERMISSIONS(["user"]) list_rooms(ListRoomsRequest) -> ListRoomsResponse,
         WITH_PERMISSIONS(["moderator"]) kick_user(KickUserRequest) -> bool,
         WITH_PERMISSIONS(["admin"]) broadcast_announcement(BroadcastAnnouncementRequest) -> (),
+        WITH_PERMISSIONS(["user"]) get_profile(GetProfileRequest) -> GetProfileResponse,
+        WITH_PERMISSIONS(["user"]) update_profile(UpdateProfileRequest) -> UpdateProfileResponse,
     ],
 
     // Server -> Client notifications (no response expected)
