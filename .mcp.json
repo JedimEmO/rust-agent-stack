@@ -15,6 +15,10 @@
         "--lsp",
         "rust-analyzer"
       ]
+    },
+    "human-in-the-loop": {
+      "command": "uvx",
+      "args": ["hitl-mcp-server"]
     }
   }
 }
