@@ -1,0 +1,22 @@
+[package]
+name = "bidirectional-chat-api"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["server", "client"]
+server = ["ras-jsonrpc-bidirectional-server"]
+client = ["ras-jsonrpc-bidirectional-client"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+schemars = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+ras-jsonrpc-bidirectional-macro = { path = "../../../crates/libs/ras-jsonrpc-bidirectional-macro" }
+ras-jsonrpc-bidirectional-types = { path = "../../../crates/libs/ras-jsonrpc-bidirectional-types" }
+ras-jsonrpc-bidirectional-server = { path = "../../../crates/libs/ras-jsonrpc-bidirectional-server", optional = true }
+ras-jsonrpc-bidirectional-client = { path = "../../../crates/libs/ras-jsonrpc-bidirectional-client", optional = true }
+ras-auth-core = { path = "../../../crates/libs/ras-auth-core" }
+ras-jsonrpc-types = { path = "../../../crates/libs/ras-jsonrpc-types" }

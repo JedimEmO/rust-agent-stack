@@ -297,4 +297,11 @@ cargo run -p bidirectional-chat-client login --username alice
 cargo run -p bidirectional-chat-client chat
 ```
 
-**Key Features:** Bidirectional WebSockets, real-time messaging, JWT authentication, permission-based access control, cross-platform client support
+**Key Features:** Bidirectional WebSockets, real-time messaging, JWT authentication, permission-based access control, cross-platform client support, persistent chat history
+
+#### Bidirectional Macro Implementation Notes
+- **Generated Type Names**: The macro generates a trait named `{ServiceName}Service` (e.g., `ChatServiceService` for `ChatService`)
+- **OpenRPC Field**: The `openrpc` field is not currently supported in `jsonrpc_bidirectional_service!` macro - remove it if present
+- **Required Fields**: Always include `server_to_client_calls` field even if empty (`server_to_client_calls: []`)
+- **Connection Management**: Use the `ConnectionManager` directly for sending notifications, not a generated client handle
+- **Persistence**: Chat history and room state can be persisted using simple JSON file storage with `serde_json`

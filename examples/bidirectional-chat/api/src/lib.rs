@@ -1,0 +1,149 @@
+//! Shared types and generated service for the bidirectional chat example
+
+use ras_jsonrpc_bidirectional_macro::jsonrpc_bidirectional_service;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+// Client -> Server request types
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct SendMessageRequest {
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct SendMessageResponse {
+    pub message_id: u64,
+    pub timestamp: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct JoinRoomRequest {
+    pub room_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct JoinRoomResponse {
+    pub room_id: String,
+    pub user_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct LeaveRoomRequest {
+    pub room_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ListRoomsRequest {}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct ListRoomsResponse {
+    pub rooms: Vec<RoomInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct RoomInfo {
+    pub room_id: String,
+    pub room_name: String,
+    pub user_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct KickUserRequest {
+    pub target_username: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct BroadcastAnnouncementRequest {
+    pub message: String,
+    pub level: AnnouncementLevel,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum AnnouncementLevel {
+    Info,
+    Warning,
+    Error,
+}
+
+// Server -> Client notification types
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct MessageReceivedNotification {
+    pub message_id: u64,
+    pub username: String,
+    pub text: String,
+    pub timestamp: String,
+    pub room_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct UserJoinedNotification {
+    pub username: String,
+    pub room_id: String,
+    pub user_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct UserLeftNotification {
+    pub username: String,
+    pub room_id: String,
+    pub user_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct SystemAnnouncementNotification {
+    pub message: String,
+    pub level: AnnouncementLevel,
+    pub timestamp: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct UserKickedNotification {
+    pub username: String,
+    pub reason: String,
+    pub room_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct RoomCreatedNotification {
+    pub room_info: RoomInfo,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct RoomDeletedNotification {
+    pub room_id: String,
+    pub room_name: String,
+}
+
+// Generate the bidirectional chat service
+jsonrpc_bidirectional_service!({
+    service_name: ChatService,
+
+    // Client -> Server methods (with authentication/permissions)
+    client_to_server: [
+        WITH_PERMISSIONS(["user"]) send_message(SendMessageRequest) -> SendMessageResponse,
+        WITH_PERMISSIONS(["user"]) join_room(JoinRoomRequest) -> JoinRoomResponse,
+        WITH_PERMISSIONS(["user"]) leave_room(LeaveRoomRequest) -> (),
+        WITH_PERMISSIONS(["user"]) list_rooms(ListRoomsRequest) -> ListRoomsResponse,
+        WITH_PERMISSIONS(["moderator"]) kick_user(KickUserRequest) -> bool,
+        WITH_PERMISSIONS(["admin"]) broadcast_announcement(BroadcastAnnouncementRequest) -> (),
+    ],
+
+    // Server -> Client notifications (no response expected)
+    server_to_client: [
+        message_received(MessageReceivedNotification),
+        user_joined(UserJoinedNotification),
+        user_left(UserLeftNotification),
+        system_announcement(SystemAnnouncementNotification),
+        user_kicked(UserKickedNotification),
+        room_created(RoomCreatedNotification),
+        room_deleted(RoomDeletedNotification),
+    ],
+
+    // Server -> Client calls (no bidirectional calls for this example)
+    server_to_client_calls: [
+    ]
+});
