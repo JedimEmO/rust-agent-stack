@@ -9,31 +9,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 cargo build
 
 # Build specific crate
-cargo build -p ras-auth-core
-cargo build -p ras-jsonrpc-macro
-cargo build -p ras-jsonrpc-core
-cargo build -p ras-jsonrpc-types
-cargo build -p ras-jsonrpc-bidirectional-types
-cargo build -p ras-jsonrpc-bidirectional-server
-cargo build -p ras-jsonrpc-bidirectional-client
-cargo build -p ras-jsonrpc-bidirectional-macro
-cargo build -p ras-rest-macro
-cargo build -p openrpc-types
+cargo build -p <crate-name>  # e.g., cargo build -p ras-auth-core
 
 # Run tests
 cargo test
 
 # Run tests for specific crate
-cargo test -p ras-auth-core
-cargo test -p ras-jsonrpc-macro
-cargo test -p ras-jsonrpc-core
-cargo test -p ras-jsonrpc-types
-cargo test -p ras-jsonrpc-bidirectional-types
-cargo test -p ras-jsonrpc-bidirectional-server
-cargo test -p ras-jsonrpc-bidirectional-client
-cargo test -p ras-jsonrpc-bidirectional-macro
-cargo test -p ras-rest-macro
-cargo test -p openrpc-types
+cargo test -p <crate-name>  # e.g., cargo test -p ras-auth-core
 
 # Run example applications
 cargo run -p google-oauth-example
@@ -136,6 +118,11 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
 - **Macro Base URL**: Always test generated macro code with the actual base_url parameter to catch routing issues
 - **String Type Mismatches**: Watch for bon builder string literal type mismatches (String vs &str)
 - **Move Semantics**: Pay attention to type annotations and move semantics in complex macro-generated code
+- **Bidirectional Macro**: The `openrpc` field is NOT supported in `jsonrpc_bidirectional_service!` - always remove it
+- **Generated Type Names**: Macro generates trait named `{ServiceName}Service` (e.g., `ChatServiceService` for `ChatService`)
+- **Arc in Handler State**: When using Arc<T> in Axum handlers, ensure proper state tuple handling - may require multiple iterations
+- **Module Visibility**: Always check module exports are public when creating new modules that need external access
+- **Private Field Access**: Identity providers may have private fields - plan for workarounds when syncing between endpoints
 
 #### OpenRPC Document Generation
 The `jsonrpc_service` macro supports optional OpenRPC document generation for API documentation:
@@ -175,7 +162,7 @@ The `jsonrpc_bidirectional_service!` macro enables type-safe, bidirectional JSON
 ```rust
 jsonrpc_bidirectional_service!({
     service_name: ChatService,
-    openrpc: true,
+    // NOTE: openrpc field is NOT supported - remove if present
     
     // Client -> Server methods (with authentication/permissions)
     client_to_server: [
@@ -299,13 +286,16 @@ cargo run -p bidirectional-chat-client chat
 
 **Key Features:** Bidirectional WebSockets, real-time messaging, JWT authentication, permission-based access control, cross-platform client support, persistent chat history, user profiles with cat avatar customization, comprehensive logging with tracing, configurable via environment variables or TOML config file, extensive integration test coverage
 
+**Client Architecture:**
+- **Terminal UI**: Built with ratatui for cross-platform terminal interface
+- **Layout**: Header, messages area, user list sidebar, input area, and status bar
+- **State Management**: Centralized AppState with message history, user list, and connection status
+- **WebSocket Client**: Uses ras-jsonrpc-bidirectional-client for real-time communication
+- **Authentication**: JWT token storage in config directory with secure file permissions
+- **Configuration**: Supports environment variables and TOML config file in user's config directory
+
 #### Bidirectional Macro Implementation Notes
-- **Generated Type Names**: The macro generates a trait named `{ServiceName}Service` (e.g., `ChatServiceService` for `ChatService`)
-- **OpenRPC Field**: The `openrpc` field is not currently supported in `jsonrpc_bidirectional_service!` macro - remove it if present
 - **Required Fields**: Always include `server_to_client_calls` field even if empty (`server_to_client_calls: []`)
 - **Connection Management**: Use the `ConnectionManager` directly for sending notifications, not a generated client handle
 - **Persistence**: Chat history and room state can be persisted using simple JSON file storage with `serde_json`
-- **User Profiles**: Support for user profiles with cat avatar customization including breed (10 varieties), color (10 options), and expression (8 moods)
-- **Logging**: Comprehensive structured logging using `tracing` with configurable levels via `RUST_LOG` environment variable
-- **Configuration**: Full configuration support via environment variables or TOML config file following 12-factor app principles
 - **Integration Testing**: Extensive test coverage including WebSocket tests, authentication flows, and concurrent user scenarios
