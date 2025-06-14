@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Refactored - 2025-01-14
+- Migrated bidirectional chat server authentication endpoints to use REST macro
+  - Replaced manual Axum handlers with type-safe REST service definitions
+  - Added structured request/response types with JSON Schema support
+  - Improved error handling with proper HTTP status codes
+  - Enabled OpenAPI documentation generation for auth endpoints
+
 ### Changed - 2025-01-14
 - Removed unused MCP server configurations (language-server, human-in-the-loop) from .mcp.json
 - Updated .gitignore to exclude local chat server config.toml and test scripts

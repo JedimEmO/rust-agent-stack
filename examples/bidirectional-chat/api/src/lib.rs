@@ -1,5 +1,7 @@
 //! Shared types and generated service for the bidirectional chat example
 
+pub mod auth;
+
 use ras_jsonrpc_bidirectional_macro::jsonrpc_bidirectional_service;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

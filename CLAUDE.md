@@ -286,6 +286,11 @@ cargo run -p bidirectional-chat-client chat
 
 **Key Features:** Bidirectional WebSockets, real-time messaging, JWT authentication, permission-based access control, cross-platform client support, persistent chat history, user profiles with cat avatar customization, comprehensive logging with tracing, configurable via environment variables or TOML config file, extensive integration test coverage
 
+**Architecture:**
+- **API Crate**: Shared types and service definitions between client and server
+- **Server**: Axum-based WebSocket server with room management and persistence
+- **Client**: Terminal UI client with interactive chat interface
+
 **Client Architecture:**
 - **Terminal UI**: Built with ratatui for cross-platform terminal interface
 - **Layout**: Header, messages area, user list sidebar, input area, and status bar
@@ -294,8 +299,25 @@ cargo run -p bidirectional-chat-client chat
 - **Authentication**: JWT token storage in config directory with secure file permissions
 - **Configuration**: Supports environment variables and TOML config file in user's config directory
 
+**Chat Commands:**
+- `/help` - Show available commands
+- `/leave` or `/quit` - Leave current room
+- `/join <room>` - Join a different room
+- `/rooms` - List available rooms
+- `/users` - List users in current room
+- `/kick <username>` - Admin only: kick user from room
+- `/clear` - Clear chat history
+
 #### Bidirectional Macro Implementation Notes
 - **Required Fields**: Always include `server_to_client_calls` field even if empty (`server_to_client_calls: []`)
 - **Connection Management**: Use the `ConnectionManager` directly for sending notifications, not a generated client handle
 - **Persistence**: Chat history and room state can be persisted using simple JSON file storage with `serde_json`
 - **Integration Testing**: Extensive test coverage including WebSocket tests, authentication flows, and concurrent user scenarios
+
+### Production Deployment Considerations
+When deploying the bidirectional chat example to production:
+- **Security**: Use proper JWT secrets, enable CORS only for trusted origins, implement rate limiting
+- **Persistence**: Configure database storage for messages instead of JSON files
+- **Scaling**: Consider Redis for pub/sub across multiple server instances
+- **Monitoring**: Use structured logging with appropriate log levels
+- **Configuration**: Use environment-specific config files and secure credential management

@@ -33,7 +33,7 @@ pub struct RegisterRequest {
 
 /// Response payload for successful authentication
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-pub struct AuthResponse {
+pub struct LoginResponse {
     /// JWT token for authentication
     pub token: String,
     /// Token expiration timestamp (Unix timestamp)
@@ -66,12 +66,12 @@ pub struct HealthResponse {
 // Define the REST service
 rest_service!({
     service_name: ChatAuthService,
-    base_path: "",
+    base_path: "/",
     openapi: true,
     serve_docs: false,
     endpoints: [
         // Authentication endpoints
-        POST UNAUTHORIZED auth/login(LoginRequest) -> AuthResponse,
+        POST UNAUTHORIZED auth/login(LoginRequest) -> LoginResponse,
         POST UNAUTHORIZED auth/register(RegisterRequest) -> RegisterResponse,
 
         // Health check endpoint

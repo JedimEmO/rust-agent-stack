@@ -104,7 +104,7 @@ impl AppState {
     }
     
     pub fn set_connection_status(&mut self, status: ConnectionStatus) {
-        self.connection_status = status;
+        self.connection_status = status.clone();
         match status {
             ConnectionStatus::Connected => {
                 self.add_system_message("Connected to server".to_string());

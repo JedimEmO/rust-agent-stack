@@ -30,11 +30,10 @@ use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
-mod auth_api;
 pub mod config;
 mod persistence;
 
-use auth_api::*;
+use bidirectional_chat_api::auth::*;
 use config::Config;
 use persistence::{
     PersistedCatAvatar, PersistedMessage, PersistedRoom, PersistedUserProfile, PersistenceManager,
@@ -1046,7 +1045,7 @@ impl AuthHandlers {
     async fn handle_login(
         &self,
         request: LoginRequest,
-    ) -> Result<AuthResponse, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<LoginResponse, Box<dyn std::error::Error + Send + Sync>> {
         debug!("Processing login request");
 
         // Create auth payload
@@ -1078,7 +1077,7 @@ impl AuthHandlers {
             })?;
 
         info!(user_id = %claims.sub, "User logged in successfully");
-        Ok(AuthResponse {
+        Ok(LoginResponse {
             token,
             expires_at: claims.exp,
             user_id: claims.sub,

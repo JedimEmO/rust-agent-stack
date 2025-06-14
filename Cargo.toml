@@ -22,7 +22,7 @@ members = [
     "examples/google-oauth-example/api",
     "examples/bidirectional-chat/api",
     "examples/bidirectional-chat/server",
-    "examples/bidirectional-chat/client",
+    "examples/bidirectional-chat/client"
 ]
 
 [workspace.dependencies]
@@ -75,3 +75,4 @@ wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 tempfile = "3.13"
 config = { version = "0.14", features = ["toml"] }
+toml = "0.8"

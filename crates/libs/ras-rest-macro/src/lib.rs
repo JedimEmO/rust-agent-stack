@@ -633,7 +633,12 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
                 // Add static hosting routes if enabled
                 #static_routes
 
-                axum::Router::new().nest(#base_path, router)
+                // Handle empty or root base path
+                if #base_path.is_empty() || #base_path == "/" {
+                    router
+                } else {
+                    axum::Router::new().nest(#base_path, router)
+                }
             }
         }
 

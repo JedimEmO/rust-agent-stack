@@ -5,7 +5,7 @@ edition = "2024"
 
 [features]
 default = ["server", "client"]
-server = ["ras-jsonrpc-bidirectional-server"]
+server = ["ras-jsonrpc-bidirectional-server", "axum"]
 client = ["ras-jsonrpc-bidirectional-client"]
 
 [dependencies]
@@ -20,3 +20,6 @@ ras-jsonrpc-bidirectional-server = { path = "../../../crates/libs/ras-jsonrpc-bi
 ras-jsonrpc-bidirectional-client = { path = "../../../crates/libs/ras-jsonrpc-bidirectional-client", optional = true }
 ras-auth-core = { path = "../../../crates/libs/ras-auth-core" }
 ras-jsonrpc-types = { path = "../../../crates/libs/ras-jsonrpc-types" }
+ras-rest-macro = { path = "../../../crates/libs/ras-rest-macro" }
+reqwest = { workspace = true, features = ["json"] }
+axum = { workspace = true, optional = true }

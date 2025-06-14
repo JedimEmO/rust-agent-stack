@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
     execute,
@@ -7,9 +7,9 @@ use crossterm::{
 use ratatui::{
     backend::{Backend, CrosstermBackend},
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style, Stylize},
-    text::{Line, Span, Text},
-    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame, Terminal,
 };
 use std::{
@@ -46,10 +46,24 @@ pub async fn run_chat_ui(config: &Config) -> Result<()> {
     let app_state = Arc::new(Mutex::new(AppState::new(token.username.clone())));
     
     // Create chat client
-    let mut client = ChatClient::new(config.websocket_url.clone(), token.token, app_state.clone()).await?;
+    let client = ChatClient::new(config.websocket_url.clone(), token.token, app_state.clone()).await?;
+    
+    // Join the default room
+    client.join_room("general".to_string()).await?;
+    
+    // Start the message handler task
+    let message_handler = tokio::spawn({
+        let client = client.clone();
+        async move {
+            client.handle_pending_messages().await;
+        }
+    });
     
     // Run the UI
     let res = run_app(&mut terminal, app_state).await;
+    
+    // Cancel the message handler
+    message_handler.abort();
     
     // Restore terminal
     disable_raw_mode()?;
