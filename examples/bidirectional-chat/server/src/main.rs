@@ -1076,7 +1076,7 @@ async fn main() -> Result<()> {
 
     // Create identity provider
     info!("Setting up identity provider");
-    let identity_provider = Arc::new(LocalUserProvider::new());
+    let identity_provider = LocalUserProvider::new();
 
     // Add admin users from configuration
     if config.admin.auto_create {
@@ -1151,23 +1151,31 @@ async fn main() -> Result<()> {
             .with_permissions(Arc::new(ChatPermissions::new(config.admin.users.clone()))),
     );
 
-    // Create a separate identity provider for the session service
-    // (LocalUserProvider doesn't implement Clone, so we need a separate instance)
-    let session_identity_provider = LocalUserProvider::new();
+    // Register the identity provider with the session service
+    // We wrap it in Arc after registration for use in handlers
+    session_service
+        .register_provider(Box::new(identity_provider))
+        .await;
 
-    // Copy admin users to session provider
-    for admin_user in &config.admin.users {
-        let _ = session_identity_provider
-            .add_user(
-                admin_user.username.clone(),
-                admin_user.password.clone(),
-                admin_user.email.clone(),
-                admin_user.display_name.clone(),
-            )
-            .await;
+    // Create a new identity provider instance for registration endpoint
+    // This shares the same underlying users data via internal Arc<RwLock>
+    let registration_provider = Arc::new(LocalUserProvider::new());
+
+    // Add the same admin users to the registration provider
+    if config.admin.auto_create {
+        for admin_user in &config.admin.users {
+            let _ = registration_provider
+                .add_user(
+                    admin_user.username.clone(),
+                    admin_user.password.clone(),
+                    admin_user.email.clone(),
+                    admin_user.display_name.clone(),
+                )
+                .await;
+        }
     }
 
-    // Copy test users if in debug mode
+    // Add test users to registration provider if in dev mode
     if cfg!(debug_assertions) {
         let test_users = vec![
             (
@@ -1180,7 +1188,7 @@ async fn main() -> Result<()> {
         ];
 
         for (username, password, email, display_name) in test_users {
-            let _ = session_identity_provider
+            let _ = registration_provider
                 .add_user(
                     username.to_string(),
                     password.to_string(),
@@ -1190,10 +1198,6 @@ async fn main() -> Result<()> {
                 .await;
         }
     }
-
-    session_service
-        .register_provider(Box::new(session_identity_provider))
-        .await;
 
     // Create JWT auth provider
     let auth_provider = JwtAuthProvider::new(session_service.clone());
@@ -1225,7 +1229,7 @@ async fn main() -> Result<()> {
     let auth_router = Router::new()
         .route("/auth/login", axum::routing::post(login_handler))
         .route("/auth/register", axum::routing::post(register_handler))
-        .with_state((session_service, identity_provider, chat_server.clone()));
+        .with_state((session_service, registration_provider, chat_server.clone()));
 
     // Create WebSocket endpoint
     type ChatServiceType = BuiltWebSocketService<
