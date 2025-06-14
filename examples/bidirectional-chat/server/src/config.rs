@@ -691,4 +691,3 @@ mod tests {
         assert!(config.validate().is_err());
     }
 }
-

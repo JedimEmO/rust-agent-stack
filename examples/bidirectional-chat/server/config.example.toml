@@ -79,14 +79,14 @@ auto_create = true
 # Example: CHAT__ADMIN__USERS__0__PASSWORD=secure_password
 [[admin.users]]
 username = "admin"
-password = "admin123"  # Change this in production!
+password = "admin123456"  # Change this in production! (min 8 chars)
 email = "admin@example.com"
 display_name = "Administrator"
 permissions = ["admin", "moderator", "user"]
 
 [[admin.users]]
 username = "moderator"
-password = "mod123"  # Change this in production!
+password = "moderator123"  # Change this in production! (min 8 chars)
 email = "mod@example.com"
 display_name = "Moderator"
 permissions = ["moderator", "user"]

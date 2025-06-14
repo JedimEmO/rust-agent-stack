@@ -7,6 +7,9 @@ All notable changes to this project will be documented in this file.
 ### Changed - 2025-01-14
 - Removed unused MCP server configurations (language-server, human-in-the-loop) from .mcp.json
 
+### Fixed - 2025-01-14
+- Updated minimum password length in chat server config examples to match 8-character validation requirement
+
 ### Added - 2025-01-14
 - Bidirectional chat terminal client foundation (Sprint 2 Day 1)
   - Modular architecture with separate ui, client, auth, and config modules
