@@ -11,6 +11,7 @@ ras-jsonrpc-types = { path = "../../../crates/libs/ras-jsonrpc-types" }
 ras-jsonrpc-bidirectional-macro = { path = "../../../crates/libs/ras-jsonrpc-bidirectional-macro" }
 ras-jsonrpc-bidirectional-server = { path = "../../../crates/libs/ras-jsonrpc-bidirectional-server" }
 ras-jsonrpc-bidirectional-types = { path = "../../../crates/libs/ras-jsonrpc-bidirectional-types" }
+ras-rest-macro = { path = "../../../crates/libs/ras-rest-macro", features = ["server"] }
 ras-identity-core = { path = "../../../crates/identity/ras-identity-core" }
 ras-identity-local = { path = "../../../crates/identity/ras-identity-local" }
 ras-identity-session = { path = "../../../crates/identity/ras-identity-session" }
@@ -20,6 +21,7 @@ axum = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+schemars = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 async-trait = { workspace = true }

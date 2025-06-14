@@ -30,9 +30,11 @@ use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
 
+mod auth_api;
 pub mod config;
 mod persistence;
 
+use auth_api::*;
 use config::Config;
 use persistence::{
     PersistedCatAvatar, PersistedMessage, PersistedRoom, PersistedUserProfile, PersistenceManager,
@@ -1009,6 +1011,13 @@ struct ChatPermissions {
     admin_users: Vec<config::AdminUser>,
 }
 
+// REST API handlers
+#[derive(Clone)]
+struct AuthHandlers {
+    session_service: Arc<SessionService>,
+    identity_provider: Arc<LocalUserProvider>,
+}
+
 impl ChatPermissions {
     fn new(admin_users: Vec<config::AdminUser>) -> Self {
         Self { admin_users }
@@ -1030,6 +1039,88 @@ impl UserPermissions for ChatPermissions {
 
         // Default permissions for regular users
         Ok(vec!["user".to_string()])
+    }
+}
+
+impl AuthHandlers {
+    async fn handle_login(
+        &self,
+        request: LoginRequest,
+    ) -> Result<AuthResponse, Box<dyn std::error::Error + Send + Sync>> {
+        debug!("Processing login request");
+
+        // Create auth payload
+        let provider_id = request.provider.as_deref().unwrap_or("local");
+        let auth_payload = json!({
+            "username": request.username,
+            "password": request.password,
+            "provider": provider_id,
+        });
+
+        // Begin session
+        let token = self
+            .session_service
+            .begin_session(provider_id, auth_payload)
+            .await
+            .map_err(|e| {
+                warn!(provider = %provider_id, "Login failed: {}", e);
+                format!("Authentication failed: {}", e)
+            })?;
+
+        // Parse token to get user info (for response)
+        let claims = self
+            .session_service
+            .verify_session(&token)
+            .await
+            .map_err(|e| {
+                warn!("Token verification failed: {}", e);
+                format!("Token verification failed: {}", e)
+            })?;
+
+        info!(user_id = %claims.sub, "User logged in successfully");
+        Ok(AuthResponse {
+            token,
+            expires_at: claims.exp,
+            user_id: claims.sub,
+        })
+    }
+
+    async fn handle_register(
+        &self,
+        request: RegisterRequest,
+    ) -> Result<RegisterResponse, Box<dyn std::error::Error + Send + Sync>> {
+        debug!("Processing registration request");
+
+        // Add user
+        self.identity_provider
+            .add_user(
+                request.username.clone(),
+                request.password,
+                request.email.clone(),
+                request.display_name.clone(),
+            )
+            .await
+            .map_err(|e| {
+                warn!(username = %request.username, "Registration failed: {}", e);
+                format!("Registration failed: {}", e)
+            })?;
+
+        info!(username = %request.username, email = ?request.email, "User registered successfully");
+
+        Ok(RegisterResponse {
+            message: "User registered successfully".to_string(),
+            username: request.username,
+            display_name: request.display_name,
+        })
+    }
+
+    async fn handle_health(
+        &self,
+    ) -> Result<HealthResponse, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(HealthResponse {
+            status: "OK".to_string(),
+            timestamp: Utc::now().to_rfc3339(),
+        })
     }
 }
 
@@ -1200,7 +1291,7 @@ async fn main() -> Result<()> {
     }
 
     // Create JWT auth provider
-    let auth_provider = JwtAuthProvider::new(session_service.clone());
+    let auth_provider = Arc::new(JwtAuthProvider::new(session_service.clone()));
 
     // Create connection manager
     let connection_manager = Arc::new(DefaultConnectionManager::new());
@@ -1220,16 +1311,37 @@ async fn main() -> Result<()> {
     // Build WebSocket service
     let ws_service = WebSocketServiceBuilder::builder()
         .handler(handler)
-        .auth_provider(Arc::new(auth_provider.clone()))
+        .auth_provider(auth_provider.clone())
         .require_auth(true)
         .build()
         .build_with_manager(connection_manager);
 
-    // Create auth endpoints for login and registration
-    let auth_router = Router::new()
-        .route("/auth/login", axum::routing::post(login_handler))
-        .route("/auth/register", axum::routing::post(register_handler))
-        .with_state((session_service, registration_provider, chat_server.clone()));
+    // Create auth handlers
+    let auth_handlers = AuthHandlers {
+        session_service: session_service.clone(),
+        identity_provider: registration_provider,
+    };
+
+    // Build REST service using the macro-generated builder
+    let auth_handlers_clone1 = auth_handlers.clone();
+    let auth_handlers_clone2 = auth_handlers.clone();
+    let auth_handlers_clone3 = auth_handlers.clone();
+
+    let auth_router = ChatAuthServiceBuilder::new()
+        .auth_provider(auth_provider.as_ref().clone())
+        .post_auth_login_handler(move |req| {
+            let handlers = auth_handlers_clone1.clone();
+            async move { handlers.handle_login(req).await }
+        })
+        .post_auth_register_handler(move |req| {
+            let handlers = auth_handlers_clone2.clone();
+            async move { handlers.handle_register(req).await }
+        })
+        .get_health_handler(move || {
+            let handlers = auth_handlers_clone3.clone();
+            async move { handlers.handle_health().await }
+        })
+        .build();
 
     // Create WebSocket endpoint
     type ChatServiceType = BuiltWebSocketService<
@@ -1240,9 +1352,6 @@ async fn main() -> Result<()> {
     let ws_router = Router::new()
         .route("/ws", get(websocket_handler::<ChatServiceType>))
         .with_state(ws_service);
-
-    // Create health check endpoint
-    let health_router = Router::new().route("/health", get(|| async { "OK" }));
 
     // Configure CORS based on configuration
     let cors_layer = if config.server.cors.allow_any_origin {
@@ -1259,7 +1368,6 @@ async fn main() -> Result<()> {
     let app = Router::new()
         .merge(auth_router)
         .merge(ws_router)
-        .merge(health_router)
         .layer(cors_layer);
 
     // Start server
@@ -1282,95 +1390,4 @@ async fn main() -> Result<()> {
     })?;
 
     Ok(())
-}
-
-// Login handler for authentication
-#[instrument(skip(session_service, _identity_provider, _chat_server, payload))]
-async fn login_handler(
-    axum::extract::State((session_service, _identity_provider, _chat_server)): axum::extract::State<
-        (Arc<SessionService>, Arc<LocalUserProvider>, Arc<ChatServer>),
-    >,
-    axum::Json(payload): axum::Json<serde_json::Value>,
-) -> Result<axum::Json<serde_json::Value>, axum::http::StatusCode> {
-    debug!("Processing login request");
-    // Extract provider_id from payload (default to "local")
-    let provider_id = payload
-        .get("provider")
-        .and_then(|v| v.as_str())
-        .unwrap_or("local");
-
-    // Begin session
-    let token = session_service
-        .begin_session(provider_id, payload.clone())
-        .await
-        .map_err(|e| {
-            warn!(provider = %provider_id, "Login failed: {}", e);
-            axum::http::StatusCode::UNAUTHORIZED
-        })?;
-
-    // Parse token to get user info (for response)
-    let claims = session_service.verify_session(&token).await.map_err(|e| {
-        warn!("Token verification failed: {}", e);
-        axum::http::StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    info!(user_id = %claims.sub, "User logged in successfully");
-    Ok(axum::Json(json!({
-        "token": token,
-        "expires_at": claims.exp,
-        "user_id": claims.sub,
-    })))
-}
-
-// Register handler for user registration
-#[instrument(skip(_session_service, identity_provider, _chat_server, payload))]
-async fn register_handler(
-    axum::extract::State((_session_service, identity_provider, _chat_server)): axum::extract::State<
-        (Arc<SessionService>, Arc<LocalUserProvider>, Arc<ChatServer>),
-    >,
-    axum::Json(payload): axum::Json<serde_json::Value>,
-) -> Result<axum::Json<serde_json::Value>, axum::http::StatusCode> {
-    debug!("Processing registration request");
-    // Extract username and password
-    let username = payload
-        .get("username")
-        .and_then(|v| v.as_str())
-        .ok_or(axum::http::StatusCode::BAD_REQUEST)?;
-
-    let password = payload
-        .get("password")
-        .and_then(|v| v.as_str())
-        .ok_or(axum::http::StatusCode::BAD_REQUEST)?;
-
-    let email = payload
-        .get("email")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-
-    let display_name = payload
-        .get("display_name")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-
-    // Add user
-    identity_provider
-        .add_user(
-            username.to_string(),
-            password.to_string(),
-            email.clone(),
-            display_name.clone(),
-        )
-        .await
-        .map_err(|e| {
-            warn!(username = %username, "Registration failed: {}", e);
-            axum::http::StatusCode::CONFLICT // User already exists
-        })?;
-
-    info!(username = %username, email = ?email, "User registered successfully");
-
-    Ok(axum::Json(json!({
-        "message": "User registered successfully",
-        "username": username,
-        "display_name": display_name,
-    })))
 }
