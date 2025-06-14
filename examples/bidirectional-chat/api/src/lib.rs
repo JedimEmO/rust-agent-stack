@@ -95,6 +95,7 @@ pub struct JoinRoomRequest {
 pub struct JoinRoomResponse {
     pub room_id: String,
     pub user_count: u32,
+    pub existing_users: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

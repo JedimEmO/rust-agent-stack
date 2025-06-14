@@ -537,6 +537,9 @@ impl ChatServiceService for ChatServer {
             .into());
         }
 
+        // Get existing users before adding the new user
+        let existing_users: Vec<String> = room.users.iter().cloned().collect();
+        
         room.users.insert(username.clone());
         let user_count = room.users.len() as u32;
         let room_users: Vec<String> = room.users.iter().cloned().collect();
@@ -544,7 +547,7 @@ impl ChatServiceService for ChatServer {
 
         // Notify users in new room
         let notification = UserJoinedNotification {
-            username,
+            username: username.clone(),
             room_id: room_id.clone(),
             user_count,
         };
@@ -572,9 +575,18 @@ impl ChatServiceService for ChatServer {
             }
         }
 
+        info!(
+            user = %username, 
+            room_id = %room_id, 
+            existing_users = ?existing_users,
+            user_count = %user_count,
+            "User joined room successfully"
+        );
+        
         Ok(JoinRoomResponse {
             room_id,
             user_count,
+            existing_users,
         })
     }
 

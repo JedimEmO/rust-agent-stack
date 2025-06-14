@@ -514,6 +514,7 @@ impl ChatServiceService for ChatServer {
         Ok(JoinRoomResponse {
             room_id,
             user_count,
+            existing_users: vec![],
         })
     }
 
@@ -666,6 +667,42 @@ impl ChatServiceService for ChatServer {
         &self,
         _connection_id: ConnectionId,
         _params: RoomDeletedNotification,
+    ) -> ras_jsonrpc_bidirectional_types::Result<()> {
+        Ok(())
+    }
+
+    async fn start_typing(
+        &self,
+        _client_id: ConnectionId,
+        _connection_manager: &dyn ConnectionManager,
+        _user: &AuthenticatedUser,
+        _request: StartTypingRequest,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        Ok(())
+    }
+
+    async fn stop_typing(
+        &self,
+        _client_id: ConnectionId,
+        _connection_manager: &dyn ConnectionManager,
+        _user: &AuthenticatedUser,
+        _request: StopTypingRequest,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        Ok(())
+    }
+
+    async fn notify_user_started_typing(
+        &self,
+        _connection_id: ConnectionId,
+        _params: UserStartedTypingNotification,
+    ) -> ras_jsonrpc_bidirectional_types::Result<()> {
+        Ok(())
+    }
+
+    async fn notify_user_stopped_typing(
+        &self,
+        _connection_id: ConnectionId,
+        _params: UserStoppedTypingNotification,
     ) -> ras_jsonrpc_bidirectional_types::Result<()> {
         Ok(())
     }

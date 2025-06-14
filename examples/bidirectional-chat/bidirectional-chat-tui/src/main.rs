@@ -209,17 +209,30 @@ async fn run_app(
                                     
                                     let client = chat_client.lock().await;
                                     match client.join_room(room_name.clone()).await {
-                                        Ok((room_id, _)) => {
+                                        Ok((room_id, existing_users)) => {
                                             let mut app = app_state.lock().await;
                                             app.current_room = Some((room_id.clone(), room_name.clone()));
                                             app.screen = AppScreen::Chat { room_id: room_id.clone(), room_name };
                                             app.messages.clear();
+                                            
+                                            // Clear and populate room_users with existing users
+                                            app.room_users.entry(room_id.clone()).or_insert_with(Vec::new).clear();
+                                            
+                                            tracing::debug!("Existing users in room: {:?}", existing_users);
+                                            
+                                            app.room_users.entry(room_id.clone())
+                                                .or_insert_with(Vec::new)
+                                                .extend(existing_users);
+                                            
                                             // Add current user to room_users
                                             if let Some(username) = app.username.clone() {
-                                                app.room_users.entry(room_id)
+                                                tracing::debug!("Adding current user to room: {}", username);
+                                                app.room_users.entry(room_id.clone())
                                                     .or_insert_with(Vec::new)
                                                     .push(username);
                                             }
+                                            
+                                            tracing::debug!("Room users after join: {:?}", app.room_users.get(&room_id));
                                         }
                                         Err(e) => {
                                             app_state.lock().await.error_message = Some(format!("Failed to join room: {}", e));
@@ -250,7 +263,7 @@ async fn run_app(
                                     let _ = client.stop_typing().await;
                                 }
                                 
-                                if let Err(e) = client.leave_room(room_id).await {
+                                if let Err(e) = client.leave_room(room_id.clone()).await {
                                     app_state.lock().await.error_message = Some(format!("Failed to leave room: {}", e));
                                 }
                                 
@@ -258,6 +271,8 @@ async fn run_app(
                                 app.screen = AppScreen::RoomList;
                                 app.current_room = None;
                                 app.input_buffer.clear();
+                                // Clear room users when leaving
+                                app.room_users.remove(&room_id);
                             }
                             KeyCode::Enter => {
                                 if !app.input_buffer.is_empty() {

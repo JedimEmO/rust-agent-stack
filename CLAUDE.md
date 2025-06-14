@@ -20,7 +20,9 @@ cargo test -p <crate-name>  # e.g., cargo test -p ras-auth-core
 # Run example applications
 cargo run -p google-oauth-example
 cargo run -p bidirectional-chat-server
-cargo run -p bidirectional-chat-client
+cargo run -p bidirectional-chat-tui
+cargo run -p basic-service
+cargo run -p rest-service-example
 
 # Check code without building
 cargo check
@@ -46,7 +48,8 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
 - Uses Cargo workspace with resolver version 3 (latest)
 - Organized under `crates/` with subcategories:
   - `libs/` - Library crates
-  - Future expansion likely: `apps/`, `services/`
+  - `identity/` - Identity and authentication providers
+  - `tools/` - Development tools and utilities
 
 ### Current Crates
 
@@ -68,9 +71,17 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
 - **ras-identity-oauth2**: OAuth2 provider with Google support, PKCE, and state management
 - **ras-identity-session**: JWT session management and `JwtAuthProvider` implementation
 
+#### Development Tools (`crates/tools/`)
+- **openrpc-to-bruno**: CLI tool to convert OpenRPC specifications to Bruno API collections (both binary and library)
+
 #### Examples (`examples/`)
 - **google-oauth-example**: Full-stack OAuth2 demo with backend API and interactive frontend
 - **bidirectional-chat**: Real-time chat system demonstrating bidirectional JSON-RPC over WebSockets
+  - **bidirectional-chat-server**: WebSocket server with persistence and room management
+  - **bidirectional-chat-tui**: Terminal UI client with ratatui interface
+  - **bidirectional-chat-api**: Shared types and service definitions
+- **basic-service**: Simple JSON-RPC service example demonstrating macro usage
+- **rest-service-example**: REST API example using ras-rest-macro with authentication
 
 ### Key Design Decisions
 1. **Procedural Macro Architecture**: Using proc-macros for JSON-RPC suggests focus on ergonomic, type-safe RPC interfaces with compile-time validation
@@ -266,6 +277,10 @@ Full-stack OAuth2 demo with Google integration, showcasing complete authenticati
 ```
 
 **Key Features:** OAuth2 + PKCE, role-based permissions, JSON-RPC API, responsive web UI
+
+### Bidirectional Chat Example (`examples/bidirectional-chat/`)
+
+Real-time chat system showcasing WebSocket-based bidirectional JSON-RPC communication with authentication, persistence, and rich UI features.
 
 #### Bidirectional Macro Implementation Notes
 - **Required Fields**: Always include `server_to_client_calls` field even if empty (`server_to_client_calls: []`)

@@ -185,11 +185,11 @@ impl ChatClient {
         }
     }
 
-    pub async fn join_room(&self, room_name: String) -> Result<(String, String)> {
+    pub async fn join_room(&self, room_name: String) -> Result<(String, Vec<String>)> {
         match &self.client {
             Some(client) => {
                 let response = client.join_room(JoinRoomRequest { room_name: room_name.clone() }).await?;
-                Ok((response.room_id, room_name))
+                Ok((response.room_id, response.existing_users))
             }
             None => anyhow::bail!("Not connected"),
         }

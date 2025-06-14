@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added - 2025-01-14
+- Cat avatar system for bidirectional chat users
+  - Unique ASCII art cat avatars generated from username hashes
+  - Multiple cat breeds, colors, and expressions
+  - Animated states (normal, blinking, winking, happy)
+  - Typing indicators with animated speech bubbles
+- Enhanced chat UI with chat bubbles and timestamps
+- Message persistence system using JSON files
+  - State files for rooms and user profiles
+  - JSONL message logs per room
+  - Automatic state recovery on server restart
+- User sidebar showing active users in rooms
+- Real-time typing indicators in both server and TUI client
+
 ### Refactored - 2025-01-14
 - Migrated bidirectional chat server authentication endpoints to use REST macro
   - Replaced manual Axum handlers with type-safe REST service definitions
