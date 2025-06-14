@@ -21,7 +21,8 @@ members = [
     "examples/rest-service-example",
     "examples/google-oauth-example/api",
     "examples/bidirectional-chat/api",
-    "examples/bidirectional-chat/server"
+    "examples/bidirectional-chat/server",
+    "examples/bidirectional-chat-tui"
 ]
 
 [workspace.dependencies]
@@ -75,3 +76,6 @@ js-sys = "0.3"
 tempfile = "3.13"
 config = { version = "0.14", features = ["toml"] }
 toml = "0.8"
+# TUI dependencies
+ratatui = "0.29"
+crossterm = "0.28"

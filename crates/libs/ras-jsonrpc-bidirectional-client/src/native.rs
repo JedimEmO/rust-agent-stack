@@ -78,8 +78,7 @@ impl WebSocketTransport for NativeWebSocketTransport {
             .header("Connection", "Upgrade")
             .header("Upgrade", "websocket")
             .header("Sec-WebSocket-Version", "13")
-            .header("Sec-WebSocket-Key", generate_key())
-            .header("Sec-WebSocket-Protocol", "jsonrpc");
+            .header("Sec-WebSocket-Key", generate_key());
 
         // Add custom headers from build_request_headers()
         let headers = self.build_request_headers();

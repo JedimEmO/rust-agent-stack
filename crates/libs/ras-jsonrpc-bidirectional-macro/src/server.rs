@@ -408,6 +408,30 @@ pub fn generate_server_code(
                 }
             }
 
+            async fn on_connect(&self, context: std::sync::Arc<ras_jsonrpc_bidirectional_server::ConnectionContext>) -> ras_jsonrpc_bidirectional_server::ServerResult<()> {
+                // Call the service's on_client_connected
+                if let Err(e) = self.service.on_client_connected(context.id, self.connection_manager.as_ref()).await {
+                    return Err(ras_jsonrpc_bidirectional_server::ServerError::Internal(e.to_string()));
+                }
+
+                // If user is authenticated, call on_client_authenticated
+                if let Some(user) = context.get_user().await {
+                    if let Err(e) = self.service.on_client_authenticated(context.id, self.connection_manager.as_ref(), &user).await {
+                        return Err(ras_jsonrpc_bidirectional_server::ServerError::Internal(e.to_string()));
+                    }
+                }
+
+                Ok(())
+            }
+
+            async fn on_disconnect(&self, context: std::sync::Arc<ras_jsonrpc_bidirectional_server::ConnectionContext>, reason: Option<String>) -> ras_jsonrpc_bidirectional_server::ServerResult<()> {
+                let _ = reason; // Unused for now
+                // Call the service's on_client_disconnected
+                if let Err(e) = self.service.on_client_disconnected(context.id, self.connection_manager.as_ref()).await {
+                    return Err(ras_jsonrpc_bidirectional_server::ServerError::Internal(e.to_string()));
+                }
+                Ok(())
+            }
         }
 
         #[cfg(feature = "server")]
