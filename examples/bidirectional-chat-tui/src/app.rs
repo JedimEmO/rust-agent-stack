@@ -6,6 +6,7 @@ use bidirectional_chat_api::{
 };
 use chrono::{DateTime, Local};
 use tokio::sync::mpsc;
+use crate::avatar::AvatarManager;
 
 #[derive(Debug, Clone)]
 pub struct Message {
@@ -48,6 +49,8 @@ pub struct AppState {
     pub auth_password_input: String,
     pub auth_field_focus: AuthField,
     pub connected: bool,
+    pub avatar_manager: AvatarManager,
+    pub room_users: std::collections::HashMap<String, Vec<String>>, // room_id -> list of users
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -70,6 +73,8 @@ impl Default for AppState {
             auth_password_input: String::new(),
             auth_field_focus: AuthField::Username,
             connected: false,
+            avatar_manager: AvatarManager::new(),
+            room_users: std::collections::HashMap::new(),
         }
     }
 }

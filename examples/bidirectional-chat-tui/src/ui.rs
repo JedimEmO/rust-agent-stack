@@ -9,8 +9,9 @@ use ratatui::{
     Frame,
 };
 
-pub fn draw(frame: &mut Frame, app: &AppState) {
-    match &app.screen {
+pub fn draw(frame: &mut Frame, app: &mut AppState) {
+    let screen = app.screen.clone();
+    match &screen {
         AppScreen::Login => draw_login_screen(frame, app),
         AppScreen::Register => draw_register_screen(frame, app),
         AppScreen::RoomList => draw_room_list_screen(frame, app),
@@ -298,7 +299,7 @@ fn draw_room_list_screen(frame: &mut Frame, app: &AppState) {
     frame.render_widget(instructions, chunks[2]);
 }
 
-fn draw_chat_screen(frame: &mut Frame, app: &AppState, room_name: &str) {
+fn draw_chat_screen(frame: &mut Frame, app: &mut AppState, room_name: &str) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(5)])
@@ -311,15 +312,98 @@ fn draw_chat_screen(frame: &mut Frame, app: &AppState, room_name: &str) {
         .block(Block::default().borders(Borders::ALL).border_type(BorderType::Thick));
     frame.render_widget(header, chunks[0]);
 
+    // Split the main area into messages and avatar sidebar
+    let main_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Min(0), Constraint::Length(20)])
+        .split(chunks[1]);
+
     // Messages area
     let messages_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded);
     
-    let messages_area = messages_block.inner(chunks[1]);
-    frame.render_widget(messages_block, chunks[1]);
+    let messages_area = messages_block.inner(main_chunks[0]);
+    frame.render_widget(messages_block, main_chunks[0]);
 
-    // Render messages
+    // Avatar sidebar
+    let sidebar_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .title(" Users ");
+    frame.render_widget(sidebar_block.clone(), main_chunks[1]);
+    let sidebar_area = sidebar_block.inner(main_chunks[1]);
+
+    // Tick the avatar animation
+    app.avatar_manager.tick();
+
+    // Build a list of users from room_users and always include System
+    let mut user_list: Vec<String> = vec!["System".to_string()];
+    
+    // Add users from room_users for current room
+    if let Some((room_id, _)) = &app.current_room {
+        if let Some(users) = app.room_users.get(room_id) {
+            for user in users {
+                if !user_list.contains(user) {
+                    user_list.push(user.clone());
+                }
+            }
+        }
+    }
+    
+    // Sort users (System first, then alphabetical)
+    user_list[1..].sort();
+    
+    // Draw avatars in sidebar
+    let avatar_height = 3; // Each avatar is 3 lines tall
+    let avatar_width = 8; // Width of avatar part
+    let spacing = 1;
+    let max_avatars = (sidebar_area.height as usize) / (avatar_height + spacing);
+    
+    for (idx, username) in user_list.iter().take(max_avatars).enumerate() {
+        let avatar_lines = app.avatar_manager.get_avatar_for_user(username);
+        let y_offset = idx * (avatar_height + spacing);
+        
+        // Draw each line of the avatar with username to the right
+        for (line_idx, avatar_line) in avatar_lines.iter().enumerate() {
+            if y_offset + line_idx < sidebar_area.height as usize {
+                // Draw avatar
+                let avatar_widget = Paragraph::new(avatar_line.as_str())
+                    .style(Style::default().fg(Color::Magenta));
+                frame.render_widget(
+                    avatar_widget,
+                    Rect {
+                        x: sidebar_area.x,
+                        y: sidebar_area.y + (y_offset + line_idx) as u16,
+                        width: avatar_width,
+                        height: 1,
+                    },
+                );
+                
+                // Draw username on the middle line of the avatar
+                if line_idx == 1 && sidebar_area.width > avatar_width + 1 {
+                    let username_color = if username == "System" {
+                        Color::Yellow
+                    } else {
+                        Color::Green
+                    };
+                    let username_widget = Paragraph::new(username.as_str())
+                        .style(Style::default().fg(username_color).add_modifier(Modifier::BOLD));
+                    frame.render_widget(
+                        username_widget,
+                        Rect {
+                            x: sidebar_area.x + avatar_width + 1,
+                            y: sidebar_area.y + (y_offset + line_idx) as u16,
+                            width: sidebar_area.width.saturating_sub(avatar_width + 1),
+                            height: 1,
+                        },
+                    );
+                }
+            }
+        }
+    }
+
+    // Render messages (without inline avatars now)
     let messages: Vec<Line> = app
         .messages
         .iter()

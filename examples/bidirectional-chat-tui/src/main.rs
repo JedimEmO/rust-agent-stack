@@ -1,5 +1,6 @@
 mod app;
 mod auth;
+mod avatar;
 mod ui;
 
 use anyhow::Result;
@@ -73,8 +74,8 @@ async fn run_app(
     loop {
         // Draw UI
         {
-            let app = app_state.lock().await;
-            terminal.draw(|f| ui::draw(f, &app))?;
+            let mut app = app_state.lock().await;
+            terminal.draw(|f| ui::draw(f, &mut app))?;
             terminal.backend_mut().flush()?;
         }
 
@@ -211,8 +212,14 @@ async fn run_app(
                                         Ok((room_id, _)) => {
                                             let mut app = app_state.lock().await;
                                             app.current_room = Some((room_id.clone(), room_name.clone()));
-                                            app.screen = AppScreen::Chat { room_id, room_name };
+                                            app.screen = AppScreen::Chat { room_id: room_id.clone(), room_name };
                                             app.messages.clear();
+                                            // Add current user to room_users
+                                            if let Some(username) = app.username.clone() {
+                                                app.room_users.entry(room_id)
+                                                    .or_insert_with(Vec::new)
+                                                    .push(username);
+                                            }
                                         }
                                         Err(e) => {
                                             app_state.lock().await.error_message = Some(format!("Failed to join room: {}", e));
@@ -289,6 +296,11 @@ async fn run_app(
                         app.messages.push(message);
                     }
                     AppEvent::UserJoined { username, room_id } => {
+                        // Add user to room_users
+                        app.room_users.entry(room_id.clone())
+                            .or_insert_with(Vec::new)
+                            .push(username.clone());
+                        
                         let msg = app::Message {
                             id: 0,
                             username: "System".to_string(),
@@ -299,6 +311,11 @@ async fn run_app(
                         app.messages.push(msg);
                     }
                     AppEvent::UserLeft { username, room_id } => {
+                        // Remove user from room_users
+                        if let Some(users) = app.room_users.get_mut(&room_id) {
+                            users.retain(|u| u != &username);
+                        }
+                        
                         let msg = app::Message {
                             id: 0,
                             username: "System".to_string(),
