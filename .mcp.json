@@ -6,19 +6,6 @@
       "env": {
         "DEFAULT_MINIMUM_TOKENS": "6000"
       }
-    },
-    "language-server": {
-      "command": "/home/mmy/go/bin/mcp-language-server",
-      "args": [
-        "--workspace",
-        "/home/mmy/repos/ai/rust-agent-stack",
-        "--lsp",
-        "rust-analyzer"
-      ]
-    },
-    "human-in-the-loop": {
-      "command": "uvx",
-      "args": ["hitl-mcp-server"]
     }
   }
 }

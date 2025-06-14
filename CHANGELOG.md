@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed - 2025-01-14
+- Removed unused MCP server configurations (language-server, human-in-the-loop) from .mcp.json
+
+### Added - 2025-01-14
+- Bidirectional chat terminal client foundation (Sprint 2 Day 1)
+  - Modular architecture with separate ui, client, auth, and config modules
+  - Complete ratatui-based terminal UI with message area, user list, and input field
+  - Placeholder implementations for WebSocket client integration
+  - Configuration system supporting environment variables and TOML files
+  - JWT token management infrastructure for authentication
+
+### Updated - 2025-01-14
+- Simplified CLAUDE.md build commands to use generic examples instead of listing all crates
+- Added bidirectional chat client architecture details to documentation
+  - Terminal UI layout and components
+  - State management and WebSocket integration
+  - Authentication and configuration details
+- Updated TASK.md to mark completed Sprint 2 terminal client implementation tasks
+- Archived Sprint 3 retrospective to scraim/retroed/ folder
+  - Documented successful completion of bidirectional chat server and client foundation
+
 ### Added - 2025-01-13
 - Comprehensive configuration system for bidirectional chat server
   - Flexible configuration supporting environment variables and TOML files
