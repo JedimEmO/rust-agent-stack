@@ -229,11 +229,28 @@ async fn run_app(
                                 if !app.input_buffer.is_empty() {
                                     let text = app.input_buffer.clone();
                                     app.input_buffer.clear();
-                                    drop(app);
                                     
-                                    let client = chat_client.lock().await;
-                                    if let Err(e) = client.send_message(text).await {
-                                        app_state.lock().await.error_message = Some(format!("Failed to send message: {}", e));
+                                    // Check for slash commands
+                                    if text.starts_with('/') {
+                                        let command = text.trim_start_matches('/').to_lowercase();
+                                        match command.as_str() {
+                                            "quit" | "exit" => {
+                                                drop(app);
+                                                let mut client = chat_client.lock().await;
+                                                let _ = client.disconnect().await;
+                                                return Ok(());
+                                            }
+                                            _ => {
+                                                app.error_message = Some(format!("Unknown command: /{}", command));
+                                            }
+                                        }
+                                    } else {
+                                        drop(app);
+                                        
+                                        let client = chat_client.lock().await;
+                                        if let Err(e) = client.send_message(text).await {
+                                            app_state.lock().await.error_message = Some(format!("Failed to send message: {}", e));
+                                        }
                                     }
                                 }
                             }

@@ -242,7 +242,7 @@ fn draw_room_list_screen(frame: &mut Frame, app: &AppState) {
 fn draw_chat_screen(frame: &mut Frame, app: &AppState, room_name: &str) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(3)])
+        .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(5)])
         .split(frame.area());
 
     // Header
@@ -296,19 +296,30 @@ fn draw_chat_screen(frame: &mut Frame, app: &AppState, room_name: &str) {
         ));
     frame.render_widget(messages_widget, messages_area);
 
-    // Input area
+    // Input area with help text
+    let input_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(3), Constraint::Length(1)])
+        .split(chunks[2]);
+    
     let input_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Double)
         .title(" Type your message ");
     
     let input = Paragraph::new(app.input_buffer.as_str())
-        .style(Style::default().fg(Color::White))
+        .style(Style::default().fg(Color::White).bg(Color::Black))
         .block(input_block);
-    frame.render_widget(input, chunks[2]);
+    frame.render_widget(input, input_chunks[0]);
+
+    // Help text
+    let help_text = Paragraph::new("Press Esc to leave room | /quit to exit")
+        .style(Style::default().fg(Color::DarkGray))
+        .alignment(Alignment::Center);
+    frame.render_widget(help_text, input_chunks[1]);
 
     // Show cursor
-    frame.set_cursor_position((chunks[2].x + 1 + app.input_buffer.len() as u16, chunks[2].y + 1));
+    frame.set_cursor_position((input_chunks[0].x + 1 + app.input_buffer.len() as u16, input_chunks[0].y + 1));
 }
 
 fn draw_error_popup(frame: &mut Frame, error: &str) {

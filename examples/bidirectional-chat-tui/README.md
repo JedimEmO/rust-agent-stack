@@ -59,6 +59,7 @@ The server comes with default admin users configured:
 - **Enter**: Send message
 - **Esc**: Leave room and return to room list
 - **Backspace**: Delete character
+- **/quit** or **/exit**: Quit the application completely
 
 ## Configuration
 
