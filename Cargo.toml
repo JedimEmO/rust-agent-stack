@@ -21,8 +21,7 @@ members = [
     "examples/rest-service-example",
     "examples/google-oauth-example/api",
     "examples/bidirectional-chat/api",
-    "examples/bidirectional-chat/server",
-    "examples/bidirectional-chat/client"
+    "examples/bidirectional-chat/server"
 ]
 
 [workspace.dependencies]

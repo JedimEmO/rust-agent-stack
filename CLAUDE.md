@@ -267,47 +267,6 @@ Full-stack OAuth2 demo with Google integration, showcasing complete authenticati
 
 **Key Features:** OAuth2 + PKCE, role-based permissions, JSON-RPC API, responsive web UI
 
-### Bidirectional Chat Example (`examples/bidirectional-chat/`)
-
-Real-time chat system demonstrating bidirectional JSON-RPC communication over WebSockets with JWT authentication.
-
-**Quick Start:**
-```bash
-# 1. Start the server
-cargo run -p bidirectional-chat-server
-
-# 2. Register a user and login (in another terminal)
-cargo run -p bidirectional-chat-client register --username alice
-cargo run -p bidirectional-chat-client login --username alice
-
-# 3. Start interactive chat session
-cargo run -p bidirectional-chat-client chat
-```
-
-**Key Features:** Bidirectional WebSockets, real-time messaging, JWT authentication, permission-based access control, cross-platform client support, persistent chat history, user profiles with cat avatar customization, comprehensive logging with tracing, configurable via environment variables or TOML config file, extensive integration test coverage
-
-**Architecture:**
-- **API Crate**: Shared types and service definitions between client and server
-- **Server**: Axum-based WebSocket server with room management and persistence
-- **Client**: Terminal UI client with interactive chat interface
-
-**Client Architecture:**
-- **Terminal UI**: Built with ratatui for cross-platform terminal interface
-- **Layout**: Header, messages area, user list sidebar, input area, and status bar
-- **State Management**: Centralized AppState with message history, user list, and connection status
-- **WebSocket Client**: Uses ras-jsonrpc-bidirectional-client for real-time communication
-- **Authentication**: JWT token storage in config directory with secure file permissions
-- **Configuration**: Supports environment variables and TOML config file in user's config directory
-
-**Chat Commands:**
-- `/help` - Show available commands
-- `/leave` or `/quit` - Leave current room
-- `/join <room>` - Join a different room
-- `/rooms` - List available rooms
-- `/users` - List users in current room
-- `/kick <username>` - Admin only: kick user from room
-- `/clear` - Clear chat history
-
 #### Bidirectional Macro Implementation Notes
 - **Required Fields**: Always include `server_to_client_calls` field even if empty (`server_to_client_calls: []`)
 - **Connection Management**: Use the `ConnectionManager` directly for sending notifications, not a generated client handle
