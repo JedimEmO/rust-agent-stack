@@ -16,3 +16,6 @@ secrets/
 **/custom/
 **/*.json
 !package*.json
+# Local config and test files
+examples/bidirectional-chat/server/config.toml
+test_login.sh

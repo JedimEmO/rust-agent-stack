@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed - 2025-01-14
 - Removed unused MCP server configurations (language-server, human-in-the-loop) from .mcp.json
+- Updated .gitignore to exclude local chat server config.toml and test scripts
 
 ### Fixed - 2025-01-14
 - Updated minimum password length in chat server config examples to match 8-character validation requirement
