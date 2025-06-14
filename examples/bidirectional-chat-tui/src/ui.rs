@@ -35,12 +35,10 @@ fn draw_login_screen(frame: &mut Frame, app: &AppState) {
         .split(frame.area());
 
     let auth_block = Block::default()
-        .title(format!(" Login - Debug: username_len={}, password_len={} ", 
-            app.auth_username_input.len(), 
-            app.auth_password_input.len()))
+        .title(" Login ")
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .style(Style::default().fg(Color::Cyan).bg(Color::Black));
+        .style(Style::default().fg(Color::Cyan));
 
     frame.render_widget(auth_block.clone(), chunks[1]);
     
@@ -49,11 +47,11 @@ fn draw_login_screen(frame: &mut Frame, app: &AppState) {
         .direction(Direction::Vertical)
         .margin(1)
         .constraints([
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Min(0),
+            Constraint::Length(2),  // Username field
+            Constraint::Length(1),  // Spacing
+            Constraint::Length(2),  // Password field
+            Constraint::Length(1),  // Spacing
+            Constraint::Min(0),     // Instructions
         ])
         .split(inner_area);
 
@@ -65,8 +63,18 @@ fn draw_login_screen(frame: &mut Frame, app: &AppState) {
     };
     
     let username_field = Paragraph::new(format!("Username: {}", app.auth_username_input))
-        .style(username_style.bg(Color::Black));
+        .style(username_style);
     frame.render_widget(username_field, auth_chunks[0]);
+    
+    // Add underline for username field
+    let username_underline = Paragraph::new("─".repeat(auth_chunks[0].width as usize))
+        .style(Style::default().fg(Color::DarkGray));
+    frame.render_widget(username_underline, Rect {
+        x: auth_chunks[0].x,
+        y: auth_chunks[0].y + 1,
+        width: auth_chunks[0].width,
+        height: 1,
+    });
 
     // Password field
     let password_style = if app.auth_field_focus == AuthField::Password {
@@ -77,17 +85,38 @@ fn draw_login_screen(frame: &mut Frame, app: &AppState) {
     
     let password_display = "*".repeat(app.auth_password_input.len());
     let password_field = Paragraph::new(format!("Password: {}", password_display))
-        .style(password_style.bg(Color::Black));
-    frame.render_widget(password_field, auth_chunks[1]);
+        .style(password_style);
+    frame.render_widget(password_field, auth_chunks[2]);
+    
+    // Add underline for password field
+    let password_underline = Paragraph::new("─".repeat(auth_chunks[2].width as usize))
+        .style(Style::default().fg(Color::DarkGray));
+    frame.render_widget(password_underline, Rect {
+        x: auth_chunks[2].x,
+        y: auth_chunks[2].y + 1,
+        width: auth_chunks[2].width,
+        height: 1,
+    });
 
     // Instructions
     let instructions = Paragraph::new(vec![
-        Line::from("Press Tab to switch fields"),
-        Line::from("Press Enter to login"),
-        Line::from("Press Ctrl+R to register"),
-        Line::from("Press Esc to quit"),
+        Line::from(""),
+        Line::from(vec![
+            Span::raw("Press "),
+            Span::styled("Tab", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::raw(" to switch fields | "),
+            Span::styled("Enter", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::raw(" to login"),
+        ]),
+        Line::from(vec![
+            Span::raw("Press "),
+            Span::styled("Ctrl+R", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
+            Span::raw(" to create a new account | "),
+            Span::styled("Esc", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Span::raw(" to quit"),
+        ]),
     ])
-    .style(Style::default().fg(Color::DarkGray))
+    .style(Style::default().fg(Color::Gray))
     .alignment(Alignment::Center);
     frame.render_widget(instructions, auth_chunks[4]);
 
@@ -101,8 +130,8 @@ fn draw_login_screen(frame: &mut Frame, app: &AppState) {
         }
         AuthField::Password => {
             frame.set_cursor_position((
-                auth_chunks[1].x + 10 + app.auth_password_input.len() as u16,
-                auth_chunks[1].y,
+                auth_chunks[2].x + 10 + app.auth_password_input.len() as u16,
+                auth_chunks[2].y,
             ));
         }
     }
@@ -120,10 +149,10 @@ fn draw_register_screen(frame: &mut Frame, app: &AppState) {
         .split(frame.area());
 
     let auth_block = Block::default()
-        .title(" Register ")
+        .title(" Create New Account ")
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .style(Style::default().fg(Color::Green).bg(Color::Black));
+        .style(Style::default().fg(Color::Green));
 
     frame.render_widget(auth_block.clone(), chunks[1]);
     
@@ -132,11 +161,11 @@ fn draw_register_screen(frame: &mut Frame, app: &AppState) {
         .direction(Direction::Vertical)
         .margin(1)
         .constraints([
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Min(0),
+            Constraint::Length(2),  // Username field
+            Constraint::Length(1),  // Spacing
+            Constraint::Length(2),  // Password field
+            Constraint::Length(1),  // Spacing
+            Constraint::Min(0),     // Instructions
         ])
         .split(inner_area);
 
@@ -148,8 +177,18 @@ fn draw_register_screen(frame: &mut Frame, app: &AppState) {
     };
     
     let username_field = Paragraph::new(format!("Username: {}", app.auth_username_input))
-        .style(username_style.bg(Color::Black));
+        .style(username_style);
     frame.render_widget(username_field, auth_chunks[0]);
+    
+    // Add underline for username field
+    let username_underline = Paragraph::new("─".repeat(auth_chunks[0].width as usize))
+        .style(Style::default().fg(Color::DarkGray));
+    frame.render_widget(username_underline, Rect {
+        x: auth_chunks[0].x,
+        y: auth_chunks[0].y + 1,
+        width: auth_chunks[0].width,
+        height: 1,
+    });
 
     // Password field
     let password_style = if app.auth_field_focus == AuthField::Password {
@@ -160,16 +199,36 @@ fn draw_register_screen(frame: &mut Frame, app: &AppState) {
     
     let password_display = "*".repeat(app.auth_password_input.len());
     let password_field = Paragraph::new(format!("Password: {}", password_display))
-        .style(password_style.bg(Color::Black));
-    frame.render_widget(password_field, auth_chunks[1]);
+        .style(password_style);
+    frame.render_widget(password_field, auth_chunks[2]);
+    
+    // Add underline for password field
+    let password_underline = Paragraph::new("─".repeat(auth_chunks[2].width as usize))
+        .style(Style::default().fg(Color::DarkGray));
+    frame.render_widget(password_underline, Rect {
+        x: auth_chunks[2].x,
+        y: auth_chunks[2].y + 1,
+        width: auth_chunks[2].width,
+        height: 1,
+    });
 
     // Instructions
     let instructions = Paragraph::new(vec![
-        Line::from("Press Tab to switch fields"),
-        Line::from("Press Enter to register"),
-        Line::from("Press Esc to go back to login"),
+        Line::from(""),
+        Line::from(vec![
+            Span::raw("Press "),
+            Span::styled("Tab", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::raw(" to switch fields | "),
+            Span::styled("Enter", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::raw(" to create account"),
+        ]),
+        Line::from(vec![
+            Span::raw("Press "),
+            Span::styled("Esc", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Span::raw(" to go back to login"),
+        ]),
     ])
-    .style(Style::default().fg(Color::DarkGray))
+    .style(Style::default().fg(Color::Gray))
     .alignment(Alignment::Center);
     frame.render_widget(instructions, auth_chunks[4]);
 
@@ -183,8 +242,8 @@ fn draw_register_screen(frame: &mut Frame, app: &AppState) {
         }
         AuthField::Password => {
             frame.set_cursor_position((
-                auth_chunks[1].x + 10 + app.auth_password_input.len() as u16,
-                auth_chunks[1].y,
+                auth_chunks[2].x + 10 + app.auth_password_input.len() as u16,
+                auth_chunks[2].y,
             ));
         }
     }

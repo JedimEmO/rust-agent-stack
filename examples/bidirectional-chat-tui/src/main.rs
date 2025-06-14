@@ -104,16 +104,30 @@ async fn run_app(
                                 }
                                 
                                 let result = if app_state.lock().await.screen == AppScreen::Login {
-                                    auth_client.login(username.clone(), password).await
+                                    // Login returns LoginResponse
+                                    match auth_client.login(username.clone(), password).await {
+                                        Ok(login_response) => Ok((login_response.token, login_response.user_id)),
+                                        Err(e) => Err(e),
+                                    }
                                 } else {
-                                    auth_client.register(username.clone(), password).await
+                                    // Register returns RegisterResponse, but we need to login after registration
+                                    match auth_client.register(username.clone(), password.clone()).await {
+                                        Ok(_register_response) => {
+                                            // After successful registration, login to get the token
+                                            match auth_client.login(username.clone(), password).await {
+                                                Ok(login_response) => Ok((login_response.token, login_response.user_id)),
+                                                Err(e) => Err(e),
+                                            }
+                                        }
+                                        Err(e) => Err(e),
+                                    }
                                 };
                                 
                                 match result {
-                                    Ok(auth_response) => {
-                                        jwt_token = Some(auth_response.token);
+                                    Ok((token, user_id)) => {
+                                        jwt_token = Some(token);
                                         let mut app = app_state.lock().await;
-                                        app.username = Some(username);
+                                        app.username = Some(user_id);
                                         app.screen = AppScreen::RoomList;
                                         app.error_message = None;
                                         drop(app);

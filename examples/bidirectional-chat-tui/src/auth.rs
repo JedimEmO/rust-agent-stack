@@ -1,25 +1,10 @@
 use anyhow::Result;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize)]
-pub struct LoginRequest {
-    pub username: String,
-    pub password: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct RegisterRequest {
-    pub username: String,
-    pub password: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct AuthResponse {
-    pub token: String,
-    pub expires_at: i64,
-    pub user_id: String,
-}
+// Use types from the bidirectional-chat-api crate
+use bidirectional_chat_api::auth::{
+    LoginRequest, LoginResponse, RegisterRequest, RegisterResponse,
+};
 
 pub struct AuthClient {
     client: Client,
@@ -34,11 +19,15 @@ impl AuthClient {
         }
     }
 
-    pub async fn login(&self, username: String, password: String) -> Result<AuthResponse> {
+    pub async fn login(&self, username: String, password: String) -> Result<LoginResponse> {
         let response = self
             .client
             .post(&format!("{}/auth/login", self.base_url))
-            .json(&LoginRequest { username, password })
+            .json(&LoginRequest { 
+                username, 
+                password,
+                provider: None, // Use default "local" provider
+            })
             .send()
             .await?;
 
@@ -50,11 +39,16 @@ impl AuthClient {
         }
     }
 
-    pub async fn register(&self, username: String, password: String) -> Result<AuthResponse> {
+    pub async fn register(&self, username: String, password: String) -> Result<RegisterResponse> {
         let response = self
             .client
             .post(&format!("{}/auth/register", self.base_url))
-            .json(&RegisterRequest { username, password })
+            .json(&RegisterRequest { 
+                username, 
+                password,
+                email: None,
+                display_name: None,
+            })
             .send()
             .await?;
 
