@@ -28,11 +28,11 @@ Key deliverables:
 - [x] Create `examples/bidirectional-chat-client/` with ratatui dependencies
 - [x] Implement basic terminal UI layout with message area, input area, and user list
 - [x] Create CLI command structure (register, login, chat, logout)
-- [ ] Implement user registration flow with local auth provider
-- [ ] Implement login flow with JWT token storage and management
-- [ ] Add basic message sending and receiving functionality
-- [ ] Implement connection status indicators and reconnection handling
-- [ ] Create help screens and keyboard shortcut overlays
+- [x] Implement user registration flow with local auth provider
+- [x] Implement login flow with JWT token storage and management
+- [x] Add basic message sending and receiving functionality
+- [x] Implement connection status indicators and reconnection handling
+- [x] Create help screens and keyboard shortcut overlays
 
 ## Sprint 3: ASCII Art Cat System
 
