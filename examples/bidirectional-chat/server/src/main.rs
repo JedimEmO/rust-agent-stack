@@ -1164,9 +1164,9 @@ async fn main() -> Result<()> {
     info!("Starting bidirectional chat server");
     info!("Configuration loaded from environment and config file");
 
-    // Create identity provider
+    // Create identity provider - use Arc to share between session service and registration
     info!("Setting up identity provider");
-    let identity_provider = LocalUserProvider::new();
+    let identity_provider = Arc::new(LocalUserProvider::new());
 
     // Add admin users from configuration
     if config.admin.auto_create {
@@ -1242,52 +1242,10 @@ async fn main() -> Result<()> {
     );
 
     // Register the identity provider with the session service
-    // We wrap it in Arc after registration for use in handlers
+    // We need to dereference the Arc and clone the inner provider since register_provider takes Box
     session_service
-        .register_provider(Box::new(identity_provider))
+        .register_provider(Box::new((*identity_provider).clone()))
         .await;
-
-    // Create a new identity provider instance for registration endpoint
-    // This shares the same underlying users data via internal Arc<RwLock>
-    let registration_provider = Arc::new(LocalUserProvider::new());
-
-    // Add the same admin users to the registration provider
-    if config.admin.auto_create {
-        for admin_user in &config.admin.users {
-            let _ = registration_provider
-                .add_user(
-                    admin_user.username.clone(),
-                    admin_user.password.clone(),
-                    admin_user.email.clone(),
-                    admin_user.display_name.clone(),
-                )
-                .await;
-        }
-    }
-
-    // Add test users to registration provider if in dev mode
-    if cfg!(debug_assertions) {
-        let test_users = vec![
-            (
-                "alice",
-                "alice123",
-                Some("alice@example.com"),
-                Some("Alice"),
-            ),
-            ("bob", "bob123", Some("bob@example.com"), Some("Bob")),
-        ];
-
-        for (username, password, email, display_name) in test_users {
-            let _ = registration_provider
-                .add_user(
-                    username.to_string(),
-                    password.to_string(),
-                    email.map(|s| s.to_string()),
-                    display_name.map(|s| s.to_string()),
-                )
-                .await;
-        }
-    }
 
     // Create JWT auth provider
     let auth_provider = Arc::new(JwtAuthProvider::new(session_service.clone()));
@@ -1315,10 +1273,10 @@ async fn main() -> Result<()> {
         .build()
         .build_with_manager(connection_manager);
 
-    // Create auth handlers
+    // Create auth handlers with the shared identity provider
     let auth_handlers = AuthHandlers {
         session_service: session_service.clone(),
-        identity_provider: registration_provider,
+        identity_provider: identity_provider.clone(),
     };
 
     // Build REST service using the macro-generated builder

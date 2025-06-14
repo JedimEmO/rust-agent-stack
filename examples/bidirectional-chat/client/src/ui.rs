@@ -13,7 +13,7 @@ use ratatui::{
     Frame, Terminal,
 };
 use std::{
-    io,
+    io::{self, IsTerminal},
     sync::Arc,
     time::Duration,
 };
@@ -35,10 +35,22 @@ pub async fn run_chat_ui(config: &Config) -> Result<()> {
     let token = get_current_token()?
         .ok_or_else(|| anyhow::anyhow!("Not logged in. Please login first with: bidirectional-chat-client login -u <username>"))?;
     
+    // Check if we're running in a terminal
+    if !io::stdout().is_terminal() {
+        return Err(anyhow::anyhow!(
+            "This command requires an interactive terminal. Please run it directly in a terminal, not through pipes or redirection."
+        ));
+    }
+    
     // Setup terminal
-    enable_raw_mode()?;
+    enable_raw_mode().map_err(|e| {
+        anyhow::anyhow!("Failed to enable raw mode. Make sure you're running in a proper terminal: {}", e)
+    })?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture).map_err(|e| {
+        disable_raw_mode().ok();
+        anyhow::anyhow!("Failed to setup terminal: {}", e)
+    })?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     

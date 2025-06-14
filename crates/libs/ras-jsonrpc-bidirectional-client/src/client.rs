@@ -460,7 +460,7 @@ impl Client {
             }
             BidirectionalMessage::Request(request) => {
                 // Handle incoming RPC request from server
-                if let Some(id) = &request.id {
+                if let Some(_id) = &request.id {
                     if let Some(handler) = rpc_request_handlers.get(&request.method) {
                         debug!("Handling RPC request: {}", request.method);
                         let response = handler(request).await;

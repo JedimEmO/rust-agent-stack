@@ -27,6 +27,7 @@ pub struct LocalAuthPayload {
     pub password: String,
 }
 
+#[derive(Clone)]
 pub struct LocalUserProvider {
     users: Arc<RwLock<HashMap<String, LocalUser>>>,
     semaphore: Arc<tokio::sync::Semaphore>,
