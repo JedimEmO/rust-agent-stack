@@ -75,6 +75,12 @@ pub struct SendMessageRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct StartTypingRequest {}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct StopTypingRequest {}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct SendMessageResponse {
     pub message_id: u64,
     pub timestamp: String,
@@ -204,6 +210,18 @@ pub struct RoomDeletedNotification {
     pub room_name: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct UserStartedTypingNotification {
+    pub username: String,
+    pub room_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct UserStoppedTypingNotification {
+    pub username: String,
+    pub room_id: String,
+}
+
 // Generate the bidirectional chat service
 jsonrpc_bidirectional_service!({
     service_name: ChatService,
@@ -218,6 +236,8 @@ jsonrpc_bidirectional_service!({
         WITH_PERMISSIONS(["admin"]) broadcast_announcement(BroadcastAnnouncementRequest) -> (),
         WITH_PERMISSIONS(["user"]) get_profile(GetProfileRequest) -> GetProfileResponse,
         WITH_PERMISSIONS(["user"]) update_profile(UpdateProfileRequest) -> UpdateProfileResponse,
+        WITH_PERMISSIONS(["user"]) start_typing(StartTypingRequest) -> (),
+        WITH_PERMISSIONS(["user"]) stop_typing(StopTypingRequest) -> (),
     ],
 
     // Server -> Client notifications (no response expected)
@@ -229,6 +249,8 @@ jsonrpc_bidirectional_service!({
         user_kicked(UserKickedNotification),
         room_created(RoomCreatedNotification),
         room_deleted(RoomDeletedNotification),
+        user_started_typing(UserStartedTypingNotification),
+        user_stopped_typing(UserStoppedTypingNotification),
     ],
 
     // Server -> Client calls (no bidirectional calls for this example)

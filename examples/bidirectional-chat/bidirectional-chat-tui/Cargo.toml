@@ -12,7 +12,7 @@ crossterm = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
 # Chat API client
-bidirectional-chat-api = { path = "../bidirectional-chat/api" }
+bidirectional-chat-api = { path = "../api" }
 
 # Error handling
 anyhow = { workspace = true }

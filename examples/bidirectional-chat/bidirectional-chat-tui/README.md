@@ -16,6 +16,8 @@ The server comes with default admin users configured:
 - **Authentication**: Login and registration with JWT-based auth
 - **Type-safe API**: Uses the generated client from `jsonrpc_bidirectional_service!` macro
 - **Real-time updates**: WebSocket-based bidirectional communication
+- **Animated cat avatars**: Each user has a unique cat avatar with expressions
+- **Visual typing indicators**: Cat avatars show "..." chat bubbles when users are typing
 
 ## Prerequisites
 
@@ -60,6 +62,13 @@ The server comes with default admin users configured:
 - **Esc**: Leave room and return to room list
 - **Backspace**: Delete character
 - **/quit** or **/exit**: Quit the application completely
+
+#### Visual Features in Chat
+- **User sidebar**: Shows all users in the room with animated cat avatars
+- **Typing indicators**: 
+  - Yellow text at bottom shows "X is typing..."
+  - Cat avatars display chat bubbles with animated dots when users are typing
+  - Automatically clears after 5 seconds of inactivity
 
 ## Configuration
 

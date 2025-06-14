@@ -302,7 +302,7 @@ fn draw_room_list_screen(frame: &mut Frame, app: &AppState) {
 fn draw_chat_screen(frame: &mut Frame, app: &mut AppState, room_name: &str) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(5)])
+        .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(6)])
         .split(frame.area());
 
     // Header
@@ -360,14 +360,33 @@ fn draw_chat_screen(frame: &mut Frame, app: &mut AppState, room_name: &str) {
     let spacing = 1;
     let max_avatars = (sidebar_area.height as usize) / (avatar_height + spacing);
     
+    // Check which users are typing in current room
+    let typing_users_set = if let Some((room_id, _)) = &app.current_room {
+        app.typing_users.get(room_id).cloned().unwrap_or_default()
+    } else {
+        std::collections::HashSet::new()
+    };
+    
     for (idx, username) in user_list.iter().take(max_avatars).enumerate() {
-        let avatar_lines = app.avatar_manager.get_avatar_for_user(username);
+        // Use typing avatar if user is typing (but not for current user)
+        let is_typing = typing_users_set.contains(username) && app.username.as_ref() != Some(username);
+        let avatar_lines = if is_typing {
+            app.avatar_manager.get_typing_avatar_for_user(username)
+        } else {
+            app.avatar_manager.get_avatar_for_user(username)
+        };
         let y_offset = idx * (avatar_height + spacing);
         
         // Draw each line of the avatar with username to the right
         for (line_idx, avatar_line) in avatar_lines.iter().enumerate() {
             if y_offset + line_idx < sidebar_area.height as usize {
-                // Draw avatar
+                // Draw avatar - use different width for typing avatars with bubble
+                let line_width = if is_typing && line_idx == 0 {
+                    avatar_width + 7 // Extra space for speech bubble
+                } else {
+                    avatar_width
+                };
+                
                 let avatar_widget = Paragraph::new(avatar_line.as_str())
                     .style(Style::default().fg(Color::Magenta));
                 frame.render_widget(
@@ -375,7 +394,7 @@ fn draw_chat_screen(frame: &mut Frame, app: &mut AppState, room_name: &str) {
                     Rect {
                         x: sidebar_area.x,
                         y: sidebar_area.y + (y_offset + line_idx) as u16,
-                        width: avatar_width,
+                        width: line_width.min(sidebar_area.width),
                         height: 1,
                     },
                 );
@@ -439,11 +458,45 @@ fn draw_chat_screen(frame: &mut Frame, app: &mut AppState, room_name: &str) {
         ));
     frame.render_widget(messages_widget, messages_area);
 
-    // Input area with help text
+    // Input area with typing indicator and help text
     let input_chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Length(1)])
+        .constraints([Constraint::Length(1), Constraint::Length(3), Constraint::Length(1)])
         .split(chunks[2]);
+    
+    // Typing indicator
+    if let Some((room_id, _)) = &app.current_room {
+        if let Some(typing_users) = app.typing_users.get(room_id) {
+            let typing_users: Vec<&String> = typing_users.iter()
+                .filter(|u| app.username.as_ref() != Some(u))
+                .collect();
+            
+            if !typing_users.is_empty() {
+                let typing_text = if typing_users.len() == 1 {
+                    format!("{} is typing...", typing_users[0])
+                } else if typing_users.len() == 2 {
+                    format!("{} and {} are typing...", typing_users[0], typing_users[1])
+                } else {
+                    format!("{} and {} others are typing...", typing_users[0], typing_users.len() - 1)
+                };
+                
+                // Animated dots based on current time
+                let dots = match std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() / 500 % 4 {
+                    0 => "",
+                    1 => ".",
+                    2 => "..",
+                    _ => "...",
+                };
+                
+                let typing_indicator = Paragraph::new(format!("{}{}", typing_text.trim_end_matches('.'), dots))
+                    .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::ITALIC));
+                frame.render_widget(typing_indicator, input_chunks[0]);
+            }
+        }
+    }
     
     let input_block = Block::default()
         .borders(Borders::ALL)
@@ -453,16 +506,16 @@ fn draw_chat_screen(frame: &mut Frame, app: &mut AppState, room_name: &str) {
     let input = Paragraph::new(app.input_buffer.as_str())
         .style(Style::default().fg(Color::White).bg(Color::Black))
         .block(input_block);
-    frame.render_widget(input, input_chunks[0]);
+    frame.render_widget(input, input_chunks[1]);
 
     // Help text
     let help_text = Paragraph::new("Press Esc to leave room | /quit to exit")
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center);
-    frame.render_widget(help_text, input_chunks[1]);
+    frame.render_widget(help_text, input_chunks[2]);
 
     // Show cursor
-    frame.set_cursor_position((input_chunks[0].x + 1 + app.input_buffer.len() as u16, input_chunks[0].y + 1));
+    frame.set_cursor_position((input_chunks[1].x + 1 + app.input_buffer.len() as u16, input_chunks[1].y + 1));
 }
 
 fn draw_error_popup(frame: &mut Frame, error: &str) {

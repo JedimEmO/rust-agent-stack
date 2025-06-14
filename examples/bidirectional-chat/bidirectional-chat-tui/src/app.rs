@@ -2,7 +2,9 @@ use anyhow::Result;
 use bidirectional_chat_api::{
     ChatServiceClient, ChatServiceClientBuilder, JoinRoomRequest, LeaveRoomRequest,
     ListRoomsRequest, MessageReceivedNotification, RoomInfo, SendMessageRequest,
-    SystemAnnouncementNotification, UserJoinedNotification, UserLeftNotification,
+    StartTypingRequest, StopTypingRequest, SystemAnnouncementNotification, 
+    UserJoinedNotification, UserLeftNotification, UserStartedTypingNotification,
+    UserStoppedTypingNotification,
 };
 use chrono::{DateTime, Local};
 use tokio::sync::mpsc;
@@ -22,6 +24,8 @@ pub enum AppEvent {
     MessageReceived(Message),
     UserJoined { username: String, room_id: String },
     UserLeft { username: String, room_id: String },
+    UserStartedTyping { username: String, room_id: String },
+    UserStoppedTyping { username: String, room_id: String },
     SystemAnnouncement { message: String },
     RoomListUpdated(Vec<RoomInfo>),
     Error(String),
@@ -51,6 +55,9 @@ pub struct AppState {
     pub connected: bool,
     pub avatar_manager: AvatarManager,
     pub room_users: std::collections::HashMap<String, Vec<String>>, // room_id -> list of users
+    pub typing_users: std::collections::HashMap<String, std::collections::HashSet<String>>, // room_id -> set of typing users
+    pub last_typing_time: Option<std::time::Instant>,
+    pub is_typing: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -75,6 +82,9 @@ impl Default for AppState {
             connected: false,
             avatar_manager: AvatarManager::new(),
             room_users: std::collections::HashMap::new(),
+            typing_users: std::collections::HashMap::new(),
+            last_typing_time: None,
+            is_typing: false,
         }
     }
 }
@@ -147,6 +157,22 @@ impl ChatClient {
                 message: notification.message,
             });
         });
+
+        let tx = self.event_tx.clone();
+        client.on_user_started_typing(move |notification: UserStartedTypingNotification| {
+            let _ = tx.send(AppEvent::UserStartedTyping {
+                username: notification.username,
+                room_id: notification.room_id,
+            });
+        });
+
+        let tx = self.event_tx.clone();
+        client.on_user_stopped_typing(move |notification: UserStoppedTypingNotification| {
+            let _ = tx.send(AppEvent::UserStoppedTyping {
+                username: notification.username,
+                room_id: notification.room_id,
+            });
+        });
     }
 
     pub async fn list_rooms(&self) -> Result<Vec<RoomInfo>> {
@@ -183,6 +209,26 @@ impl ChatClient {
         match &self.client {
             Some(client) => {
                 client.send_message(SendMessageRequest { text }).await?;
+                Ok(())
+            }
+            None => anyhow::bail!("Not connected"),
+        }
+    }
+
+    pub async fn start_typing(&self) -> Result<()> {
+        match &self.client {
+            Some(client) => {
+                client.start_typing(StartTypingRequest {}).await?;
+                Ok(())
+            }
+            None => anyhow::bail!("Not connected"),
+        }
+    }
+
+    pub async fn stop_typing(&self) -> Result<()> {
+        match &self.client {
+            Some(client) => {
+                client.stop_typing(StopTypingRequest {}).await?;
                 Ok(())
             }
             None => anyhow::bail!("Not connected"),

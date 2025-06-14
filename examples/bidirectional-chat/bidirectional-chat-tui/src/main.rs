@@ -84,7 +84,7 @@ async fn run_app(
             if let Event::Key(key) = event::read()? {
                 let mut app = app_state.lock().await;
                 
-                match &app.screen {
+                match app.screen.clone() {
                     AppScreen::Login | AppScreen::Register => {
                         match key.code {
                             KeyCode::Tab => {
@@ -230,13 +230,26 @@ async fn run_app(
                             _ => {}
                         }
                     }
-                    AppScreen::Chat { room_id, .. } => {
+                    AppScreen::Chat { room_id: chat_room_id, .. } => {
                         match key.code {
                             KeyCode::Esc => {
-                                let room_id = room_id.clone();
+                                // Stop typing if leaving room
+                                let was_typing = app.is_typing;
+                                if was_typing {
+                                    app.is_typing = false;
+                                    app.last_typing_time = None;
+                                }
+                                
+                                let room_id = chat_room_id.clone();
                                 drop(app);
                                 
                                 let client = chat_client.lock().await;
+                                
+                                // Send stop typing if needed
+                                if was_typing {
+                                    let _ = client.stop_typing().await;
+                                }
+                                
                                 if let Err(e) = client.leave_room(room_id).await {
                                     app_state.lock().await.error_message = Some(format!("Failed to leave room: {}", e));
                                 }
@@ -266,9 +279,15 @@ async fn run_app(
                                             }
                                         }
                                     } else {
+                                        // Stop typing when sending message
+                                        app.is_typing = false;
+                                        app.last_typing_time = None;
                                         drop(app);
                                         
                                         let client = chat_client.lock().await;
+                                        // Stop typing notification
+                                        let _ = client.stop_typing().await;
+                                        
                                         if let Err(e) = client.send_message(text).await {
                                             app_state.lock().await.error_message = Some(format!("Failed to send message: {}", e));
                                         }
@@ -280,6 +299,25 @@ async fn run_app(
                             }
                             KeyCode::Char(c) => {
                                 app.input_buffer.push(c);
+                                
+                                // Track typing state
+                                let now = std::time::Instant::now();
+                                let should_send_typing = if let Some(last_time) = app.last_typing_time {
+                                    !app.is_typing || now.duration_since(last_time).as_secs() >= 4
+                                } else {
+                                    true
+                                };
+                                
+                                if should_send_typing {
+                                    app.last_typing_time = Some(now);
+                                    app.is_typing = true;
+                                    drop(app);
+                                    
+                                    let client = chat_client.lock().await;
+                                    if let Err(e) = client.start_typing().await {
+                                        tracing::warn!("Failed to send start typing: {}", e);
+                                    }
+                                }
                             }
                             _ => {}
                         }
@@ -348,8 +386,39 @@ async fn run_app(
                     AppEvent::Error(e) => {
                         app.error_message = Some(e);
                     }
+                    AppEvent::UserStartedTyping { username, room_id } => {
+                        app.typing_users
+                            .entry(room_id)
+                            .or_insert_with(std::collections::HashSet::new)
+                            .insert(username);
+                    }
+                    AppEvent::UserStoppedTyping { username, room_id } => {
+                        if let Some(typing_users) = app.typing_users.get_mut(&room_id) {
+                            typing_users.remove(&username);
+                            if typing_users.is_empty() {
+                                app.typing_users.remove(&room_id);
+                            }
+                        }
+                    }
                     _ => {}
                 }
+        }
+        
+        // Check for typing timeout
+        {
+            let mut app = app_state.lock().await;
+            if app.is_typing {
+                if let Some(last_typing_time) = app.last_typing_time {
+                    if last_typing_time.elapsed().as_secs() >= 5 {
+                        app.is_typing = false;
+                        app.last_typing_time = None;
+                        drop(app);
+                        
+                        let client = chat_client.lock().await;
+                        let _ = client.stop_typing().await;
+                    }
+                }
+            }
         }
         
         // Small delay to prevent busy loop

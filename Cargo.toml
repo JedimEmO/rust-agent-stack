@@ -22,7 +22,7 @@ members = [
     "examples/google-oauth-example/api",
     "examples/bidirectional-chat/api",
     "examples/bidirectional-chat/server",
-    "examples/bidirectional-chat-tui"
+    "examples/bidirectional-chat/bidirectional-chat-tui"
 ]
 
 [workspace.dependencies]
