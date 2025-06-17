@@ -690,6 +690,16 @@ pub fn generate_static_hosting_code(
     </div>
 
     <script>
+        // HTML escape function to prevent XSS
+        function escapeHtml(unsafe) {{
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }}
+
         // Global state
         let apiSpec = null;
         let currentEndpoint = null;
@@ -822,13 +832,13 @@ pub fn generate_static_hosting_code(
             
             div.innerHTML = `
                 <div class="endpoint-header">
-                    <span class="method-badge method-${{method}}">${{method.toUpperCase()}}</span>
-                    <span class="endpoint-path">${{path}}</span>
+                    <span class="method-badge method-${{escapeHtml(method)}}">${{escapeHtml(method.toUpperCase())}}</span>
+                    <span class="endpoint-path">${{escapeHtml(path)}}</span>
                     <span class="auth-indicator ${{isProtected ? 'protected' : ''}}">
                         ${{isProtected ? '🔒' : '🌐'}}
                     </span>
                 </div>
-                ${{operation.summary ? `<div class="endpoint-description">${{operation.summary}}</div>` : ''}}
+                ${{operation.summary ? `<div class="endpoint-description">${{escapeHtml(operation.summary)}}</div>` : ''}}
             `;
             
             div.addEventListener('click', () => selectEndpoint(path, method, operation));
@@ -840,7 +850,10 @@ pub fn generate_static_hosting_code(
         function selectEndpoint(path, method, operation) {{
             // Update UI state
             document.querySelectorAll('.endpoint-item').forEach(el => el.classList.remove('active'));
-            document.querySelector(`[data-path="${{path}}"][data-method="${{method}}"]`).classList.add('active');
+            // Use CSS.escape to safely escape selector values
+            const safePathSelector = CSS.escape ? CSS.escape(path) : path.replace(/[\\"]/g, '\\$&');
+            const safeMethodSelector = CSS.escape ? CSS.escape(method) : method.replace(/[\\"]/g, '\\$&');
+            document.querySelector(`[data-path="${{safePathSelector}}"][data-method="${{safeMethodSelector}}"]`).classList.add('active');
             
             currentEndpoint = {{ path, method, operation }};
             
@@ -851,7 +864,7 @@ pub fn generate_static_hosting_code(
         // Update request panel
         function updateRequestPanel(path, method, operation) {{
             document.getElementById('current-method').textContent = method.toUpperCase();
-            document.getElementById('current-method').className = `method-badge method-${{method}}`;
+            document.getElementById('current-method').className = `method-badge method-${{escapeHtml(method)}}`;
             document.getElementById('current-endpoint').textContent = path;
             document.getElementById('current-description').textContent = operation.summary || operation.description || '';
             
@@ -878,10 +891,10 @@ pub fn generate_static_hosting_code(
                         <h3>Path Parameters</h3>
                         ${{pathParams.map(param => `
                             <div class="param-row">
-                                <label class="param-label">${{param.name}}</label>
-                                <input type="text" class="input-field" data-param="path" data-name="${{param.name}}" 
-                                       placeholder="${{param.description || param.name}}" ${{param.required ? 'required' : ''}}>
-                                <span class="param-type">${{param.schema?.type || 'string'}}</span>
+                                <label class="param-label">${{escapeHtml(param.name)}}</label>
+                                <input type="text" class="input-field" data-param="path" data-name="${{escapeHtml(param.name)}}" 
+                                       placeholder="${{escapeHtml(param.description || param.name)}}" ${{param.required ? 'required' : ''}}>
+                                <span class="param-type">${{escapeHtml(param.schema?.type || 'string')}}</span>
                             </div>
                         `).join('')}}
                     </div>
@@ -896,10 +909,10 @@ pub fn generate_static_hosting_code(
                         <h3>Query Parameters</h3>
                         ${{queryParams.map(param => `
                             <div class="param-row">
-                                <label class="param-label">${{param.name}}</label>
-                                <input type="text" class="input-field" data-param="query" data-name="${{param.name}}" 
-                                       placeholder="${{param.description || param.name}}" ${{param.required ? 'required' : ''}}>
-                                <span class="param-type">${{param.schema?.type || 'string'}}</span>
+                                <label class="param-label">${{escapeHtml(param.name)}}</label>
+                                <input type="text" class="input-field" data-param="query" data-name="${{escapeHtml(param.name)}}" 
+                                       placeholder="${{escapeHtml(param.description || param.name)}}" ${{param.required ? 'required' : ''}}>
+                                <span class="param-type">${{escapeHtml(param.schema?.type || 'string')}}</span>
                             </div>
                         `).join('')}}
                     </div>
@@ -1097,7 +1110,9 @@ pub fn generate_static_hosting_code(
         // Switch response tab
         function switchResponseTab(tab) {{
             document.querySelectorAll('.response-tab').forEach(t => t.classList.remove('active'));
-            document.querySelector(`[data-tab="${{tab}}"]`).classList.add('active');
+            // Use CSS.escape to safely escape selector values
+            const safeTabSelector = CSS.escape ? CSS.escape(tab) : tab.replace(/[\\"]/g, '\\$&');
+            document.querySelector(`[data-tab="${{safeTabSelector}}"]`).classList.add('active');
             
             const bodyEl = document.getElementById('response-body');
             
