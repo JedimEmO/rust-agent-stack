@@ -26,13 +26,13 @@ schemars = { workspace = true }
 
 # Server dependencies
 axum = { workspace = true, optional = true }
-ras-jsonrpc-core = { path = "../ras-jsonrpc-core", version = "0.1.1", registry = "kellnr", optional = true }
+ras-jsonrpc-core = { path = "../ras-jsonrpc-core", optional = true }
 
 # Client dependencies
 reqwest = { workspace = true, optional = true }
 
 # Always needed for types
-ras-jsonrpc-types = { path = "../ras-jsonrpc-types", version = "0.1.1", registry = "kellnr" }
+ras-jsonrpc-types = { path = "../ras-jsonrpc-types" }
 
 [dev-dependencies]
 tokio = { workspace = true }
@@ -43,4 +43,4 @@ ras-identity-session = { path = "../../identity/ras-identity-session" }
 futures = { workspace = true }
 # Server dependencies for tests
 axum = { workspace = true }
-ras-jsonrpc-core = { path = "../ras-jsonrpc-core", version = "0.1.1", registry = "kellnr" }
+ras-jsonrpc-core = { path = "../ras-jsonrpc-core" }

@@ -11,5 +11,5 @@ homepage = "https://github.com/example/rust-agent-stack"
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-ras-jsonrpc-types = { path = "../ras-jsonrpc-types", version = "0.1.1", registry = "kellnr" }
+ras-jsonrpc-types = { path = "../ras-jsonrpc-types" }
 ras-auth-core = { path = "../ras-auth-core" }

@@ -8,7 +8,7 @@ repository = "https://github.com/example/rust-agent-stack"
 homepage = "https://github.com/example/rust-agent-stack"
 
 [dependencies]
-ras-identity-core = { path = "../ras-identity-core", version = "0.1.1", registry = "kellnr" }
+ras-identity-core = { path = "../ras-identity-core" }
 
 async-trait = { workspace = true }
 serde = { workspace = true }
