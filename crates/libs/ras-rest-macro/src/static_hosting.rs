@@ -1176,6 +1176,7 @@ pub fn generate_static_routes(
     }
 
     let docs_path = &static_config.docs_path;
+    let openapi_path = format!("{}/openapi.json", docs_path);
     let docs_handler_name = quote::format_ident!(
         "{}_docs_handler",
         service_def.service_name.to_string().to_lowercase()
@@ -1185,6 +1186,6 @@ pub fn generate_static_routes(
         // Register static hosting routes
         router = router
             .route(#docs_path, ::axum::routing::get(#docs_handler_name))
-            .route(&format!("{}/openapi.json", #docs_path), ::axum::routing::get(openapi_json_handler));
+            .route(#openapi_path, ::axum::routing::get(openapi_json_handler));
     }
 }
