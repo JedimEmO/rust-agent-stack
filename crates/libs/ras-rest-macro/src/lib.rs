@@ -731,10 +731,11 @@ fn generate_handler_body(endpoint: &EndpointDefinition) -> proc_macro2::TokenStr
                     },
                     Err(e) => {
                         use axum::response::IntoResponse;
+                        tracing::error!(error = ?e, "Internal server error");
                         (
                             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                             axum::Json(serde_json::json!({
-                                "error": e.to_string()
+                                "error": "Internal server error"
                             }))
                         ).into_response()
                     },
@@ -867,10 +868,11 @@ fn generate_handler_body(endpoint: &EndpointDefinition) -> proc_macro2::TokenStr
                     },
                     Err(e) => {
                         use axum::response::IntoResponse;
+                        tracing::error!(error = ?e, "Internal server error");
                         (
                             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                             axum::Json(serde_json::json!({
-                                "error": e.to_string()
+                                "error": "Internal server error"
                             }))
                         ).into_response()
                     },

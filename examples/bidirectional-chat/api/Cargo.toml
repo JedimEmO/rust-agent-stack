@@ -22,4 +22,5 @@ ras-auth-core = { path = "../../../crates/libs/ras-auth-core" }
 ras-jsonrpc-types = { path = "../../../crates/libs/ras-jsonrpc-types" }
 ras-rest-macro = { path = "../../../crates/libs/ras-rest-macro" }
 reqwest = { workspace = true, features = ["json"] }
+tracing.workspace = true
 axum = { workspace = true, optional = true }

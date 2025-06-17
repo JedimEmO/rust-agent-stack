@@ -883,7 +883,7 @@ async fn test_generated_rest_client() {
 
     assert_eq!(resp.total, 2);
 
-    let resp = client
+    let _resp = client
         .delete_users_by_id_with_timeout(resp.users[0].id.unwrap(), None)
         .await
         .expect("failed to get users");

@@ -41,6 +41,7 @@ ras-jsonrpc-core = { path = "../ras-jsonrpc-core" }
 futures = { workspace = true }
 chrono = { workspace = true }
 serde_json = { workspace = true }
+tracing = { workspace = true }
 # Server dependencies for tests
 axum = { workspace = true }
 ras-auth-core = { path = "../ras-auth-core" }
