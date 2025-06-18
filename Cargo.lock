@@ -299,6 +299,7 @@ dependencies = [
  "ras-jsonrpc-core",
  "ras-jsonrpc-macro",
  "ras-jsonrpc-types",
+ "schemars",
  "serde",
  "serde_json",
  "tokio",

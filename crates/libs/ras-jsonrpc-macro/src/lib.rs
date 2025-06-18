@@ -332,26 +332,44 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                     #method_str => {
                         if let Some(handler) = &self.#field_name {
                             // Parse parameters
-                            let params: #request_type = if let Some(params) = request.params {
-                                serde_json::from_value(params)
-                                    .map_err(|e| ras_jsonrpc_types::JsonRpcError::invalid_params(e.to_string()))?
-                            } else {
-                                // For unit type (), we can deserialize from null
-                                serde_json::from_value(serde_json::Value::Null)
-                                    .map_err(|e| ras_jsonrpc_types::JsonRpcError::invalid_params(e.to_string()))?
+                            let params: #request_type = match request.params {
+                                Some(params) => match serde_json::from_value(params) {
+                                    Ok(p) => p,
+                                    Err(e) => return ras_jsonrpc_types::JsonRpcResponse::error(
+                                        ras_jsonrpc_types::JsonRpcError::invalid_params(e.to_string()),
+                                        request.id.clone()
+                                    ),
+                                },
+                                None => match serde_json::from_value(serde_json::Value::Null) {
+                                    Ok(p) => p,
+                                    Err(e) => return ras_jsonrpc_types::JsonRpcResponse::error(
+                                        ras_jsonrpc_types::JsonRpcError::invalid_params(e.to_string()),
+                                        request.id.clone()
+                                    ),
+                                }
                             };
 
                             // Call handler
                             match handler(params).await {
                                 Ok(result) => {
-                                    let result_value = serde_json::to_value(result)
-                                        .map_err(|e| ras_jsonrpc_types::JsonRpcError::internal_error(e.to_string()))?;
-                                    Ok(ras_jsonrpc_types::JsonRpcResponse::success(result_value, request.id.clone()))
+                                    match serde_json::to_value(result) {
+                                        Ok(result_value) => ras_jsonrpc_types::JsonRpcResponse::success(result_value, request.id.clone()),
+                                        Err(e) => ras_jsonrpc_types::JsonRpcResponse::error(
+                                            ras_jsonrpc_types::JsonRpcError::internal_error(e.to_string()),
+                                            request.id.clone()
+                                        ),
+                                    }
                                 }
-                                Err(e) => Err(ras_jsonrpc_types::JsonRpcError::internal_error(e.to_string())),
+                                Err(e) => ras_jsonrpc_types::JsonRpcResponse::error(
+                                    ras_jsonrpc_types::JsonRpcError::internal_error(e.to_string()),
+                                    request.id.clone()
+                                ),
                             }
                         } else {
-                            Err(ras_jsonrpc_types::JsonRpcError::method_not_found(&#method_str))
+                            ras_jsonrpc_types::JsonRpcResponse::error(
+                                ras_jsonrpc_types::JsonRpcError::method_not_found(&#method_str),
+                                request.id.clone()
+                            )
                         }
                     }
                 }
@@ -372,19 +390,33 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                     #method_str => {
                         if let Some(handler) = &self.#field_name {
                             // Extract and validate auth token
-                            let token = headers
+                            let token = match headers
                                 .get("Authorization")
                                 .and_then(|h| h.to_str().ok())
-                                .and_then(|s| s.strip_prefix("Bearer "))
-                                .ok_or_else(|| ras_jsonrpc_types::JsonRpcError::authentication_required())?;
+                                .and_then(|s| s.strip_prefix("Bearer ")) {
+                                Some(t) => t,
+                                None => return ras_jsonrpc_types::JsonRpcResponse::error(
+                                    ras_jsonrpc_types::JsonRpcError::authentication_required(),
+                                    request.id.clone()
+                                ),
+                            };
 
                             // Authenticate user
-                            let user = self.auth_provider
-                                .as_ref()
-                                .ok_or_else(|| ras_jsonrpc_types::JsonRpcError::internal_error("No auth provider configured".to_string()))?
-                                .authenticate(token.to_string())
-                                .await
-                                .map_err(|e| ras_jsonrpc_types::JsonRpcError::authentication_required())?;
+                            let auth_provider = match self.auth_provider.as_ref() {
+                                Some(p) => p,
+                                None => return ras_jsonrpc_types::JsonRpcResponse::error(
+                                    ras_jsonrpc_types::JsonRpcError::internal_error("".to_string()),
+                                    request.id.clone()
+                                ),
+                            };
+                            
+                            let user = match auth_provider.authenticate(token.to_string()).await {
+                                Ok(u) => u,
+                                Err(_) => return ras_jsonrpc_types::JsonRpcResponse::error(
+                                    ras_jsonrpc_types::JsonRpcError::authentication_required(),
+                                    request.id.clone()
+                                ),
+                            };
 
                             // Check permissions - AND within groups, OR between groups
                             let required_permission_groups: Vec<Vec<String>> = #permission_groups_code;
@@ -419,34 +451,55 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                                         .find(|g| !g.is_empty())
                                         .cloned()
                                         .unwrap_or_default();
-                                    return Err(ras_jsonrpc_types::JsonRpcError::insufficient_permissions(
-                                        first_group,
-                                        user.permissions.iter().cloned().collect()
-                                    ));
+                                    return ras_jsonrpc_types::JsonRpcResponse::error(
+                                        ras_jsonrpc_types::JsonRpcError::insufficient_permissions(
+                                            first_group,
+                                            user.permissions.iter().cloned().collect()
+                                        ),
+                                        request.id.clone()
+                                    );
                                 }
                             }
 
                             // Parse parameters
-                            let params: #request_type = if let Some(params) = request.params {
-                                serde_json::from_value(params)
-                                    .map_err(|e| ras_jsonrpc_types::JsonRpcError::invalid_params(e.to_string()))?
-                            } else {
-                                // For unit type (), we can deserialize from null
-                                serde_json::from_value(serde_json::Value::Null)
-                                    .map_err(|e| ras_jsonrpc_types::JsonRpcError::invalid_params(e.to_string()))?
+                            let params: #request_type = match request.params {
+                                Some(params) => match serde_json::from_value(params) {
+                                    Ok(p) => p,
+                                    Err(e) => return ras_jsonrpc_types::JsonRpcResponse::error(
+                                        ras_jsonrpc_types::JsonRpcError::invalid_params(e.to_string()),
+                                        request.id.clone()
+                                    ),
+                                },
+                                None => match serde_json::from_value(serde_json::Value::Null) {
+                                    Ok(p) => p,
+                                    Err(e) => return ras_jsonrpc_types::JsonRpcResponse::error(
+                                        ras_jsonrpc_types::JsonRpcError::invalid_params(e.to_string()),
+                                        request.id.clone()
+                                    ),
+                                }
                             };
 
                             // Call handler
                             match handler(user, params).await {
                                 Ok(result) => {
-                                    let result_value = serde_json::to_value(result)
-                                        .map_err(|e| ras_jsonrpc_types::JsonRpcError::internal_error(e.to_string()))?;
-                                    Ok(ras_jsonrpc_types::JsonRpcResponse::success(result_value, request.id.clone()))
+                                    match serde_json::to_value(result) {
+                                        Ok(result_value) => ras_jsonrpc_types::JsonRpcResponse::success(result_value, request.id.clone()),
+                                        Err(e) => ras_jsonrpc_types::JsonRpcResponse::error(
+                                            ras_jsonrpc_types::JsonRpcError::internal_error(e.to_string()),
+                                            request.id.clone()
+                                        ),
+                                    }
                                 }
-                                Err(e) => Err(ras_jsonrpc_types::JsonRpcError::internal_error(e.to_string())),
+                                Err(e) => ras_jsonrpc_types::JsonRpcResponse::error(
+                                    ras_jsonrpc_types::JsonRpcError::internal_error(e.to_string()),
+                                    request.id.clone()
+                                ),
                             }
                         } else {
-                            Err(ras_jsonrpc_types::JsonRpcError::method_not_found(&#method_str))
+                            ras_jsonrpc_types::JsonRpcResponse::error(
+                                ras_jsonrpc_types::JsonRpcError::method_not_found(&#method_str),
+                                request.id.clone()
+                            )
                         }
                     }
                 }
@@ -497,41 +550,37 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                     .route(&base_url, axum::routing::post(move |headers: axum::http::HeaderMap, body: String| {
                         let service = service.clone();
                         async move {
-                            match service.handle_request(headers, body).await {
-                                Ok(response) => {
-                                    (
-                                        axum::http::StatusCode::OK,
-                                        [("Content-Type", "application/json")],
-                                        serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string())
-                                    )
-                                }
-                                Err(error) => {
-                                    let error_response = ras_jsonrpc_types::JsonRpcResponse::error(error, None);
-                                    (
-                                        axum::http::StatusCode::OK,  // JSON-RPC errors still return 200 OK
-                                        [("Content-Type", "application/json")],
-                                        serde_json::to_string(&error_response).unwrap_or_else(|_| "{}".to_string())
-                                    )
-                                }
-                            }
+                            let response = service.handle_request(headers, body).await;
+                            (
+                                axum::http::StatusCode::OK,
+                                [("Content-Type", "application/json")],
+                                serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string())
+                            )
                         }
                     }))
             }
 
-            async fn handle_request(&self, headers: axum::http::HeaderMap, body: String) -> Result<ras_jsonrpc_types::JsonRpcResponse, ras_jsonrpc_types::JsonRpcError> {
+            async fn handle_request(&self, headers: axum::http::HeaderMap, body: String) -> ras_jsonrpc_types::JsonRpcResponse {
                 // Parse JSON-RPC request
-                let request: ras_jsonrpc_types::JsonRpcRequest = serde_json::from_str(&body)
-                    .map_err(|_| ras_jsonrpc_types::JsonRpcError::parse_error())?;
+                let request: ras_jsonrpc_types::JsonRpcRequest = match serde_json::from_str(&body) {
+                    Ok(req) => req,
+                    Err(_) => return ras_jsonrpc_types::JsonRpcResponse::error(ras_jsonrpc_types::JsonRpcError::parse_error(), None),
+                };
+
+                let request_id = request.id.clone();
 
                 // Validate JSON-RPC version
                 if request.jsonrpc != "2.0" {
-                    return Err(ras_jsonrpc_types::JsonRpcError::invalid_request());
+                    return ras_jsonrpc_types::JsonRpcResponse::error(ras_jsonrpc_types::JsonRpcError::invalid_request(), request_id);
                 }
 
                 // Dispatch method
                 match request.method.as_str() {
                     #(#method_dispatch)*
-                    _ => Err(ras_jsonrpc_types::JsonRpcError::method_not_found(&request.method))
+                    _ => ras_jsonrpc_types::JsonRpcResponse::error(
+                        ras_jsonrpc_types::JsonRpcError::method_not_found(&request.method),
+                        request_id
+                    )
                 }
             }
         }

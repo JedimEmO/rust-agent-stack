@@ -3,13 +3,14 @@ use ras_jsonrpc_core::{AuthFuture, AuthProvider, AuthenticatedUser};
 use ras_jsonrpc_macro::jsonrpc_service;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use schemars::JsonSchema;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub enum SignInRequest {
     WithCredentials { username: String, password: String },
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub enum SignInResponse {
     Success { jwt: String },
     Failure { msg: String },
@@ -56,6 +57,7 @@ impl AuthProvider for MyAuthProvider {
 
 jsonrpc_service!({
     service_name: MyService,
+    openrpc: true,
     methods: [
         UNAUTHORIZED sign_in(SignInRequest) -> SignInResponse,
         WITH_PERMISSIONS([]) sign_out(()) -> (),
