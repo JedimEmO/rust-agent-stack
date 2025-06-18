@@ -4,6 +4,7 @@ use syn::{Ident, LitStr, Token, Type, parse::Parse, parse_macro_input};
 
 mod client;
 mod openrpc;
+mod static_hosting;
 
 /// Macro to generate a JSON-RPC service with authentication support
 ///
@@ -25,11 +26,18 @@ pub fn jsonrpc_service(input: TokenStream) -> TokenStream {
 struct ServiceDefinition {
     service_name: Ident,
     openrpc: Option<OpenRpcConfig>,
+    explorer: Option<ExplorerConfig>,
     methods: Vec<MethodDefinition>,
 }
 
 #[derive(Debug)]
 enum OpenRpcConfig {
+    Enabled,
+    WithPath(String),
+}
+
+#[derive(Debug)]
+enum ExplorerConfig {
     Enabled,
     WithPath(String),
 }
@@ -62,12 +70,19 @@ impl Parse for ServiceDefinition {
 
         // Check if openrpc field is present
         let mut openrpc = None;
-        if content.peek(Ident) {
+        let mut explorer = None;
+        
+        // Parse optional fields until we hit "methods"
+        while content.peek(Ident) {
             let field_name = content.fork().parse::<Ident>()?;
+            if field_name == "methods" {
+                break;
+            }
+            
+            let _ = content.parse::<Ident>()?; // field name
+            let _ = content.parse::<Token![:]>()?;
+            
             if field_name == "openrpc" {
-                let _ = content.parse::<Ident>()?; // "openrpc"
-                let _ = content.parse::<Token![:]>()?;
-
                 // Parse openrpc value - can be true/false or { output: "path" }
                 if content.peek(syn::LitBool) {
                     let enabled = content.parse::<syn::LitBool>()?;
@@ -84,9 +99,26 @@ impl Parse for ServiceDefinition {
                     let path = openrpc_content.parse::<LitStr>()?;
                     openrpc = Some(OpenRpcConfig::WithPath(path.value()));
                 }
+            } else if field_name == "explorer" {
+                // Parse explorer value - can be true/false or { path: "/custom-path" }
+                if content.peek(syn::LitBool) {
+                    let enabled = content.parse::<syn::LitBool>()?;
+                    if enabled.value() {
+                        explorer = Some(ExplorerConfig::Enabled);
+                    }
+                } else if content.peek(syn::token::Brace) {
+                    let explorer_content;
+                    syn::braced!(explorer_content in content);
 
-                let _ = content.parse::<Token![,]>()?;
+                    // Parse path: "/custom-path"
+                    let _ = explorer_content.parse::<Ident>()?; // "path"
+                    let _ = explorer_content.parse::<Token![:]>()?;
+                    let path = explorer_content.parse::<LitStr>()?;
+                    explorer = Some(ExplorerConfig::WithPath(path.value()));
+                }
             }
+            
+            let _ = content.parse::<Token![,]>()?;
         }
 
         // Parse methods: [...]
@@ -110,6 +142,7 @@ impl Parse for ServiceDefinition {
         Ok(ServiceDefinition {
             service_name,
             openrpc,
+            explorer,
             methods,
         })
     }
@@ -218,11 +251,33 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
     // Generate client code - this will be conditionally compiled by the user
     let client_code = crate::client::generate_client_code(&service_def);
 
+    // Generate explorer code if enabled
+    let explorer_code = if service_def.explorer.is_some() && service_def.openrpc.is_some() {
+        let explorer_config = match &service_def.explorer {
+            Some(ExplorerConfig::Enabled) => static_hosting::StaticHostingConfig {
+                serve_explorer: true,
+                explorer_path: "/explorer".to_string(),
+            },
+            Some(ExplorerConfig::WithPath(path)) => static_hosting::StaticHostingConfig {
+                serve_explorer: true,
+                explorer_path: path.clone(),
+            },
+            None => static_hosting::StaticHostingConfig::default(),
+        };
+        
+        // Extract base path from server code (we'll need to pass this to explorer)
+        // For now, use the default empty string since JSON-RPC typically uses a single endpoint
+        static_hosting::generate_static_hosting_code(&explorer_config, &service_def.service_name, "")
+    } else {
+        quote! {}
+    };
+
     let output = quote! {
         #openrpc_code
         #schema_checks
         #server_code
         #client_code
+        #explorer_code
     };
 
     Ok(output)
@@ -232,6 +287,17 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
     let service_name = &service_def.service_name;
     let service_trait_name = quote::format_ident!("{}Trait", service_name);
     let builder_name = quote::format_ident!("{}Builder", service_name);
+    
+    // Generate explorer route integration if enabled
+    let explorer_route_integration = if service_def.explorer.is_some() && service_def.openrpc.is_some() {
+        let service_name_str = service_name.to_string();
+        let service_name_lower = service_name_str.to_lowercase();
+        let explorer_routes_fn_str = [&service_name_lower, "_explorer_routes"].concat();
+        let explorer_routes_fn = syn::Ident::new(&explorer_routes_fn_str, service_name.span());
+        quote! { router = router.merge(#explorer_routes_fn()); }
+    } else {
+        quote! {}
+    };
 
     // Generate trait methods
     let trait_methods = service_def.methods.iter().map(|method| {
@@ -546,7 +612,7 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                 let base_url = self.base_url.clone();
                 let service = std::sync::Arc::new(self);
 
-                axum::Router::new()
+                let mut router = axum::Router::new()
                     .route(&base_url, axum::routing::post(move |headers: axum::http::HeaderMap, body: String| {
                         let service = service.clone();
                         async move {
@@ -557,7 +623,12 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                                 serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string())
                             )
                         }
-                    }))
+                    }));
+
+                // Include explorer routes if explorer is enabled
+                #explorer_route_integration
+
+                router
             }
 
             async fn handle_request(&self, headers: axum::http::HeaderMap, body: String) -> ras_jsonrpc_types::JsonRpcResponse {

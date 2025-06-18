@@ -11,6 +11,8 @@ This example demonstrates how to build a fully functional JSON-RPC service with:
 - ✅ **Multiple Methods** - Unauthorized and permission-based endpoints
 - ✅ **Axum Integration** - Complete web server setup
 - ✅ **Error Handling** - Proper JSON-RPC error responses
+- ✅ **Interactive Explorer** - Built-in JSON-RPC Explorer UI
+- ✅ **OpenRPC Document** - Auto-generated API specification
 
 ## Service Definition
 
@@ -27,7 +29,29 @@ The service implements three methods:
 cargo run -p basic-service
 ```
 
-The server will start on `http://0.0.0.0:3000`
+The server will start on `http://0.0.0.0:3000` with the following endpoints:
+
+- **Main page**: http://localhost:3000/ - Simple "Hello, World!" response
+- **JSON-RPC endpoint**: http://localhost:3000/api/rpc - The JSON-RPC service endpoint  
+- **JSON-RPC Explorer**: http://localhost:3000/api/explorer - Interactive API explorer UI
+- **OpenRPC Document**: http://localhost:3000/api/explorer/openrpc.json - Machine-readable API specification
+
+## Using the Interactive Explorer
+
+The JSON-RPC Explorer provides a web-based UI for testing your API:
+
+1. Navigate to http://localhost:3000/api/explorer
+2. You'll see all available methods in the sidebar with their authentication requirements
+3. Start by calling the `sign_in` method to get a JWT token
+4. Use the "Authentication" section to save your JWT token
+5. Test authenticated methods like `sign_out` or admin-only methods like `delete_everything`
+
+The explorer features:
+- Real-time request/response display
+- Authentication token management
+- Method documentation from OpenRPC
+- Dark mode support
+- Auto-generated request examples
 
 ## Testing the Service
 
@@ -326,6 +350,8 @@ To add new methods:
    ```rust
    jsonrpc_service!({
        service_name: MyService,
+       openrpc: true,
+       explorer: true,
        methods: [
            // ... existing methods
            WITH_PERMISSIONS(["admin"]) create_user(CreateUserRequest) -> UserId,

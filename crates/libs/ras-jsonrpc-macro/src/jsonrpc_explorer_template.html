@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{SERVICE_NAME} - JSON-RPC API Explorer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        /* Reset and base styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --secondary-color: #64748b;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --error-color: #ef4444;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --bg-tertiary: #f1f5f9;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --text-muted: #94a3b8;
+            --border-color: #e2e8f0;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            --radius-sm: 0.375rem;
+            --radius-md: 0.5rem;
+            --radius-lg: 0.75rem;
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --text-muted: #64748b;
+            --border-color: #334155;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--text-primary);
+            background-color: var(--bg-secondary);
+            min-height: 100vh;
+        }
+
+        /* Layout */
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 320px;
+            background: var(--bg-primary);
+            border-right: 1px solid var(--border-color);
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .main-content {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .header h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        /* Auth section */
+        .auth-section {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .auth-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .auth-status {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--error-color);
+        }
+
+        .auth-status.authenticated {
+            background: var(--success-color);
+        }
+
+        .input-group {
+            margin-bottom: 0.75rem;
+        }
+
+        .input-label {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+            display: block;
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            transition: border-color 0.2s;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgb(37 99 235 / 0.1);
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: var(--radius-md);
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-color);
+        }
+
+        .btn-sm {
+            padding: 0.375rem 0.75rem;
+            font-size: 0.75rem;
+        }
+
+        /* Methods list */
+        .methods-section {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .search-container {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 0.875rem;
+        }
+
+        .search-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .methods-list {
+            padding: 0.5rem;
+        }
+
+        .method-item {
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.2s;
+            background: var(--bg-primary);
+        }
+
+        .method-item:hover {
+            border-color: var(--primary-color);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .method-item.active {
+            border-color: var(--primary-color);
+            background: rgb(37 99 235 / 0.05);
+        }
+
+        .method-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .method-name {
+            font-family: 'JetBrains Mono', 'Consolas', monospace;
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .method-description {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        .auth-indicator {
+            font-size: 0.6875rem;
+            padding: 0.125rem 0.375rem;
+            border-radius: var(--radius-sm);
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
+            margin-left: auto;
+        }
+
+        .auth-indicator.protected {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        /* Request panel */
+        .request-panel {
+            flex: 1;
+            background: var(--bg-primary);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .request-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .request-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .request-title h2 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', 'Consolas', monospace;
+        }
+
+        .request-description {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .request-form {
+            padding: 1.5rem;
+            flex: 1;
+        }
+
+        .form-section {
+            margin-bottom: 2rem;
+        }
+
+        .form-section h3 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+        }
+
+        .jsonrpc-info {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+        }
+
+        .jsonrpc-info-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .jsonrpc-info-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .jsonrpc-label {
+            font-weight: 500;
+            color: var(--text-secondary);
+            min-width: 80px;
+        }
+
+        .jsonrpc-value {
+            font-family: 'JetBrains Mono', 'Consolas', monospace;
+            color: var(--text-primary);
+        }
+
+        .code-editor {
+            width: 100%;
+            min-height: 200px;
+            padding: 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', 'Consolas', monospace;
+            font-size: 0.875rem;
+            resize: vertical;
+        }
+
+        .send-button {
+            background: var(--success-color);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+        }
+
+        .send-button:hover {
+            background: #059669;
+        }
+
+        .send-button:disabled {
+            background: var(--text-muted);
+            cursor: not-allowed;
+        }
+
+        /* Response panel */
+        .response-panel {
+            background: var(--bg-primary);
+            border-top: 1px solid var(--border-color);
+            max-height: 50vh;
+            overflow-y: auto;
+        }
+
+        .response-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .response-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .response-status {
+            padding: 0.25rem 0.75rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-success { background: #dcfce7; color: #166534; }
+        .status-error { background: #fee2e2; color: #991b1b; }
+
+        .response-content {
+            padding: 1.5rem;
+        }
+
+        .response-body {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            font-family: 'JetBrains Mono', 'Consolas', monospace;
+            font-size: 0.875rem;
+            white-space: pre-wrap;
+            overflow-x: auto;
+            position: relative;
+        }
+
+        /* Dark mode toggle */
+        .theme-toggle {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .app-container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                height: auto;
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+            }
+        }
+
+        /* Loading states */
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .spinner {
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid var(--border-color);
+            border-top: 2px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Error states */
+        .error-message {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 0.75rem;
+            border-radius: var(--radius-md);
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+        }
+
+        /* Copy button */
+        .copy-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 0.25rem 0.5rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+
+        .copy-btn:hover {
+            background: var(--bg-tertiary);
+        }
+
+        /* Toast notifications */
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            padding: 0.75rem 1rem;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.success {
+            border-color: var(--success-color);
+        }
+
+        .toast.error {
+            border-color: var(--error-color);
+        }
+
+        .permissions-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.25rem;
+            margin-top: 0.5rem;
+        }
+
+        .permission-badge {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            padding: 0.125rem 0.5rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <!-- Authentication Section -->
+            <div class="auth-section">
+                <div class="auth-title">
+                    <span class="auth-status" id="auth-status"></span>
+                    Authentication
+                </div>
+                <div class="input-group">
+                    <label class="input-label" for="jwt-token">JWT Token</label>
+                    <input type="password" id="jwt-token" class="input-field" placeholder="Enter your JWT token...">
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button id="save-token" class="btn btn-primary btn-sm">Save Token</button>
+                    <button id="clear-token" class="btn btn-secondary btn-sm">Clear</button>
+                </div>
+            </div>
+
+            <!-- Search -->
+            <div class="search-container">
+                <input type="text" id="method-search" class="search-input" placeholder="Search methods...">
+            </div>
+
+            <!-- Methods List -->
+            <div class="methods-section">
+                <div class="methods-list" id="methods-list">
+                    <!-- Methods will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Header -->
+            <div class="header">
+                <h1>{SERVICE_NAME} JSON-RPC Explorer</h1>
+                <div class="header-actions">
+                    <button class="theme-toggle" id="theme-toggle" title="Toggle dark mode">
+                        🌙
+                    </button>
+                </div>
+            </div>
+
+            <!-- Request Panel -->
+            <div class="request-panel" id="request-panel">
+                <div class="request-header">
+                    <div class="request-title">
+                        <h2 id="current-method">Select a method</h2>
+                    </div>
+                    <div class="request-description" id="current-description">
+                        Choose a method from the sidebar to get started
+                    </div>
+                </div>
+
+                <div class="request-form" id="request-form">
+                    <p style="color: var(--text-muted);">Select a method to see the request form</p>
+                </div>
+            </div>
+
+            <!-- Response Panel -->
+            <div class="response-panel" id="response-panel" style="display: none;">
+                <div class="response-header">
+                    <div class="response-title">Response</div>
+                    <div class="response-status" id="response-status"></div>
+                </div>
+                <div class="response-content">
+                    <div class="response-body" id="response-body">
+                        <button class="copy-btn" id="copy-response" title="Copy response">Copy</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // HTML escape function to prevent XSS
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Global state
+        let openrpcDoc = null;
+        let currentMethod = null;
+        let jwtToken = localStorage.getItem('jwt-token') || '';
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadOpenRPCDoc();
+            initializeAuth();
+            initializeTheme();
+            initializeEventListeners();
+            renderMethods();
+        });
+
+        // Load OpenRPC document
+        async function loadOpenRPCDoc() {
+            try {
+                const response = await fetch('{OPENRPC_PATH}');
+                openrpcDoc = await response.json();
+                console.log('OpenRPC document loaded:', openrpcDoc);
+            } catch (error) {
+                console.error('Failed to load OpenRPC document:', error);
+                showToast('Failed to load API specification', 'error');
+            }
+        }
+
+        // Initialize authentication
+        function initializeAuth() {
+            const tokenInput = document.getElementById('jwt-token');
+            const authStatus = document.getElementById('auth-status');
+            
+            if (jwtToken) {
+                tokenInput.value = jwtToken;
+                authStatus.classList.add('authenticated');
+            }
+        }
+
+        // Initialize theme
+        function initializeTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            if (savedTheme === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                document.getElementById('theme-toggle').textContent = '☀️';
+            }
+        }
+
+        // Initialize event listeners
+        function initializeEventListeners() {
+            // Authentication
+            document.getElementById('save-token').addEventListener('click', saveToken);
+            document.getElementById('clear-token').addEventListener('click', clearToken);
+            
+            // Theme toggle
+            document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+            
+            // Search
+            document.getElementById('method-search').addEventListener('input', filterMethods);
+            
+            // Copy response
+            document.getElementById('copy-response').addEventListener('click', copyResponse);
+        }
+
+        // Save JWT token
+        function saveToken() {
+            const tokenInput = document.getElementById('jwt-token');
+            const authStatus = document.getElementById('auth-status');
+            
+            jwtToken = tokenInput.value.trim();
+            localStorage.setItem('jwt-token', jwtToken);
+            
+            if (jwtToken) {
+                authStatus.classList.add('authenticated');
+                showToast('Token saved successfully', 'success');
+            } else {
+                authStatus.classList.remove('authenticated');
+            }
+        }
+
+        // Clear JWT token
+        function clearToken() {
+            jwtToken = '';
+            localStorage.removeItem('jwt-token');
+            document.getElementById('jwt-token').value = '';
+            document.getElementById('auth-status').classList.remove('authenticated');
+            showToast('Token cleared', 'success');
+        }
+
+        // Toggle theme
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            
+            const toggle = document.getElementById('theme-toggle');
+            toggle.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+        }
+
+        // Render methods list
+        function renderMethods() {
+            if (!openrpcDoc || !openrpcDoc.methods) return;
+            
+            const container = document.getElementById('methods-list');
+            container.innerHTML = '';
+            
+            openrpcDoc.methods.forEach(method => {
+                const methodEl = createMethodElement(method);
+                container.appendChild(methodEl);
+            });
+        }
+
+        // Create method element
+        function createMethodElement(method) {
+            const div = document.createElement('div');
+            div.className = 'method-item';
+            div.dataset.method = method.name;
+            
+            const isProtected = method['x-authentication'] !== false;
+            const permissions = method['x-permissions'] || [];
+            
+            let permissionsHtml = '';
+            if (permissions.length > 0) {
+                permissionsHtml = `
+                    <div class="permissions-list">
+                        ${permissions.map(p => `<span class="permission-badge">${escapeHtml(p)}</span>`).join('')}
+                    </div>
+                `;
+            }
+            
+            div.innerHTML = `
+                <div class="method-header">
+                    <span class="method-name">${escapeHtml(method.name)}</span>
+                    <span class="auth-indicator ${isProtected ? 'protected' : ''}">
+                        ${isProtected ? '🔒' : '🌐'}
+                    </span>
+                </div>
+                ${method.summary ? `<div class="method-description">${escapeHtml(method.summary)}</div>` : ''}
+                ${permissionsHtml}
+            `;
+            
+            div.addEventListener('click', () => selectMethod(method));
+            
+            return div;
+        }
+
+        // Select method
+        function selectMethod(method) {
+            // Update UI state
+            document.querySelectorAll('.method-item').forEach(el => el.classList.remove('active'));
+            const safeMethodSelector = CSS.escape ? CSS.escape(method.name) : method.name.replace(/[\"]/g, '\\$&');
+            document.querySelector(`[data-method="${safeMethodSelector}"]`).classList.add('active');
+            
+            currentMethod = method;
+            
+            // Update request panel
+            updateRequestPanel(method);
+        }
+
+        // Update request panel
+        function updateRequestPanel(method) {
+            document.getElementById('current-method').textContent = method.name;
+            document.getElementById('current-description').textContent = method.description || method.summary || '';
+            
+            // Generate request form
+            const formContainer = document.getElementById('request-form');
+            formContainer.innerHTML = generateRequestForm(method);
+            
+            // Add form event listeners
+            const sendButton = document.getElementById('send-request');
+            if (sendButton) {
+                sendButton.addEventListener('click', () => sendRequest(method));
+            }
+        }
+
+        // Generate request form
+        function generateRequestForm(method) {
+            let html = '';
+            
+            // JSON-RPC info section
+            html += `
+                <div class="form-section">
+                    <h3>JSON-RPC Request Info</h3>
+                    <div class="jsonrpc-info">
+                        <div class="jsonrpc-info-row">
+                            <span class="jsonrpc-label">Version:</span>
+                            <span class="jsonrpc-value">2.0</span>
+                        </div>
+                        <div class="jsonrpc-info-row">
+                            <span class="jsonrpc-label">Method:</span>
+                            <span class="jsonrpc-value">${escapeHtml(method.name)}</span>
+                        </div>
+                        <div class="jsonrpc-info-row">
+                            <span class="jsonrpc-label">Request ID:</span>
+                            <span class="jsonrpc-value" id="request-id">${generateRequestId()}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Parameters section
+            if (method.params && method.params.length > 0) {
+                const paramsSchema = method.params[0].schema;
+                const example = generateExampleFromSchema(paramsSchema);
+                
+                html += `
+                    <div class="form-section">
+                        <h3>Parameters</h3>
+                        <textarea class="code-editor" id="request-params" placeholder="Enter JSON parameters...">${
+                            JSON.stringify(example, null, 2)
+                        }</textarea>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div class="form-section">
+                        <h3>Parameters</h3>
+                        <p style="color: var(--text-muted); font-size: 0.875rem;">This method has no parameters</p>
+                    </div>
+                `;
+            }
+            
+            // Authentication info
+            if (method['x-authentication'] !== false) {
+                const permissions = method['x-permissions'] || [];
+                html += `
+                    <div class="form-section">
+                        <h3>Authentication Required</h3>
+                        ${permissions.length > 0 ? `
+                            <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.5rem;">
+                                Required permissions:
+                            </p>
+                            <div class="permissions-list">
+                                ${permissions.map(p => `<span class="permission-badge">${escapeHtml(p)}</span>`).join('')}
+                            </div>
+                        ` : `
+                            <p style="color: var(--text-secondary); font-size: 0.875rem;">
+                                This method requires authentication but no specific permissions.
+                            </p>
+                        `}
+                    </div>
+                `;
+            }
+            
+            // Send button
+            html += `
+                <div class="form-section">
+                    <button id="send-request" class="btn send-button">
+                        <span>Send Request</span>
+                    </button>
+                </div>
+            `;
+            
+            return html;
+        }
+
+        // Generate unique request ID
+        function generateRequestId() {
+            return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        }
+
+        // Resolve schema reference
+        function resolveSchemaRef(schemaOrRef) {
+            if (!schemaOrRef) return null;
+            
+            // If it's a reference, resolve it
+            if (schemaOrRef['$ref']) {
+                const refPath = schemaOrRef['$ref'];
+                if (refPath.startsWith('#/components/schemas/')) {
+                    const schemaName = refPath.replace('#/components/schemas/', '');
+                    return openrpcDoc?.components?.schemas?.[schemaName] || null;
+                }
+            }
+            
+            // Otherwise return as-is
+            return schemaOrRef;
+        }
+
+        // Generate example from schema
+        function generateExampleFromSchema(schemaOrRef) {
+            const schema = resolveSchemaRef(schemaOrRef);
+            if (!schema) return {};
+            
+            if (schema.examples && schema.examples.length > 0) {
+                return schema.examples[0];
+            }
+            
+            if (schema.example) return schema.example;
+            
+            if (schema.type === 'object' && schema.properties) {
+                const example = {};
+                Object.entries(schema.properties).forEach(([key, prop]) => {
+                    example[key] = generateExampleFromSchema(prop);
+                });
+                return example;
+            }
+            
+            if (schema.type === 'array') {
+                return [];
+            }
+            
+            if (schema.type === 'string') {
+                return schema.example || `example_${Math.random().toString(36).substr(2, 9)}`;
+            }
+            
+            if (schema.type === 'number' || schema.type === 'integer') {
+                return schema.example || 0;
+            }
+            
+            if (schema.type === 'boolean') {
+                return schema.example || false;
+            }
+            
+            return null;
+        }
+
+        // Send request
+        async function sendRequest(method) {
+            const sendButton = document.getElementById('send-request');
+            const originalText = sendButton.innerHTML;
+            sendButton.innerHTML = '<span class="spinner"></span> Sending...';
+            sendButton.disabled = true;
+            
+            try {
+                // Build JSON-RPC request
+                const requestId = document.getElementById('request-id').textContent;
+                const request = {
+                    jsonrpc: "2.0",
+                    method: method.name,
+                    id: requestId
+                };
+                
+                // Add parameters if present
+                if (method.params && method.params.length > 0) {
+                    const paramsEditor = document.getElementById('request-params');
+                    if (paramsEditor && paramsEditor.value.trim()) {
+                        try {
+                            request.params = JSON.parse(paramsEditor.value);
+                        } catch (e) {
+                            throw new Error('Invalid JSON in parameters');
+                        }
+                    }
+                }
+                
+                // Build request options
+                const options = {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(request)
+                };
+                
+                // Add authorization header if token exists
+                if (jwtToken) {
+                    options.headers['Authorization'] = `Bearer ${jwtToken}`;
+                }
+                
+                // Make request
+                const response = await fetch('{BASE_PATH}', options);
+                const responseData = await response.json();
+                
+                // Show response
+                showResponse(responseData);
+                
+            } catch (error) {
+                console.error('Request failed:', error);
+                showToast(error.message, 'error');
+            } finally {
+                sendButton.innerHTML = originalText;
+                sendButton.disabled = false;
+            }
+        }
+
+        // Show response
+        function showResponse(data) {
+            const panel = document.getElementById('response-panel');
+            const statusEl = document.getElementById('response-status');
+            const bodyEl = document.getElementById('response-body');
+            
+            panel.style.display = 'block';
+            
+            // Check if it's an error response
+            const isError = data.error !== undefined;
+            
+            // Update status
+            statusEl.className = `response-status ${isError ? 'status-error' : 'status-success'}`;
+            statusEl.textContent = isError ? 'Error' : 'Success';
+            
+            // Update body (excluding the copy button)
+            const copyBtn = bodyEl.querySelector('.copy-btn');
+            bodyEl.textContent = JSON.stringify(data, null, 2);
+            if (copyBtn) {
+                bodyEl.appendChild(copyBtn);
+            }
+        }
+
+        // Copy response
+        async function copyResponse() {
+            const bodyEl = document.getElementById('response-body');
+            const textContent = bodyEl.textContent.replace('Copy', '').trim();
+            
+            try {
+                await navigator.clipboard.writeText(textContent);
+                showToast('Response copied to clipboard', 'success');
+            } catch (error) {
+                console.error('Failed to copy:', error);
+                showToast('Failed to copy response', 'error');
+            }
+        }
+
+        // Filter methods
+        function filterMethods() {
+            const query = document.getElementById('method-search').value.toLowerCase();
+            const methods = document.querySelectorAll('.method-item');
+            
+            methods.forEach(method => {
+                const name = method.dataset.method.toLowerCase();
+                const text = method.textContent.toLowerCase();
+                
+                if (name.includes(query) || text.includes(query)) {
+                    method.style.display = 'block';
+                } else {
+                    method.style.display = 'none';
+                }
+            });
+        }
+
+        // Show toast notification
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type}`;
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

@@ -58,6 +58,7 @@ impl AuthProvider for MyAuthProvider {
 jsonrpc_service!({
     service_name: MyService,
     openrpc: true,
+    explorer: true,
     methods: [
         UNAUTHORIZED sign_in(SignInRequest) -> SignInResponse,
         WITH_PERMISSIONS([]) sign_out(()) -> (),
@@ -73,41 +74,49 @@ async fn handler() -> &'static str {
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let app = Router::new().route("/", get(handler)).nest(
-        "/api",
-        MyServiceBuilder::new("/rpc")
-            .auth_provider(MyAuthProvider)
-            .sign_in_handler(|request| async move {
-                match request {
-                    SignInRequest::WithCredentials { username, password } => {
-                        if username == "admin" && password == "secret" {
-                            Ok(SignInResponse::Success {
-                                jwt: "admin_token".to_string(),
-                            })
-                        } else if username == "user" && password == "password" {
-                            Ok(SignInResponse::Success {
-                                jwt: "valid_token".to_string(),
-                            })
-                        } else {
-                            Ok(SignInResponse::Failure {
-                                msg: "Invalid credentials".to_string(),
-                            })
-                        }
+    let rpc_router = MyServiceBuilder::new("/rpc")
+        .auth_provider(MyAuthProvider)
+        .sign_in_handler(|request| async move {
+            match request {
+                SignInRequest::WithCredentials { username, password } => {
+                    if username == "admin" && password == "secret" {
+                        Ok(SignInResponse::Success {
+                            jwt: "admin_token".to_string(),
+                        })
+                    } else if username == "user" && password == "password" {
+                        Ok(SignInResponse::Success {
+                            jwt: "valid_token".to_string(),
+                        })
+                    } else {
+                        Ok(SignInResponse::Failure {
+                            msg: "Invalid credentials".to_string(),
+                        })
                     }
                 }
-            })
-            .sign_out_handler(|user, _request| async move {
-                tracing::info!("User {} signed out", user.user_id);
-                Ok(())
-            })
-            .delete_everything_handler(|user, _request| async move {
-                tracing::warn!("Admin {} is deleting everything!", user.user_id);
-                Ok(())
-            })
-            .build(),
+            }
+        })
+        .sign_out_handler(|user, _request| async move {
+            tracing::info!("User {} signed out", user.user_id);
+            Ok(())
+        })
+        .delete_everything_handler(|user, _request| async move {
+            tracing::warn!("Admin {} is deleting everything!", user.user_id);
+            Ok(())
+        })
+        .build();
+
+    let app = Router::new().route("/", get(handler)).nest(
+        "/api",
+        rpc_router,
     );
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     println!("Server running on http://0.0.0.0:3000");
+    println!("JSON-RPC endpoint: http://0.0.0.0:3000/api/rpc");
+    println!("JSON-RPC Explorer: http://0.0.0.0:3000/api/explorer");
+    println!("");
+    println!("Example credentials:");
+    println!("  - Username: user, Password: password (basic user)");
+    println!("  - Username: admin, Password: secret (admin user)");
     axum::serve(listener, app).await.unwrap();
 }
