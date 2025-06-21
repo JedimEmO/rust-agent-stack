@@ -16,7 +16,6 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
         .map(generate_client_method_with_timeout);
 
     let output = quote! {
-        #[cfg(feature = "client")]
         /// Generated client for the JSON-RPC service
         #[derive(Clone)]
         pub struct #client_name {
@@ -26,14 +25,12 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
             default_timeout: Option<std::time::Duration>,
         }
 
-        #[cfg(feature = "client")]
         /// Builder for the JSON-RPC client
         pub struct #client_builder_name {
             server_url: Option<String>,
             timeout: Option<std::time::Duration>,
         }
 
-        #[cfg(feature = "client")]
         impl #client_builder_name {
             /// Create a new client builder
             pub fn new() -> Self {
@@ -60,6 +57,8 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
                 let server_url = self.server_url.ok_or("Server URL is required")?;
 
                 let mut client_builder = reqwest::Client::builder();
+                
+                #[cfg(not(target_arch = "wasm32"))]
                 if let Some(timeout) = self.timeout {
                     client_builder = client_builder.timeout(timeout);
                 }
@@ -75,7 +74,6 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
             }
         }
 
-        #[cfg(feature = "client")]
         impl #client_name {
             /// Set the bearer token for authentication
             pub fn set_bearer_token(&mut self, token: Option<impl Into<String>>) {
@@ -118,7 +116,8 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
                     request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
                 }
 
-                // Override timeout if provided
+                // Override timeout if provided (not supported in WASM)
+                #[cfg(not(target_arch = "wasm32"))]
                 if let Some(timeout) = timeout {
                     request_builder = request_builder.timeout(timeout);
                 }

@@ -245,33 +245,68 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         (quote! {}, quote! {})
     };
 
-    // Generate server code - this will be conditionally compiled by the user
-    let server_code = generate_server_code(&service_def);
+    // Generate server code only if server feature is enabled in the macro crate
+    let server_code = if cfg!(feature = "server") {
+        let server_impl = generate_server_code(&service_def);
+        
+        // Generate explorer code if enabled - only if server feature is enabled
+        let explorer_code = if service_def.explorer.is_some() && service_def.openrpc.is_some() {
+            let explorer_config = match &service_def.explorer {
+                Some(ExplorerConfig::Enabled) => static_hosting::StaticHostingConfig {
+                    serve_explorer: true,
+                    explorer_path: "/explorer".to_string(),
+                },
+                Some(ExplorerConfig::WithPath(path)) => static_hosting::StaticHostingConfig {
+                    serve_explorer: true,
+                    explorer_path: path.clone(),
+                },
+                None => static_hosting::StaticHostingConfig::default(),
+            };
 
-    // Generate client code - this will be conditionally compiled by the user
-    let client_code = crate::client::generate_client_code(&service_def);
-
-    // Generate explorer code if enabled
-    let explorer_code = if service_def.explorer.is_some() && service_def.openrpc.is_some() {
-        let explorer_config = match &service_def.explorer {
-            Some(ExplorerConfig::Enabled) => static_hosting::StaticHostingConfig {
-                serve_explorer: true,
-                explorer_path: "/explorer".to_string(),
-            },
-            Some(ExplorerConfig::WithPath(path)) => static_hosting::StaticHostingConfig {
-                serve_explorer: true,
-                explorer_path: path.clone(),
-            },
-            None => static_hosting::StaticHostingConfig::default(),
+            // Extract base path from server code (we'll need to pass this to explorer)
+            // For now, use the default empty string since JSON-RPC typically uses a single endpoint
+            static_hosting::generate_static_hosting_code(
+                &explorer_config,
+                &service_def.service_name,
+                "",
+            )
+        } else {
+            quote! {}
         };
+        
+        // Wrap all server code in a cfg attribute to ensure it's only compiled when server feature is enabled
+        quote! {
+            #[cfg(feature = "server")]
+            mod _generated_server {
+                use super::*;
+                
+                #server_impl
+                #explorer_code
+            }
+            
+            #[cfg(feature = "server")]
+            pub use _generated_server::*;
+        }
+    } else {
+        quote! {}
+    };
 
-        // Extract base path from server code (we'll need to pass this to explorer)
-        // For now, use the default empty string since JSON-RPC typically uses a single endpoint
-        static_hosting::generate_static_hosting_code(
-            &explorer_config,
-            &service_def.service_name,
-            "",
-        )
+    // Generate client code only if client feature is enabled in the macro crate
+    let client_code = if cfg!(feature = "client") {
+        let client_impl = crate::client::generate_client_code(&service_def);
+        
+        // Wrap all client code in a cfg attribute to ensure it's only compiled when client feature is enabled
+        quote! {
+            #[cfg(feature = "client")]
+            mod _generated_client {
+                use super::*;
+                
+                #client_impl
+            }
+            
+            #[cfg(feature = "client")]
+            pub use _generated_client::*;
+        }
     } else {
         quote! {}
     };
@@ -281,7 +316,6 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         #schema_checks
         #server_code
         #client_code
-        #explorer_code
     };
 
     Ok(output)
@@ -577,13 +611,11 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
     });
 
     quote! {
-        #[cfg(feature = "server")]
         /// Generated service trait
         pub trait #service_trait_name {
             #(#trait_methods)*
         }
 
-        #[cfg(feature = "server")]
         /// Generated builder for the JSON-RPC service
         pub struct #builder_name {
             base_url: String,
@@ -593,7 +625,6 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
             #(#builder_fields)*
         }
 
-        #[cfg(feature = "server")]
         impl #builder_name {
             /// Create a new builder with the base URL
             pub fn new(base_url: impl Into<String>) -> Self {
