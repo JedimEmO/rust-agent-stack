@@ -1,8 +1,8 @@
 #[cfg(all(feature = "server", feature = "client"))]
 mod tests {
-    use serde::{Deserialize, Serialize};
-    use ras_jsonrpc_macro::jsonrpc_service;
     use axum::Router;
+    use ras_jsonrpc_macro::jsonrpc_service;
+    use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
     struct CreateUserRequest {
@@ -41,16 +41,14 @@ mod tests {
     async fn test_explorer_routes_generated() {
         // Test that the explorer routes function is generated
         let explorer_routes = userservice_explorer_routes();
-        
+
         // The router should have routes for /explorer and /explorer/openrpc.json
         let app = Router::new().merge(explorer_routes);
-        
+
         // Create test server
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-            .await
-            .unwrap();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        
+
         // Spawn the server
         tokio::spawn(async move {
             axum::serve(listener, app).await.unwrap();
@@ -61,17 +59,17 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), 200);
-        
+
         let content = response.text().await.unwrap();
         assert!(content.contains("UserService JSON-RPC Explorer"));
         assert!(content.contains("Authentication"));
-        
+
         // Test that the OpenRPC document is accessible
         let response = reqwest::get(format!("http://{}/explorer/openrpc.json", addr))
             .await
             .unwrap();
         assert_eq!(response.status(), 200);
-        
+
         let openrpc_doc: serde_json::Value = response.json().await.unwrap();
         assert_eq!(openrpc_doc["info"]["title"], "UserService JSON-RPC API");
         assert!(openrpc_doc["methods"].is_array());
@@ -88,11 +86,11 @@ mod tests {
                 UNAUTHORIZED test_method(()) -> String,
             ]
         });
-        
+
         // Should compile without errors
     }
 
-    #[test] 
+    #[test]
     fn test_explorer_requires_openrpc() {
         // This test verifies explorer requires openrpc to be enabled
         jsonrpc_service!({
@@ -102,7 +100,7 @@ mod tests {
                 UNAUTHORIZED test_method(()) -> String,
             ]
         });
-        
+
         // Explorer routes should not be generated
     }
 }

@@ -242,13 +242,15 @@ async fn create_rest_test_server() -> (String, tokio::task::JoinHandle<()>) {
                 published: true,
             })
         })
-        .get_status_handler(|user| async move {
-            Ok(json!({
+        .get_status_handler(|user| {
+            let value = json!({
                 "status": "authenticated",
                 "user_id": user.user_id,
                 "permissions": user.permissions.iter().collect::<Vec<_>>(),
                 "timestamp": chrono::Utc::now().to_rfc3339()
-            }))
+            });
+
+            async move { Ok(value) }
         })
         .post_admin_action_handler(|_user, _request| async move {
             Ok("Admin action completed".to_string())

@@ -23,8 +23,8 @@ impl AuthClient {
         let response = self
             .client
             .post(&format!("{}/auth/login", self.base_url))
-            .json(&LoginRequest { 
-                username, 
+            .json(&LoginRequest {
+                username,
                 password,
                 provider: None, // Use default "local" provider
             })
@@ -43,8 +43,8 @@ impl AuthClient {
         let response = self
             .client
             .post(&format!("{}/auth/register", self.base_url))
-            .json(&RegisterRequest { 
-                username, 
+            .json(&RegisterRequest {
+                username,
                 password,
                 email: None,
                 display_name: None,

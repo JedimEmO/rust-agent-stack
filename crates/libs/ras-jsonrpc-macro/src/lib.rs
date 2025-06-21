@@ -71,17 +71,17 @@ impl Parse for ServiceDefinition {
         // Check if openrpc field is present
         let mut openrpc = None;
         let mut explorer = None;
-        
+
         // Parse optional fields until we hit "methods"
         while content.peek(Ident) {
             let field_name = content.fork().parse::<Ident>()?;
             if field_name == "methods" {
                 break;
             }
-            
+
             let _ = content.parse::<Ident>()?; // field name
             let _ = content.parse::<Token![:]>()?;
-            
+
             if field_name == "openrpc" {
                 // Parse openrpc value - can be true/false or { output: "path" }
                 if content.peek(syn::LitBool) {
@@ -117,7 +117,7 @@ impl Parse for ServiceDefinition {
                     explorer = Some(ExplorerConfig::WithPath(path.value()));
                 }
             }
-            
+
             let _ = content.parse::<Token![,]>()?;
         }
 
@@ -264,10 +264,14 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
             },
             None => static_hosting::StaticHostingConfig::default(),
         };
-        
+
         // Extract base path from server code (we'll need to pass this to explorer)
         // For now, use the default empty string since JSON-RPC typically uses a single endpoint
-        static_hosting::generate_static_hosting_code(&explorer_config, &service_def.service_name, "")
+        static_hosting::generate_static_hosting_code(
+            &explorer_config,
+            &service_def.service_name,
+            "",
+        )
     } else {
         quote! {}
     };
@@ -287,17 +291,18 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
     let service_name = &service_def.service_name;
     let service_trait_name = quote::format_ident!("{}Trait", service_name);
     let builder_name = quote::format_ident!("{}Builder", service_name);
-    
+
     // Generate explorer route integration if enabled
-    let explorer_route_integration = if service_def.explorer.is_some() && service_def.openrpc.is_some() {
-        let service_name_str = service_name.to_string();
-        let service_name_lower = service_name_str.to_lowercase();
-        let explorer_routes_fn_str = [&service_name_lower, "_explorer_routes"].concat();
-        let explorer_routes_fn = syn::Ident::new(&explorer_routes_fn_str, service_name.span());
-        quote! { router = router.merge(#explorer_routes_fn()); }
-    } else {
-        quote! {}
-    };
+    let explorer_route_integration =
+        if service_def.explorer.is_some() && service_def.openrpc.is_some() {
+            let service_name_str = service_name.to_string();
+            let service_name_lower = service_name_str.to_lowercase();
+            let explorer_routes_fn_str = [&service_name_lower, "_explorer_routes"].concat();
+            let explorer_routes_fn = syn::Ident::new(&explorer_routes_fn_str, service_name.span());
+            quote! { router = router.merge(#explorer_routes_fn()); }
+        } else {
+            quote! {}
+        };
 
     // Generate trait methods
     let trait_methods = service_def.methods.iter().map(|method| {
@@ -419,12 +424,12 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                             let start_time = std::time::Instant::now();
                             let handler_result = handler(params).await;
                             let duration = start_time.elapsed();
-                            
+
                             // Track method duration if configured
                             if let Some(duration_tracker) = &self.method_duration_tracker {
                                 duration_tracker(#method_str, None, duration).await;
                             }
-                            
+
                             match handler_result {
                                 Ok(result) => {
                                     match serde_json::to_value(result) {
@@ -538,12 +543,12 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                             let start_time = std::time::Instant::now();
                             let handler_result = handler(user.clone(), params).await;
                             let duration = start_time.elapsed();
-                            
+
                             // Track method duration if configured
                             if let Some(duration_tracker) = &self.method_duration_tracker {
                                 duration_tracker(#method_str, Some(user), duration).await;
                             }
-                            
+
                             match handler_result {
                                 Ok(result) => {
                                     match serde_json::to_value(result) {

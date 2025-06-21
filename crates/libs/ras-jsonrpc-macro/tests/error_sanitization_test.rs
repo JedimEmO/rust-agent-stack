@@ -52,7 +52,7 @@ mod tests {
     async fn setup_test_server() -> (SocketAddr, Router) {
         let service = std::sync::Arc::new(TestServiceImpl);
         let service_clone = service.clone();
-        
+
         let router = TestServiceBuilder::new("/api/rpc")
             .test_internal_error_handler(move |req| {
                 let service = service.clone();
@@ -99,7 +99,10 @@ mod tests {
             .unwrap();
 
         let json_response: serde_json::Value = response.json().await.unwrap();
-        println!("Response: {}", serde_json::to_string_pretty(&json_response).unwrap());
+        println!(
+            "Response: {}",
+            serde_json::to_string_pretty(&json_response).unwrap()
+        );
 
         // Verify error is sanitized
         assert_eq!(json_response["jsonrpc"], "2.0");
@@ -161,7 +164,7 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
         let client = Client::new();
-        
+
         // Test missing auth header
         let response = client
             .post(format!("http://{}/api/rpc", addr))
@@ -220,7 +223,10 @@ mod tests {
         assert_eq!(json_response["id"], 4);
         assert!(json_response["error"].is_object());
         assert_eq!(json_response["error"]["code"], -32601); // Method not found code
-        assert_eq!(json_response["error"]["message"], "Method not found: non_existent_method");
+        assert_eq!(
+            json_response["error"]["message"],
+            "Method not found: non_existent_method"
+        );
     }
 
     #[tokio::test]

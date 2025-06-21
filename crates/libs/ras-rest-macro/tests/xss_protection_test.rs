@@ -7,7 +7,7 @@ fn test_xss_protection_in_generated_html() {
         r#"'/><script>alert('XSS')</script>"#,
         r#"Test & <script>"#,
     ];
-    
+
     // The escapeHtml function should convert these to safe strings
     for input in malicious_inputs {
         let escaped = escape_html(input);

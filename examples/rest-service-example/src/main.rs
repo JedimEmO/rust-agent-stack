@@ -10,6 +10,13 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tracing::info;
 
+// OpenTelemetry imports
+use axum::{body::Body, extract::State, http::StatusCode, response::Response};
+use opentelemetry::KeyValue;
+use opentelemetry::metrics::{Counter, Histogram, Meter};
+use opentelemetry_sdk::metrics::SdkMeterProvider;
+use prometheus::{Encoder, TextEncoder};
+
 // Custom provider that implements IdentityProvider and can be shared
 #[derive(Clone)]
 struct SharedUserProvider {
@@ -134,6 +141,42 @@ rest_service!({
     ]
 });
 
+// Metrics structure to hold OpenTelemetry instruments
+#[derive(Clone)]
+struct Metrics {
+    rest_requests_started: Counter<u64>,
+    rest_requests_completed: Counter<u64>,
+    rest_method_duration: Histogram<f64>,
+    active_users: Counter<f64>,
+}
+
+impl Metrics {
+    fn new(meter: &Meter) -> Self {
+        Self {
+            rest_requests_started: meter
+                .u64_counter("rest_requests_started_total")
+                .with_description("Total number of REST API requests started")
+                .with_unit("requests")
+                .build(),
+            rest_requests_completed: meter
+                .u64_counter("rest_requests_completed_total")
+                .with_description("Total number of REST API requests completed")
+                .with_unit("requests")
+                .build(),
+            rest_method_duration: meter
+                .f64_histogram("rest_method_duration_seconds")
+                .with_description("Duration of REST API method execution in seconds")
+                .with_unit("seconds")
+                .build(),
+            active_users: meter
+                .f64_counter("active_users")
+                .with_description("Number of currently active users")
+                .with_unit("users")
+                .build(),
+        }
+    }
+}
+
 // Application configuration
 #[derive(Debug, Clone)]
 struct AppConfig {
@@ -177,6 +220,7 @@ impl UserPermissions for ExamplePermissions {
 struct AppState {
     session_service: Arc<SessionService>,
     shared_provider: SharedUserProvider,
+    metrics: Metrics,
 }
 
 // Example in-memory storage
@@ -221,7 +265,7 @@ impl UserHandlers {
 
     async fn create_user(
         &self,
-        _user: ras_auth_core::AuthenticatedUser,
+        _user: &ras_auth_core::AuthenticatedUser,
         request: CreateUserRequest,
     ) -> Result<UserResponse, Box<dyn std::error::Error + Send + Sync>> {
         let mut store = self.store.lock().unwrap();
@@ -249,7 +293,7 @@ impl UserHandlers {
 
     async fn update_user(
         &self,
-        _user: ras_auth_core::AuthenticatedUser,
+        _user: &ras_auth_core::AuthenticatedUser,
         id: i32,
         request: UpdateUserRequest,
     ) -> Result<UserResponse, Box<dyn std::error::Error + Send + Sync>> {
@@ -265,7 +309,7 @@ impl UserHandlers {
 
     async fn delete_user(
         &self,
-        _user: ras_auth_core::AuthenticatedUser,
+        _user: &ras_auth_core::AuthenticatedUser,
         id: i32,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut store = self.store.lock().unwrap();
@@ -293,6 +337,12 @@ impl AuthHandlers {
         request: RegisterUserRequest,
     ) -> Result<AuthResponse, Box<dyn std::error::Error + Send + Sync>> {
         info!("Registering new user: {}", request.username);
+
+        // Track user registration
+        self.app_state
+            .metrics
+            .active_users
+            .add(1.0, &[KeyValue::new("user_type", "regular")]);
 
         // Add user to the shared provider
         self.app_state
@@ -355,6 +405,19 @@ impl AuthHandlers {
     ) -> Result<AuthResponse, Box<dyn std::error::Error + Send + Sync>> {
         info!("User login attempt: {}", request.username);
 
+        // Track user login
+        self.app_state.metrics.active_users.add(
+            1.0,
+            &[KeyValue::new(
+                "user_type",
+                if request.username == "admin" {
+                    "admin"
+                } else {
+                    "regular"
+                },
+            )],
+        );
+
         // Create auth payload
         let auth_payload = serde_json::json!({
             "username": request.username,
@@ -396,9 +459,22 @@ impl AuthHandlers {
 
     async fn logout_user(
         &self,
-        user: ras_auth_core::AuthenticatedUser,
+        user: &ras_auth_core::AuthenticatedUser,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         info!("User logout: {}", user.user_id);
+
+        // Track user logout
+        self.app_state.metrics.active_users.add(
+            -1.0,
+            &[KeyValue::new(
+                "user_type",
+                if user.user_id == "admin" {
+                    "admin"
+                } else {
+                    "regular"
+                },
+            )],
+        );
 
         // Revoke session using the JTI from the JWT metadata
         if let Some(metadata) = &user.metadata {
@@ -422,6 +498,24 @@ impl AuthHandlers {
     }
 }
 
+// Metrics handler for Prometheus
+async fn metrics_handler(
+    State(prometheus_registry): State<prometheus::Registry>,
+) -> Result<Response<Body>, StatusCode> {
+    let encoder = TextEncoder::new();
+    let metric_families = prometheus_registry.gather();
+    let mut buffer = Vec::new();
+    encoder
+        .encode(&metric_families, &mut buffer)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", encoder.format_type())
+        .body(Body::from(buffer))
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?)
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
@@ -432,6 +526,32 @@ async fn main() -> Result<()> {
     // Load configuration
     let config = AppConfig::from_env()?;
     info!("Starting REST service with JWT authentication");
+
+    // Initialize OpenTelemetry
+    info!("Initializing OpenTelemetry...");
+
+    // Initialize Prometheus registry
+    let prometheus_registry = prometheus::Registry::new();
+
+    // Create Prometheus exporter as a reader
+    let prometheus_exporter = opentelemetry_prometheus::exporter()
+        .with_registry(prometheus_registry.clone())
+        .build()
+        .expect("Failed to create Prometheus exporter");
+
+    // Build the SdkMeterProvider with the Prometheus exporter as the reader
+    let meter_provider = SdkMeterProvider::builder()
+        .with_reader(prometheus_exporter)
+        .build();
+
+    // Set as global meter provider
+    opentelemetry::global::set_meter_provider(meter_provider.clone());
+
+    // Create meter
+    let meter = opentelemetry::global::meter("rest-service-example");
+
+    // Create metrics
+    let metrics = Metrics::new(&meter);
 
     // Initialize authentication components
     let shared_provider = SharedUserProvider::new();
@@ -483,6 +603,7 @@ async fn main() -> Result<()> {
     let app_state = AppState {
         session_service: session_service.clone(),
         shared_provider: shared_provider.clone(),
+        metrics: metrics.clone(),
     };
 
     // Create handlers
@@ -504,8 +625,95 @@ async fn main() -> Result<()> {
     let auth_handlers3 = auth_handlers.clone();
     let auth_handlers4 = auth_handlers.clone();
 
+    let metrics_for_usage = metrics.clone();
+    let metrics_for_duration = metrics.clone();
+
     let app = UserServiceBuilder::new()
         .auth_provider(jwt_auth_provider)
+        // Add usage tracker
+        .with_usage_tracker(move |headers, user, method, path| {
+            let metrics = metrics_for_usage.clone();
+            let user_agent = headers
+                .get("user-agent")
+                .and_then(|h| h.to_str().ok())
+                .unwrap_or("Unknown")
+                .to_string();
+
+            let user_id = user
+                .map(|u| u.user_id.clone())
+                .unwrap_or_else(|| "anonymous".to_string());
+            let authenticated = user.is_some();
+            let permissions = user
+                .map(|u| u.permissions.iter().cloned().collect::<Vec<_>>().join(","))
+                .unwrap_or_else(|| "none".to_string());
+            let method = method.to_string();
+            let path = path.to_string();
+
+            async move {
+                info!(
+                    method = method.as_str(),
+                    path = path.as_str(),
+                    user_id = user_id.as_str(),
+                    user_agent = user_agent.as_str(),
+                    "REST API request"
+                );
+
+                // Record metrics
+                metrics.rest_requests_started.add(
+                    1,
+                    &[
+                        KeyValue::new("method", method.clone()),
+                        KeyValue::new("path", path),
+                        KeyValue::new("user_id", user_id),
+                        KeyValue::new("authenticated", authenticated),
+                        KeyValue::new("permissions", permissions),
+                        KeyValue::new("user_agent", user_agent),
+                    ],
+                );
+            }
+        })
+        // Add method duration tracker
+        .with_method_duration_tracker(move |method, path, user, duration| {
+            let metrics = metrics_for_duration.clone();
+            let user_id = user
+                .map(|u| u.user_id.clone())
+                .unwrap_or_else(|| "anonymous".to_string());
+            let authenticated = user.is_some();
+            let method = method.to_string();
+            let path = path.to_string();
+            let duration_ms = duration.as_millis() as u64;
+
+            async move {
+                info!(
+                    method = method.as_str(),
+                    path = path.as_str(),
+                    user_id = user_id.as_str(),
+                    duration_ms = duration_ms,
+                    "REST API request completed"
+                );
+
+                // Record method duration in seconds
+                metrics.rest_method_duration.record(
+                    duration.as_secs_f64(),
+                    &[
+                        KeyValue::new("method", method.clone()),
+                        KeyValue::new("path", path.clone()),
+                        KeyValue::new("user_id", user_id.clone()),
+                        KeyValue::new("authenticated", authenticated),
+                    ],
+                );
+
+                // Record completion
+                metrics.rest_requests_completed.add(
+                    1,
+                    &[
+                        KeyValue::new("method", method),
+                        KeyValue::new("path", path),
+                        KeyValue::new("user_id", user_id),
+                    ],
+                );
+            }
+        })
         // Authentication handlers
         .post_auth_register_handler(move |request| {
             let handlers = auth_handlers1.clone();
@@ -517,10 +725,12 @@ async fn main() -> Result<()> {
         })
         .post_auth_logout_handler(move |user| {
             let handlers = auth_handlers3.clone();
-            async move { handlers.logout_user(user).await }
+            let user = user.clone();
+            async move { handlers.logout_user(&user).await }
         })
         .get_auth_me_handler(move |user| {
             let handlers = auth_handlers4.clone();
+            let user = user.clone();
             async move { handlers.get_user_info(&user).await }
         })
         // User management handlers
@@ -530,21 +740,32 @@ async fn main() -> Result<()> {
         })
         .post_users_handler(move |user, request| {
             let handlers = user_handlers2.clone();
-            async move { handlers.create_user(user, request).await }
+            let user = user.clone();
+            async move { handlers.create_user(&user, request).await }
         })
         .get_users_by_id_handler(move |user, id| {
             let handlers = user_handlers3.clone();
+            let user = user.clone();
             async move { handlers.get_user(&user, id).await }
         })
         .put_users_by_id_handler(move |user, id, request| {
             let handlers = user_handlers4.clone();
-            async move { handlers.update_user(user, id, request).await }
+            let user = user.clone();
+            async move { handlers.update_user(&user, id, request).await }
         })
         .delete_users_by_id_handler(move |user, id| {
             let handlers = user_handlers5.clone();
-            async move { handlers.delete_user(user, id).await }
+            let user = user.clone();
+            async move { handlers.delete_user(&user, id).await }
         })
         .build();
+
+    // Add metrics endpoint
+    let metrics_router = axum::Router::new()
+        .route("/metrics", axum::routing::get(metrics_handler))
+        .with_state(prometheus_registry);
+
+    let app = axum::Router::new().merge(app).merge(metrics_router);
 
     // Generate OpenAPI documentation
     if let Err(e) = generate_userservice_openapi_to_file() {
@@ -564,6 +785,9 @@ async fn main() -> Result<()> {
     println!("📖 API Documentation:");
     println!("  GET    /api/v1/docs           - Interactive API documentation (Swagger UI)");
     println!("  GET    /api/v1/docs/openapi.json - OpenAPI 3.0 specification");
+    println!();
+    println!("📊 Metrics:");
+    println!("  GET    /metrics               - Prometheus metrics endpoint");
     println!();
     println!("🔗 Available endpoints:");
     println!("  POST   /api/v1/auth/register  - Register new user");

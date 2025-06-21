@@ -42,32 +42,32 @@ pub fn generate_static_hosting_code(
     let explorer_routes_fn_str = [&service_name_lower, "_explorer_routes"].concat();
     let openrpc_fn_name = syn::Ident::new(&openrpc_fn_name_str, service_name.span());
     let explorer_routes_fn = syn::Ident::new(&explorer_routes_fn_str, service_name.span());
-    
+
     // Embed the template as a string literal
     let template_lit = syn::LitStr::new(TEMPLATE_CONTENT, proc_macro2::Span::call_site());
-    
+
     quote! {
         /// Routes for the JSON-RPC explorer
         pub fn #explorer_routes_fn() -> ::axum::Router {
             use ::axum::{response::Html, routing::get, Json};
-            
+
             async fn serve_explorer() -> Html<String> {
                 // Template is embedded at macro expansion time
                 const TEMPLATE: &str = #template_lit;
-                
+
                 // Replace placeholders
                 let html = TEMPLATE
                     .replace("{SERVICE_NAME}", #service_name_str)
                     .replace("{OPENRPC_PATH}", &#openrpc_path_js);
-                
+
                 Html(html)
             }
-            
+
             async fn serve_openrpc() -> Json<::serde_json::Value> {
                 let doc = #openrpc_fn_name();
                 Json(::serde_json::to_value(doc).unwrap())
             }
-            
+
             ::axum::Router::new()
                 .route(#explorer_path, get(serve_explorer))
                 .route(&#openrpc_path, get(serve_openrpc))

@@ -1,73 +1,33 @@
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 // Different cat faces for animation frames
 const CAT_FRAMES: &[&[&str]] = &[
     // Frame 1 - Normal
-    &[
-        " /\\_/\\  ",
-        "( o.o ) ",
-        " > ^ <  ",
-    ],
+    &[" /\\_/\\  ", "( o.o ) ", " > ^ <  "],
     // Frame 2 - Blinking
-    &[
-        " /\\_/\\  ",
-        "( -.o ) ",
-        " > ^ <  ",
-    ],
+    &[" /\\_/\\  ", "( -.o ) ", " > ^ <  "],
     // Frame 3 - Winking
-    &[
-        " /\\_/\\  ",
-        "( o.- ) ",
-        " > ^ <  ",
-    ],
+    &[" /\\_/\\  ", "( o.- ) ", " > ^ <  "],
     // Frame 4 - Happy
-    &[
-        " /\\_/\\  ",
-        "( ^.^ ) ",
-        " > ^ <  ",
-    ],
+    &[" /\\_/\\  ", "( ^.^ ) ", " > ^ <  "],
 ];
 
 // Different cat variations based on username hash
 const CAT_VARIATIONS: &[&[&str]] = &[
     // Classic cat
-    &[
-        " /\\_/\\  ",
-        "( o.o ) ",
-        " > ^ <  ",
-    ],
+    &[" /\\_/\\  ", "( o.o ) ", " > ^ <  "],
     // Chubby cat
-    &[
-        " /\\_/\\  ",
-        "( o.o ) ",
-        " (> <)  ",
-    ],
+    &[" /\\_/\\  ", "( o.o ) ", " (> <)  "],
     // Sleepy cat
-    &[
-        " /\\_/\\  ",
-        "( -.-)  ",
-        " > ^ <  ",
-    ],
+    &[" /\\_/\\  ", "( -.-)  ", " > ^ <  "],
     // Alert cat
-    &[
-        " /|_|\\  ",
-        "( O.O ) ",
-        " > ^ <  ",
-    ],
+    &[" /|_|\\  ", "( O.O ) ", " > ^ <  "],
     // Cool cat
-    &[
-        " /\\_/\\  ",
-        "( ■.■ ) ",
-        " > ^ <  ",
-    ],
+    &[" /\\_/\\  ", "( ■.■ ) ", " > ^ <  "],
     // Surprised cat
-    &[
-        " /\\_/\\  ",
-        "( O.O ) ",
-        " > o <  ",
-    ],
+    &[" /\\_/\\  ", "( O.O ) ", " > o <  "],
 ];
 
 pub struct AvatarManager {
@@ -100,7 +60,7 @@ impl AvatarManager {
 
         // Get base avatar
         let base_avatar = CAT_VARIATIONS[avatar_index];
-        
+
         // Determine animation frame based on counter
         let animated_avatar = if self.frame_counter < 30 {
             // Normal face most of the time
@@ -118,7 +78,10 @@ impl AvatarManager {
         };
 
         // Convert to Vec<String> for easier manipulation
-        animated_avatar.iter().map(|&line| line.to_string()).collect()
+        animated_avatar
+            .iter()
+            .map(|&line| line.to_string())
+            .collect()
     }
 
     pub fn get_compact_avatar_for_user(&mut self, username: &str) -> String {
@@ -147,7 +110,7 @@ impl AvatarManager {
 
         face.to_string()
     }
-    
+
     pub fn get_typing_avatar_for_user(&mut self, username: &str) -> Vec<String> {
         // Get the base avatar for the user
         let avatar_index = self.user_avatars.get(username).copied().unwrap_or_else(|| {
@@ -161,7 +124,7 @@ impl AvatarManager {
 
         // Get base avatar
         let base_avatar = CAT_VARIATIONS[avatar_index];
-        
+
         // Animated dots based on frame counter
         let dots = match (self.frame_counter / 10) % 4 {
             0 => "",
@@ -169,7 +132,7 @@ impl AvatarManager {
             2 => "..",
             _ => "...",
         };
-        
+
         // Create avatar with speech bubble
         vec![
             format!("{} ( {} )", base_avatar[0], dots),
@@ -182,29 +145,29 @@ impl AvatarManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_typing_avatar_with_bubble() {
         let mut avatar_manager = AvatarManager::new();
-        
+
         // Test normal avatar
         let normal_avatar = avatar_manager.get_avatar_for_user("TestUser");
         assert_eq!(normal_avatar.len(), 3);
         assert!(!normal_avatar[0].contains("("));
-        
+
         // Test typing avatar with chat bubble
         let typing_avatar = avatar_manager.get_typing_avatar_for_user("TestUser");
         assert_eq!(typing_avatar.len(), 3);
         assert!(typing_avatar[0].contains("("));
         assert!(typing_avatar[0].contains(")"));
-        
+
         // Test animation by advancing frames
         for _ in 0..15 {
             avatar_manager.tick();
         }
         let typing_avatar2 = avatar_manager.get_typing_avatar_for_user("TestUser");
         assert!(typing_avatar2[0].contains(".")); // Should have dots
-        
+
         // Test different users get different base avatars
         let user2_avatar = avatar_manager.get_typing_avatar_for_user("AnotherUser");
         // They might or might not be different due to hash, but should have bubble

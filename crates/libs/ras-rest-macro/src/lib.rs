@@ -466,7 +466,7 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         match &endpoint.auth {
             AuthRequirement::Unauthorized => {}
             AuthRequirement::WithPermissions(_) => {
-                handler_params.push(quote! { ras_auth_core::AuthenticatedUser });
+                handler_params.push(quote! { &ras_auth_core::AuthenticatedUser });
             }
         }
 
@@ -501,7 +501,7 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         match &endpoint.auth {
             AuthRequirement::Unauthorized => {}
             AuthRequirement::WithPermissions(_) => {
-                handler_params.push(quote! { ras_auth_core::AuthenticatedUser });
+                handler_params.push(quote! { &ras_auth_core::AuthenticatedUser });
                 handler_args.push(quote! { user });
             }
         }
@@ -547,10 +547,11 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
             AuthRequirement::Unauthorized => Vec::new(),
             AuthRequirement::WithPermissions(groups) => groups.clone(),
         };
+        let method_str = endpoint.method.as_str();
 
         // Generate the axum handler based on endpoint configuration
         let axum_handler = generate_axum_handler(endpoint);
-        let handler_body = generate_handler_body(endpoint);
+        let handler_body = generate_handler_body(endpoint, method_str, path);
 
         // Generate permission groups code for quote
         let permission_groups_code = if permission_groups.is_empty() {
@@ -568,12 +569,16 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
                 let handler = handler.clone();
                 let auth_provider = self.auth_provider.clone();
                 let required_permission_groups: Vec<Vec<String>> = #permission_groups_code;
+                let with_usage_tracker = self.with_usage_tracker.clone();
+                let with_method_duration_tracker = self.with_method_duration_tracker.clone();
 
                 router = router.route(#path, #method_routing({
                     move |#axum_handler| {
                         let handler = handler.clone();
                         let auth_provider = auth_provider.clone();
                         let required_permission_groups: Vec<Vec<String>> = required_permission_groups.clone();
+                        let with_usage_tracker = with_usage_tracker.clone();
+                        let with_method_duration_tracker = with_method_duration_tracker.clone();
 
                         async move {
                             #handler_body
@@ -599,6 +604,8 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         /// Generated builder for the REST service
         pub struct #builder_name {
             auth_provider: Option<std::sync::Arc<dyn ras_auth_core::AuthProvider>>,
+            with_usage_tracker: Option<std::sync::Arc<dyn Fn(&axum::http::HeaderMap, Option<&ras_auth_core::AuthenticatedUser>, &str, &str) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> + Send + Sync>>,
+            with_method_duration_tracker: Option<std::sync::Arc<dyn Fn(&str, &str, Option<&ras_auth_core::AuthenticatedUser>, std::time::Duration) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> + Send + Sync>>,
             #(#builder_fields)*
         }
 
@@ -612,6 +619,8 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
             pub fn new() -> Self {
                 Self {
                     auth_provider: None,
+                    with_usage_tracker: None,
+                    with_method_duration_tracker: None,
                     #(#field_inits,)*
                 }
             }
@@ -623,6 +632,32 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
             }
 
             #(#builder_setters)*
+
+            /// Set the usage tracker - called before each request
+            /// The tracker receives the headers, authenticated user (if any), HTTP method, and path
+            pub fn with_usage_tracker<F, Fut>(mut self, tracker: F) -> Self
+            where
+                F: Fn(&axum::http::HeaderMap, Option<&ras_auth_core::AuthenticatedUser>, &str, &str) -> Fut + Send + Sync + 'static,
+                Fut: std::future::Future<Output = ()> + Send + 'static,
+            {
+                self.with_usage_tracker = Some(std::sync::Arc::new(move |headers, user, method, path| {
+                    Box::pin(tracker(headers, user, method, path))
+                }));
+                self
+            }
+
+            /// Set the method duration tracker - called after each request completes
+            /// The tracker receives the HTTP method, path, authenticated user (if any), and execution duration
+            pub fn with_method_duration_tracker<F, Fut>(mut self, tracker: F) -> Self
+            where
+                F: Fn(&str, &str, Option<&ras_auth_core::AuthenticatedUser>, std::time::Duration) -> Fut + Send + Sync + 'static,
+                Fut: std::future::Future<Output = ()> + Send + 'static,
+            {
+                self.with_method_duration_tracker = Some(std::sync::Arc::new(move |method, path, user, duration| {
+                    Box::pin(tracker(method, path, user, duration))
+                }));
+                self
+            }
 
             /// Build the axum router for the REST service
             pub fn build(self) -> axum::Router {
@@ -651,13 +686,8 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
 fn generate_axum_handler(endpoint: &EndpointDefinition) -> proc_macro2::TokenStream {
     let mut extractors = Vec::new();
 
-    // Add authorization header extraction if needed
-    match &endpoint.auth {
-        AuthRequirement::Unauthorized => {}
-        AuthRequirement::WithPermissions(_) => {
-            extractors.push(quote! { headers: axum::http::HeaderMap });
-        }
-    }
+    // Always add headers extraction for tracking purposes
+    extractors.push(quote! { headers: axum::http::HeaderMap });
 
     // Add path parameter extractors
     if !endpoint.path_params.is_empty() {
@@ -679,7 +709,11 @@ fn generate_axum_handler(endpoint: &EndpointDefinition) -> proc_macro2::TokenStr
     }
 }
 
-fn generate_handler_body(endpoint: &EndpointDefinition) -> proc_macro2::TokenStream {
+fn generate_handler_body(
+    endpoint: &EndpointDefinition,
+    method: &str,
+    path: &str,
+) -> proc_macro2::TokenStream {
     // Handle authentication if required
     match &endpoint.auth {
         AuthRequirement::Unauthorized => {
@@ -721,7 +755,15 @@ fn generate_handler_body(endpoint: &EndpointDefinition) -> proc_macro2::TokenStr
             quote! {
                 #json_handling
 
-                match handler(#(#args),*).await {
+                // Call usage tracker if configured (for unauthorized endpoints, headers come from handler params)
+                if let Some(tracker) = &with_usage_tracker {
+                    tracker(&headers, None, #method, #path).await;
+                }
+
+                // Track duration
+                let start_time = std::time::Instant::now();
+
+                let result = match handler(#(#args),*).await {
                     Ok(result) => {
                         use axum::response::IntoResponse;
                         (
@@ -739,12 +781,20 @@ fn generate_handler_body(endpoint: &EndpointDefinition) -> proc_macro2::TokenStr
                             }))
                         ).into_response()
                     },
+                };
+
+                // Call duration tracker if configured
+                let duration = start_time.elapsed();
+                if let Some(tracker) = &with_method_duration_tracker {
+                    tracker(#method, #path, None, duration).await;
                 }
+
+                result
             }
         }
         AuthRequirement::WithPermissions(_) => {
             // Build argument list for authenticated endpoint
-            let mut args = vec![quote! { user }];
+            let mut args = vec![quote! { &user }];
 
             // Add path parameters
             if endpoint.path_params.len() == 1 {
@@ -858,7 +908,15 @@ fn generate_handler_body(endpoint: &EndpointDefinition) -> proc_macro2::TokenStr
                     }
                 }
 
-                match handler(#(#args),*).await {
+                // Call usage tracker if configured
+                if let Some(tracker) = &with_usage_tracker {
+                    tracker(&headers, Some(&user), #method, #path).await;
+                }
+
+                // Track duration
+                let start_time = std::time::Instant::now();
+
+                let result = match handler(#(#args),*).await {
                     Ok(result) => {
                         use axum::response::IntoResponse;
                         (
@@ -876,7 +934,15 @@ fn generate_handler_body(endpoint: &EndpointDefinition) -> proc_macro2::TokenStr
                             }))
                         ).into_response()
                     },
+                };
+
+                // Call duration tracker if configured
+                let duration = start_time.elapsed();
+                if let Some(tracker) = &with_method_duration_tracker {
+                    tracker(#method, #path, Some(&user), duration).await;
                 }
+
+                result
             }
         }
     }

@@ -24,8 +24,12 @@ use ras_jsonrpc_bidirectional_server::{
 };
 use ras_jsonrpc_bidirectional_types::{ConnectionId, ConnectionManager};
 use serde_json::json;
-use std::{collections::{HashMap, HashSet}, sync::Arc, time::Duration};
-use tokio::sync::{RwLock, Mutex};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    time::Duration,
+};
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::Instant;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, error, info, instrument, warn};
@@ -175,9 +179,9 @@ impl ChatServer {
         let mut typing_users = self.typing_users.lock().await;
         let now = Instant::now();
         let timeout = Duration::from_secs(5);
-        
+
         let mut expired_users = Vec::new();
-        
+
         for (room_id, room_typing_users) in typing_users.iter_mut() {
             room_typing_users.retain(|username, state| {
                 if now.duration_since(state.started_at) > timeout {
@@ -188,17 +192,13 @@ impl ChatServer {
                 }
             });
         }
-        
+
         drop(typing_users);
-        
+
         // Send stop typing notifications for expired users
         for (room_id, username) in expired_users {
-            self.broadcast_typing_notification(
-                connection_manager,
-                &room_id,
-                &username,
-                false
-            ).await;
+            self.broadcast_typing_notification(connection_manager, &room_id, &username, false)
+                .await;
         }
     }
 
@@ -213,7 +213,7 @@ impl ChatServer {
         if let Some(room) = self.rooms.get(room_id) {
             let room_users: Vec<String> = room.users.iter().cloned().collect();
             drop(room);
-            
+
             let notification = if is_typing {
                 let notification = UserStartedTypingNotification {
                     username: username.to_string(),
@@ -235,9 +235,11 @@ impl ChatServer {
                     metadata: None,
                 }
             };
-            
-            let msg = ras_jsonrpc_bidirectional_types::BidirectionalMessage::ServerNotification(notification);
-            
+
+            let msg = ras_jsonrpc_bidirectional_types::BidirectionalMessage::ServerNotification(
+                notification,
+            );
+
             // Send to all users in the room except the typing user
             for target_username in room_users {
                 if target_username != username {
@@ -310,12 +312,8 @@ impl ChatServiceService for ChatServer {
 
         // Send stop typing notification if user was typing
         if was_typing {
-            self.broadcast_typing_notification(
-                connection_manager,
-                &room_id,
-                &username,
-                false
-            ).await;
+            self.broadcast_typing_notification(connection_manager, &room_id, &username, false)
+                .await;
         }
 
         // Get room to find all users
@@ -539,7 +537,7 @@ impl ChatServiceService for ChatServer {
 
         // Get existing users before adding the new user
         let existing_users: Vec<String> = room.users.iter().cloned().collect();
-        
+
         room.users.insert(username.clone());
         let user_count = room.users.len() as u32;
         let room_users: Vec<String> = room.users.iter().cloned().collect();
@@ -576,13 +574,13 @@ impl ChatServiceService for ChatServer {
         }
 
         info!(
-            user = %username, 
-            room_id = %room_id, 
+            user = %username,
+            room_id = %room_id,
             existing_users = ?existing_users,
             user_count = %user_count,
             "User joined room successfully"
         );
-        
+
         Ok(JoinRoomResponse {
             room_id,
             user_count,
@@ -967,23 +965,24 @@ impl ChatServiceService for ChatServer {
 
         // Update typing state
         let mut typing_users = self.typing_users.lock().await;
-        let room_typing_users = typing_users.entry(room_id.clone()).or_insert_with(HashMap::new);
-        
+        let room_typing_users = typing_users
+            .entry(room_id.clone())
+            .or_insert_with(HashMap::new);
+
         let is_new_typing = !room_typing_users.contains_key(&username);
-        room_typing_users.insert(username.clone(), TypingState {
-            username: username.clone(),
-            started_at: Instant::now(),
-        });
+        room_typing_users.insert(
+            username.clone(),
+            TypingState {
+                username: username.clone(),
+                started_at: Instant::now(),
+            },
+        );
         drop(typing_users);
 
         // Send notification only if this is a new typing state
         if is_new_typing {
-            self.broadcast_typing_notification(
-                connection_manager,
-                &room_id,
-                &username,
-                true
-            ).await;
+            self.broadcast_typing_notification(connection_manager, &room_id, &username, true)
+                .await;
         }
 
         // Clean up expired typing states
@@ -1015,12 +1014,12 @@ impl ChatServiceService for ChatServer {
         // Remove from typing state
         let mut typing_users = self.typing_users.lock().await;
         let mut should_notify = false;
-        
+
         if let Some(room_typing_users) = typing_users.get_mut(&room_id) {
             if room_typing_users.remove(&username).is_some() {
                 should_notify = true;
             }
-            
+
             // Clean up empty room entries
             if room_typing_users.is_empty() {
                 typing_users.remove(&room_id);
@@ -1030,12 +1029,8 @@ impl ChatServiceService for ChatServer {
 
         // Send notification if user was typing
         if should_notify {
-            self.broadcast_typing_notification(
-                connection_manager,
-                &room_id,
-                &username,
-                false
-            ).await;
+            self.broadcast_typing_notification(connection_manager, &room_id, &username, false)
+                .await;
         }
 
         Ok(())
@@ -1157,7 +1152,7 @@ impl ChatServiceService for ChatServer {
         // Remove user session and notify room members
         if let Some((_, session)) = self.user_sessions.remove(&client_id) {
             let username = session.username.clone();
-            
+
             if let Some(room_id) = session.current_room {
                 // Clear typing state if user was typing
                 let mut typing_users = self.typing_users.lock().await;
@@ -1178,10 +1173,11 @@ impl ChatServiceService for ChatServer {
                         connection_manager,
                         &room_id,
                         &username,
-                        false
-                    ).await;
+                        false,
+                    )
+                    .await;
                 }
-                
+
                 // Remove from room
                 if let Some(mut room) = self.rooms.get_mut(&room_id) {
                     room.users.remove(&session.username);

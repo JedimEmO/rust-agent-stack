@@ -156,12 +156,20 @@ impl JsonRpcError {
 
     /// Creates an invalid params error.
     pub fn invalid_params(_details: String) -> Self {
-        Self::new(error_codes::INVALID_PARAMS, "Invalid params".to_string(), None)
+        Self::new(
+            error_codes::INVALID_PARAMS,
+            "Invalid params".to_string(),
+            None,
+        )
     }
 
     /// Creates an internal error.
     pub fn internal_error(_details: String) -> Self {
-        Self::new(error_codes::INTERNAL_ERROR, "Internal error".to_string(), None)
+        Self::new(
+            error_codes::INTERNAL_ERROR,
+            "Internal error".to_string(),
+            None,
+        )
     }
 
     /// Creates an authentication required error.

@@ -1,7 +1,7 @@
+use ras_auth_core::{AuthError, AuthFuture, AuthProvider, AuthenticatedUser};
+use ras_jsonrpc_macro::jsonrpc_service;
 #[cfg(all(feature = "server", feature = "client"))]
 use serde::{Deserialize, Serialize};
-use ras_jsonrpc_macro::jsonrpc_service;
-use ras_auth_core::{AuthError, AuthProvider, AuthenticatedUser, AuthFuture};
 use std::collections::HashSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
@@ -97,7 +97,7 @@ impl AuthProvider for MockAuthProvider {
                 let mut permissions = HashSet::new();
                 permissions.insert("users:read".to_string());
                 permissions.insert("users:list".to_string());
-                
+
                 Ok(AuthenticatedUser {
                     user_id: "user123".to_string(),
                     permissions,
@@ -111,7 +111,7 @@ impl AuthProvider for MockAuthProvider {
                 permissions.insert("users:read".to_string());
                 permissions.insert("users:list".to_string());
                 permissions.insert("admin".to_string());
-                
+
                 Ok(AuthenticatedUser {
                     user_id: "admin".to_string(),
                     permissions,
@@ -133,14 +133,21 @@ struct UserManagementServiceImpl;
 
 // Don't use async-trait, let the service define it directly
 impl UserManagementServiceTrait for UserManagementServiceImpl {
-    async fn create_user(&self, req: CreateUserRequest) -> Result<CreateUserResponse, Box<dyn std::error::Error + Send + Sync>> {
+    async fn create_user(
+        &self,
+        req: CreateUserRequest,
+    ) -> Result<CreateUserResponse, Box<dyn std::error::Error + Send + Sync>> {
         Ok(CreateUserResponse {
             user_id: format!("user_{}", rand::random::<u32>()),
             message: format!("User '{}' created successfully", req.username),
         })
     }
 
-    async fn get_user(&self, _user: &ras_auth_core::AuthenticatedUser, req: GetUserRequest) -> Result<GetUserResponse, Box<dyn std::error::Error + Send + Sync>> {
+    async fn get_user(
+        &self,
+        _user: &ras_auth_core::AuthenticatedUser,
+        req: GetUserRequest,
+    ) -> Result<GetUserResponse, Box<dyn std::error::Error + Send + Sync>> {
         Ok(GetUserResponse {
             user_id: req.user_id.clone(),
             username: "demo_user".to_string(),
@@ -150,7 +157,11 @@ impl UserManagementServiceTrait for UserManagementServiceImpl {
         })
     }
 
-    async fn search_users(&self, _user: &ras_auth_core::AuthenticatedUser, req: SearchUsersRequest) -> Result<SearchUsersResponse, Box<dyn std::error::Error + Send + Sync>> {
+    async fn search_users(
+        &self,
+        _user: &ras_auth_core::AuthenticatedUser,
+        req: SearchUsersRequest,
+    ) -> Result<SearchUsersResponse, Box<dyn std::error::Error + Send + Sync>> {
         let users = vec![
             UserSummary {
                 user_id: "user1".to_string(),
@@ -222,7 +233,7 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
         .unwrap();
-    
+
     println!("Server running at http://127.0.0.1:3000");
     println!("Explorer available at http://127.0.0.1:3000/explorer");
     println!("API endpoint at http://127.0.0.1:3000/api");

@@ -1,14 +1,13 @@
+use crate::avatar::AvatarManager;
 use anyhow::Result;
 use bidirectional_chat_api::{
     ChatServiceClient, ChatServiceClientBuilder, JoinRoomRequest, LeaveRoomRequest,
     ListRoomsRequest, MessageReceivedNotification, RoomInfo, SendMessageRequest,
-    StartTypingRequest, StopTypingRequest, SystemAnnouncementNotification, 
-    UserJoinedNotification, UserLeftNotification, UserStartedTypingNotification,
-    UserStoppedTypingNotification,
+    StartTypingRequest, StopTypingRequest, SystemAnnouncementNotification, UserJoinedNotification,
+    UserLeftNotification, UserStartedTypingNotification, UserStoppedTypingNotification,
 };
 use chrono::{DateTime, Local};
 use tokio::sync::mpsc;
-use crate::avatar::AvatarManager;
 
 #[derive(Debug, Clone)]
 pub struct Message {
@@ -103,20 +102,25 @@ impl ChatClient {
     }
 
     pub async fn connect(&mut self, server_url: &str, jwt_token: String) -> Result<()> {
-        let ws_url = format!("{}/ws", server_url.replace("http://", "ws://").replace("https://", "wss://"));
-        
+        let ws_url = format!(
+            "{}/ws",
+            server_url
+                .replace("http://", "ws://")
+                .replace("https://", "wss://")
+        );
+
         let mut client = ChatServiceClientBuilder::new(ws_url)
             .with_jwt_token(jwt_token)
             .build()
             .await?;
 
         self.setup_event_handlers(&mut client);
-        
+
         client.connect().await?;
-        
+
         self.client = Some(client);
         self.event_tx.send(AppEvent::Connected)?;
-        
+
         Ok(())
     }
 
@@ -188,7 +192,11 @@ impl ChatClient {
     pub async fn join_room(&self, room_name: String) -> Result<(String, Vec<String>)> {
         match &self.client {
             Some(client) => {
-                let response = client.join_room(JoinRoomRequest { room_name: room_name.clone() }).await?;
+                let response = client
+                    .join_room(JoinRoomRequest {
+                        room_name: room_name.clone(),
+                    })
+                    .await?;
                 Ok((response.room_id, response.existing_users))
             }
             None => anyhow::bail!("Not connected"),

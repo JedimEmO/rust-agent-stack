@@ -9,17 +9,15 @@ use auth::AuthClient;
 use crossterm::{
     event::{self, Event, KeyCode, KeyModifiers},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{Terminal, backend::CrosstermBackend};
 use std::{
     io::{self, Write},
     sync::Arc,
     time::Duration,
 };
-use tokio::{
-    sync::{mpsc, Mutex},
-};
+use tokio::sync::{Mutex, mpsc};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -28,7 +26,8 @@ async fn main() -> Result<()> {
 
     // Load configuration
     dotenvy::dotenv().ok();
-    let server_url = std::env::var("SERVER_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let server_url =
+        std::env::var("SERVER_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
 
     // Setup terminal
     enable_raw_mode()?;
@@ -41,13 +40,21 @@ async fn main() -> Result<()> {
     // Create app state and event channel
     let app_state = Arc::new(Mutex::new(AppState::default()));
     let (event_tx, mut event_rx) = mpsc::unbounded_channel::<AppEvent>();
-    
+
     // Create clients
     let auth_client = AuthClient::new(server_url.clone());
     let chat_client = Arc::new(Mutex::new(ChatClient::new(event_tx.clone())));
 
     // Run the app
-    let res = run_app(&mut terminal, app_state.clone(), &auth_client, chat_client.clone(), &server_url, &mut event_rx).await;
+    let res = run_app(
+        &mut terminal,
+        app_state.clone(),
+        &auth_client,
+        chat_client.clone(),
+        &server_url,
+        &mut event_rx,
+    )
+    .await;
 
     // Restore terminal
     disable_raw_mode()?;
@@ -83,7 +90,7 @@ async fn run_app(
         if event::poll(Duration::from_millis(10))? {
             if let Event::Key(key) = event::read()? {
                 let mut app = app_state.lock().await;
-                
+
                 match app.screen.clone() {
                     AppScreen::Login | AppScreen::Register => {
                         match key.code {
@@ -97,33 +104,45 @@ async fn run_app(
                                 let username = app.auth_username_input.clone();
                                 let password = app.auth_password_input.clone();
                                 drop(app); // Release lock before async operation
-                                
+
                                 // Skip if empty
                                 if username.is_empty() || password.is_empty() {
-                                    app_state.lock().await.error_message = Some("Username and password cannot be empty".to_string());
+                                    app_state.lock().await.error_message =
+                                        Some("Username and password cannot be empty".to_string());
                                     continue;
                                 }
-                                
+
                                 let result = if app_state.lock().await.screen == AppScreen::Login {
                                     // Login returns LoginResponse
                                     match auth_client.login(username.clone(), password).await {
-                                        Ok(login_response) => Ok((login_response.token, login_response.user_id)),
+                                        Ok(login_response) => {
+                                            Ok((login_response.token, login_response.user_id))
+                                        }
                                         Err(e) => Err(e),
                                     }
                                 } else {
                                     // Register returns RegisterResponse, but we need to login after registration
-                                    match auth_client.register(username.clone(), password.clone()).await {
+                                    match auth_client
+                                        .register(username.clone(), password.clone())
+                                        .await
+                                    {
                                         Ok(_register_response) => {
                                             // After successful registration, login to get the token
-                                            match auth_client.login(username.clone(), password).await {
-                                                Ok(login_response) => Ok((login_response.token, login_response.user_id)),
+                                            match auth_client
+                                                .login(username.clone(), password)
+                                                .await
+                                            {
+                                                Ok(login_response) => Ok((
+                                                    login_response.token,
+                                                    login_response.user_id,
+                                                )),
                                                 Err(e) => Err(e),
                                             }
                                         }
                                         Err(e) => Err(e),
                                     }
                                 };
-                                
+
                                 match result {
                                     Ok((token, user_id)) => {
                                         jwt_token = Some(token);
@@ -132,11 +151,15 @@ async fn run_app(
                                         app.screen = AppScreen::RoomList;
                                         app.error_message = None;
                                         drop(app);
-                                        
+
                                         // Connect to WebSocket
                                         let mut client = chat_client.lock().await;
-                                        if let Err(e) = client.connect(server_url, jwt_token.clone().unwrap()).await {
-                                            app_state.lock().await.error_message = Some(format!("Failed to connect: {}", e));
+                                        if let Err(e) = client
+                                            .connect(server_url, jwt_token.clone().unwrap())
+                                            .await
+                                        {
+                                            app_state.lock().await.error_message =
+                                                Some(format!("Failed to connect: {}", e));
                                         } else {
                                             // Load room list
                                             match client.list_rooms().await {
@@ -144,7 +167,9 @@ async fn run_app(
                                                     app_state.lock().await.rooms = rooms;
                                                 }
                                                 Err(e) => {
-                                                    app_state.lock().await.error_message = Some(format!("Failed to load rooms: {}", e));
+                                                    app_state.lock().await.error_message = Some(
+                                                        format!("Failed to load rooms: {}", e),
+                                                    );
                                                 }
                                             }
                                         }
@@ -166,18 +191,25 @@ async fn run_app(
                                     return Ok(());
                                 }
                             }
-                            KeyCode::Backspace => {
-                                match app.auth_field_focus {
-                                    AuthField::Username => { app.auth_username_input.pop(); }
-                                    AuthField::Password => { app.auth_password_input.pop(); }
+                            KeyCode::Backspace => match app.auth_field_focus {
+                                AuthField::Username => {
+                                    app.auth_username_input.pop();
                                 }
-                            }
+                                AuthField::Password => {
+                                    app.auth_password_input.pop();
+                                }
+                            },
                             KeyCode::Char(c) => {
                                 match app.auth_field_focus {
                                     AuthField::Username => app.auth_username_input.push(c),
                                     AuthField::Password => app.auth_password_input.push(c),
                                 }
-                                tracing::debug!("Input char: {}, username: {}, password len: {}", c, app.auth_username_input, app.auth_password_input.len());
+                                tracing::debug!(
+                                    "Input char: {}, username: {}, password len: {}",
+                                    c,
+                                    app.auth_username_input,
+                                    app.auth_password_input.len()
+                                );
                             }
                             _ => {}
                         }
@@ -197,7 +229,8 @@ async fn run_app(
                                         app_state.lock().await.rooms = rooms;
                                     }
                                     Err(e) => {
-                                        app_state.lock().await.error_message = Some(format!("Failed to refresh rooms: {}", e));
+                                        app_state.lock().await.error_message =
+                                            Some(format!("Failed to refresh rooms: {}", e));
                                     }
                                 }
                             }
@@ -206,36 +239,55 @@ async fn run_app(
                                 if index < app.rooms.len() {
                                     let room_name = app.rooms[index].room_name.clone();
                                     drop(app);
-                                    
+
                                     let client = chat_client.lock().await;
                                     match client.join_room(room_name.clone()).await {
                                         Ok((room_id, existing_users)) => {
                                             let mut app = app_state.lock().await;
-                                            app.current_room = Some((room_id.clone(), room_name.clone()));
-                                            app.screen = AppScreen::Chat { room_id: room_id.clone(), room_name };
+                                            app.current_room =
+                                                Some((room_id.clone(), room_name.clone()));
+                                            app.screen = AppScreen::Chat {
+                                                room_id: room_id.clone(),
+                                                room_name,
+                                            };
                                             app.messages.clear();
-                                            
+
                                             // Clear and populate room_users with existing users
-                                            app.room_users.entry(room_id.clone()).or_insert_with(Vec::new).clear();
-                                            
-                                            tracing::debug!("Existing users in room: {:?}", existing_users);
-                                            
-                                            app.room_users.entry(room_id.clone())
+                                            app.room_users
+                                                .entry(room_id.clone())
+                                                .or_insert_with(Vec::new)
+                                                .clear();
+
+                                            tracing::debug!(
+                                                "Existing users in room: {:?}",
+                                                existing_users
+                                            );
+
+                                            app.room_users
+                                                .entry(room_id.clone())
                                                 .or_insert_with(Vec::new)
                                                 .extend(existing_users);
-                                            
+
                                             // Add current user to room_users
                                             if let Some(username) = app.username.clone() {
-                                                tracing::debug!("Adding current user to room: {}", username);
-                                                app.room_users.entry(room_id.clone())
+                                                tracing::debug!(
+                                                    "Adding current user to room: {}",
+                                                    username
+                                                );
+                                                app.room_users
+                                                    .entry(room_id.clone())
                                                     .or_insert_with(Vec::new)
                                                     .push(username);
                                             }
-                                            
-                                            tracing::debug!("Room users after join: {:?}", app.room_users.get(&room_id));
+
+                                            tracing::debug!(
+                                                "Room users after join: {:?}",
+                                                app.room_users.get(&room_id)
+                                            );
                                         }
                                         Err(e) => {
-                                            app_state.lock().await.error_message = Some(format!("Failed to join room: {}", e));
+                                            app_state.lock().await.error_message =
+                                                Some(format!("Failed to join room: {}", e));
                                         }
                                     }
                                 }
@@ -243,7 +295,10 @@ async fn run_app(
                             _ => {}
                         }
                     }
-                    AppScreen::Chat { room_id: chat_room_id, .. } => {
+                    AppScreen::Chat {
+                        room_id: chat_room_id,
+                        ..
+                    } => {
                         match key.code {
                             KeyCode::Esc => {
                                 // Stop typing if leaving room
@@ -252,21 +307,22 @@ async fn run_app(
                                     app.is_typing = false;
                                     app.last_typing_time = None;
                                 }
-                                
+
                                 let room_id = chat_room_id.clone();
                                 drop(app);
-                                
+
                                 let client = chat_client.lock().await;
-                                
+
                                 // Send stop typing if needed
                                 if was_typing {
                                     let _ = client.stop_typing().await;
                                 }
-                                
+
                                 if let Err(e) = client.leave_room(room_id.clone()).await {
-                                    app_state.lock().await.error_message = Some(format!("Failed to leave room: {}", e));
+                                    app_state.lock().await.error_message =
+                                        Some(format!("Failed to leave room: {}", e));
                                 }
-                                
+
                                 let mut app = app_state.lock().await;
                                 app.screen = AppScreen::RoomList;
                                 app.current_room = None;
@@ -278,7 +334,7 @@ async fn run_app(
                                 if !app.input_buffer.is_empty() {
                                     let text = app.input_buffer.clone();
                                     app.input_buffer.clear();
-                                    
+
                                     // Check for slash commands
                                     if text.starts_with('/') {
                                         let command = text.trim_start_matches('/').to_lowercase();
@@ -290,7 +346,8 @@ async fn run_app(
                                                 return Ok(());
                                             }
                                             _ => {
-                                                app.error_message = Some(format!("Unknown command: /{}", command));
+                                                app.error_message =
+                                                    Some(format!("Unknown command: /{}", command));
                                             }
                                         }
                                     } else {
@@ -298,13 +355,14 @@ async fn run_app(
                                         app.is_typing = false;
                                         app.last_typing_time = None;
                                         drop(app);
-                                        
+
                                         let client = chat_client.lock().await;
                                         // Stop typing notification
                                         let _ = client.stop_typing().await;
-                                        
+
                                         if let Err(e) = client.send_message(text).await {
-                                            app_state.lock().await.error_message = Some(format!("Failed to send message: {}", e));
+                                            app_state.lock().await.error_message =
+                                                Some(format!("Failed to send message: {}", e));
                                         }
                                     }
                                 }
@@ -314,20 +372,22 @@ async fn run_app(
                             }
                             KeyCode::Char(c) => {
                                 app.input_buffer.push(c);
-                                
+
                                 // Track typing state
                                 let now = std::time::Instant::now();
-                                let should_send_typing = if let Some(last_time) = app.last_typing_time {
+                                let should_send_typing = if let Some(last_time) =
+                                    app.last_typing_time
+                                {
                                     !app.is_typing || now.duration_since(last_time).as_secs() >= 4
                                 } else {
                                     true
                                 };
-                                
+
                                 if should_send_typing {
                                     app.last_typing_time = Some(now);
                                     app.is_typing = true;
                                     drop(app);
-                                    
+
                                     let client = chat_client.lock().await;
                                     if let Err(e) = client.start_typing().await {
                                         tracing::warn!("Failed to send start typing: {}", e);
@@ -340,85 +400,86 @@ async fn run_app(
                 }
             }
         }
-        
+
         // Handle app events (non-blocking)
         if let Ok(event) = event_rx.try_recv() {
-                let mut app = app_state.lock().await;
-                match event {
-                    AppEvent::MessageReceived(message) => {
-                        app.messages.push(message);
-                    }
-                    AppEvent::UserJoined { username, room_id } => {
-                        // Add user to room_users
-                        app.room_users.entry(room_id.clone())
-                            .or_insert_with(Vec::new)
-                            .push(username.clone());
-                        
-                        let msg = app::Message {
-                            id: 0,
-                            username: "System".to_string(),
-                            text: format!("{} joined the room", username),
-                            timestamp: chrono::Local::now(),
-                            room_id,
-                        };
-                        app.messages.push(msg);
-                    }
-                    AppEvent::UserLeft { username, room_id } => {
-                        // Remove user from room_users
-                        if let Some(users) = app.room_users.get_mut(&room_id) {
-                            users.retain(|u| u != &username);
-                        }
-                        
-                        let msg = app::Message {
-                            id: 0,
-                            username: "System".to_string(),
-                            text: format!("{} left the room", username),
-                            timestamp: chrono::Local::now(),
-                            room_id,
-                        };
-                        app.messages.push(msg);
-                    }
-                    AppEvent::SystemAnnouncement { message } => {
-                        if let Some((room_id, _)) = &app.current_room {
-                            let msg = app::Message {
-                                id: 0,
-                                username: "System".to_string(),
-                                text: message,
-                                timestamp: chrono::Local::now(),
-                                room_id: room_id.clone(),
-                            };
-                            app.messages.push(msg);
-                        }
-                    }
-                    AppEvent::Connected => {
-                        app.connected = true;
-                    }
-                    AppEvent::Disconnected => {
-                        app.connected = false;
-                        app.screen = AppScreen::Login;
-                        app.error_message = Some("Disconnected from server".to_string());
-                    }
-                    AppEvent::Error(e) => {
-                        app.error_message = Some(e);
-                    }
-                    AppEvent::UserStartedTyping { username, room_id } => {
-                        app.typing_users
-                            .entry(room_id)
-                            .or_insert_with(std::collections::HashSet::new)
-                            .insert(username);
-                    }
-                    AppEvent::UserStoppedTyping { username, room_id } => {
-                        if let Some(typing_users) = app.typing_users.get_mut(&room_id) {
-                            typing_users.remove(&username);
-                            if typing_users.is_empty() {
-                                app.typing_users.remove(&room_id);
-                            }
-                        }
-                    }
-                    _ => {}
+            let mut app = app_state.lock().await;
+            match event {
+                AppEvent::MessageReceived(message) => {
+                    app.messages.push(message);
                 }
+                AppEvent::UserJoined { username, room_id } => {
+                    // Add user to room_users
+                    app.room_users
+                        .entry(room_id.clone())
+                        .or_insert_with(Vec::new)
+                        .push(username.clone());
+
+                    let msg = app::Message {
+                        id: 0,
+                        username: "System".to_string(),
+                        text: format!("{} joined the room", username),
+                        timestamp: chrono::Local::now(),
+                        room_id,
+                    };
+                    app.messages.push(msg);
+                }
+                AppEvent::UserLeft { username, room_id } => {
+                    // Remove user from room_users
+                    if let Some(users) = app.room_users.get_mut(&room_id) {
+                        users.retain(|u| u != &username);
+                    }
+
+                    let msg = app::Message {
+                        id: 0,
+                        username: "System".to_string(),
+                        text: format!("{} left the room", username),
+                        timestamp: chrono::Local::now(),
+                        room_id,
+                    };
+                    app.messages.push(msg);
+                }
+                AppEvent::SystemAnnouncement { message } => {
+                    if let Some((room_id, _)) = &app.current_room {
+                        let msg = app::Message {
+                            id: 0,
+                            username: "System".to_string(),
+                            text: message,
+                            timestamp: chrono::Local::now(),
+                            room_id: room_id.clone(),
+                        };
+                        app.messages.push(msg);
+                    }
+                }
+                AppEvent::Connected => {
+                    app.connected = true;
+                }
+                AppEvent::Disconnected => {
+                    app.connected = false;
+                    app.screen = AppScreen::Login;
+                    app.error_message = Some("Disconnected from server".to_string());
+                }
+                AppEvent::Error(e) => {
+                    app.error_message = Some(e);
+                }
+                AppEvent::UserStartedTyping { username, room_id } => {
+                    app.typing_users
+                        .entry(room_id)
+                        .or_insert_with(std::collections::HashSet::new)
+                        .insert(username);
+                }
+                AppEvent::UserStoppedTyping { username, room_id } => {
+                    if let Some(typing_users) = app.typing_users.get_mut(&room_id) {
+                        typing_users.remove(&username);
+                        if typing_users.is_empty() {
+                            app.typing_users.remove(&room_id);
+                        }
+                    }
+                }
+                _ => {}
+            }
         }
-        
+
         // Check for typing timeout
         {
             let mut app = app_state.lock().await;
@@ -428,14 +489,14 @@ async fn run_app(
                         app.is_typing = false;
                         app.last_typing_time = None;
                         drop(app);
-                        
+
                         let client = chat_client.lock().await;
                         let _ = client.stop_typing().await;
                     }
                 }
             }
         }
-        
+
         // Small delay to prevent busy loop
         tokio::time::sleep(Duration::from_millis(10)).await;
     }

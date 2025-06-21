@@ -34,3 +34,9 @@ jsonwebtoken = { workspace = true }
 tracing-subscriber = { workspace = true }
 schemars = { workspace = true }
 dotenvy = "0.15"
+
+# OpenTelemetry dependencies
+opentelemetry = "0.28"
+opentelemetry_sdk = { version = "0.28", features = ["rt-tokio", "metrics"] }
+opentelemetry-prometheus = "0.28"
+prometheus = "0.13"

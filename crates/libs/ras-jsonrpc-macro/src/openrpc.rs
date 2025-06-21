@@ -356,7 +356,7 @@ pub fn generate_openrpc_code(
                     } else {
                         json!({"example": "value"})
                     };
-                    
+
                     let response_example = if method.response_type_name != "()" {
                         if let Some(schema) = schemas.get(&method.response_type_name) {
                             #generate_example_fn_name(schema, &schemas)

@@ -1,8 +1,8 @@
-use axum::{http::StatusCode, Router};
+use axum::{Router, http::StatusCode};
 use ras_auth_core::{AuthError, AuthProvider, AuthenticatedUser};
 use ras_rest_macro::rest_service;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashSet;
 use std::pin::Pin;
 
@@ -33,7 +33,8 @@ impl AuthProvider for MockAuthProvider {
     fn authenticate(
         &self,
         authorization: String,
-    ) -> Pin<Box<dyn std::future::Future<Output = Result<AuthenticatedUser, AuthError>> + Send + '_>> {
+    ) -> Pin<Box<dyn std::future::Future<Output = Result<AuthenticatedUser, AuthError>> + Send + '_>>
+    {
         Box::pin(async move {
             if authorization == "valid-token" {
                 let mut permissions = HashSet::new();
@@ -94,15 +95,18 @@ async fn test_error_sanitization() {
     let app = Router::new().merge(service);
 
     // Make a request that will trigger the error
-    let client = tower::ServiceExt::oneshot(app, axum::http::Request::builder()
-        .method("POST")
-        .uri("/api/error_test")
-        .header("Authorization", "Bearer valid-token")
-        .header("Content-Type", "application/json")
-        .body(axum::body::Body::from(json!({}).to_string()))
-        .unwrap())
-        .await
-        .unwrap();
+    let client = tower::ServiceExt::oneshot(
+        app,
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/error_test")
+            .header("Authorization", "Bearer valid-token")
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(json!({}).to_string()))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
 
     assert_eq!(client.status(), StatusCode::INTERNAL_SERVER_ERROR);
 
@@ -123,22 +127,23 @@ async fn test_unauthenticated_error_sanitization() {
     // Create a service with a handler that would succeed, but no auth token provided
     let service = ErrorTestServiceBuilder::new()
         .auth_provider(MockAuthProvider)
-        .post_error_test_handler(|_user, _req| async move {
-            Ok(TestResponse {})
-        })
+        .post_error_test_handler(|_user, _req| async move { Ok(TestResponse {}) })
         .build();
 
     let app = Router::new().merge(service);
 
     // Make a request without authentication
-    let client = tower::ServiceExt::oneshot(app, axum::http::Request::builder()
-        .method("POST")
-        .uri("/api/error_test")
-        .header("Content-Type", "application/json")
-        .body(axum::body::Body::from(json!({}).to_string()))
-        .unwrap())
-        .await
-        .unwrap();
+    let client = tower::ServiceExt::oneshot(
+        app,
+        axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/error_test")
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(json!({}).to_string()))
+            .unwrap(),
+    )
+    .await
+    .unwrap();
 
     // Should get authentication error, not internal error details
     assert_eq!(client.status(), StatusCode::UNAUTHORIZED);

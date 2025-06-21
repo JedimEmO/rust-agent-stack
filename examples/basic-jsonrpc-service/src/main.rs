@@ -1,8 +1,7 @@
-use axum::{extract::State, routing::get, Router};
+use axum::{Router, extract::State, routing::get};
 use opentelemetry::{
-    global,
+    KeyValue, global,
     metrics::{Counter, Meter},
-    KeyValue,
 };
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use prometheus::{Encoder, TextEncoder};
@@ -123,21 +122,21 @@ async fn main() {
 
     // Initialize Prometheus registry
     let prometheus_registry = prometheus::Registry::new();
-    
+
     // Create Prometheus exporter as a reader
     let prometheus_exporter = opentelemetry_prometheus::exporter()
         .with_registry(prometheus_registry.clone())
         .build()
         .expect("Failed to create Prometheus exporter");
-    
+
     // Build the SdkMeterProvider with the Prometheus exporter as the reader
     let meter_provider = SdkMeterProvider::builder()
         .with_reader(prometheus_exporter)
         .build();
-    
+
     // Set as global meter provider - this is important!
     global::set_meter_provider(meter_provider.clone());
-    
+
     // Keep the meter provider alive by storing it
     let _meter_provider_handle = Arc::new(meter_provider);
     let prometheus_registry = Arc::new(prometheus_registry);
@@ -162,11 +161,11 @@ async fn main() {
                     .and_then(|h| h.to_str().ok())
                     .unwrap_or("unknown")
                     .to_string();
-                
+
                 let method = payload.method.clone();
                 let metrics = metrics.clone();
                 let user_info = user.map(|u| (u.user_id.clone(), u.permissions.clone()));
-                
+
                 async move {
                     // Record metrics
                     // NOTE: The usage_tracker is called BEFORE the actual RPC method executes,
@@ -175,55 +174,68 @@ async fn main() {
                         KeyValue::new("method", method.clone()),
                         KeyValue::new("user_agent", user_agent.clone()),
                     ];
-                    
+
                     let authenticated_attributes = match &user_info {
                         Some((user_id, permissions)) => {
                             let mut attrs = attributes.clone();
                             attrs.push(KeyValue::new("user_id", user_id.clone()));
                             attrs.push(KeyValue::new("authenticated", "true"));
-                            attrs.push(KeyValue::new("has_admin", permissions.contains("admin").to_string()));
-                            
+                            attrs.push(KeyValue::new(
+                                "has_admin",
+                                permissions.contains("admin").to_string(),
+                            ));
+
                             tracing::info!(
-                                "RPC call: method={}, user={}, permissions={:?}, user_agent={}", 
-                                method, user_id, permissions, user_agent
+                                "RPC call: method={}, user={}, permissions={:?}, user_agent={}",
+                                method,
+                                user_id,
+                                permissions,
+                                user_agent
                             );
-                            
+
                             attrs
                         }
                         None => {
                             let mut attrs = attributes.clone();
                             attrs.push(KeyValue::new("authenticated", "false"));
-                            
+
                             tracing::info!(
-                                "RPC call: method={}, user=anonymous, user_agent={}", 
-                                method, user_agent
+                                "RPC call: method={}, user=anonymous, user_agent={}",
+                                method,
+                                user_agent
                             );
-                            
+
                             attrs
                         }
                     };
-                    
+
                     // Increment request started counter
-                    metrics.rpc_requests_started.add(1, &authenticated_attributes);
-                    
+                    metrics
+                        .rpc_requests_started
+                        .add(1, &authenticated_attributes);
+
                     // Mark usage tracker completion (not the actual method completion)
-                    metrics.rpc_requests_completed.add(1, &authenticated_attributes);
+                    metrics
+                        .rpc_requests_completed
+                        .add(1, &authenticated_attributes);
                 }
             }
         })
         .with_method_duration_tracker({
             let metrics = metrics.clone();
-            move |method: &str, user: Option<&ras_jsonrpc_core::AuthenticatedUser>, duration: std::time::Duration| {
+            move |method: &str,
+                  user: Option<&ras_jsonrpc_core::AuthenticatedUser>,
+                  duration: std::time::Duration| {
                 let metrics = metrics.clone();
                 let method = method.to_string();
                 let user_id = user.map(|u| u.user_id.clone());
-                let is_admin = user.map(|u| u.permissions.contains("admin")).unwrap_or(false);
-                
+                let is_admin = user
+                    .map(|u| u.permissions.contains("admin"))
+                    .unwrap_or(false);
+
                 async move {
-                    let mut attributes = vec![
-                        KeyValue::new("method", method.clone()),
-                    ];
-                    
+                    let mut attributes = vec![KeyValue::new("method", method.clone())];
+
                     if let Some(ref user_id) = user_id {
                         attributes.push(KeyValue::new("user_id", user_id.clone()));
                         attributes.push(KeyValue::new("authenticated", "true"));
@@ -231,12 +243,14 @@ async fn main() {
                     } else {
                         attributes.push(KeyValue::new("authenticated", "false"));
                     }
-                    
+
                     // Record the duration in seconds
-                    metrics.rpc_method_duration.record(duration.as_secs_f64(), &attributes);
-                    
+                    metrics
+                        .rpc_method_duration
+                        .record(duration.as_secs_f64(), &attributes);
+
                     tracing::info!(
-                        "RPC method completed: method={}, duration={:?}, user={}", 
+                        "RPC method completed: method={}, duration={:?}, user={}",
                         method,
                         duration,
                         user_id.as_deref().unwrap_or("anonymous")
@@ -255,21 +269,27 @@ async fn main() {
                         SignInRequest::WithCredentials { username, password } => {
                             if username == "admin" && password == "secret" {
                                 // Track user sign-in
-                                metrics.active_users.add(1.0, &[
-                                    KeyValue::new("user_type", "admin"),
-                                    KeyValue::new("action", "sign_in"),
-                                ]);
-                                
+                                metrics.active_users.add(
+                                    1.0,
+                                    &[
+                                        KeyValue::new("user_type", "admin"),
+                                        KeyValue::new("action", "sign_in"),
+                                    ],
+                                );
+
                                 Ok(SignInResponse::Success {
                                     jwt: "admin_token".to_string(),
                                 })
                             } else if username == "user" && password == "password" {
                                 // Track user sign-in
-                                metrics.active_users.add(1.0, &[
-                                    KeyValue::new("user_type", "user"),
-                                    KeyValue::new("action", "sign_in"),
-                                ]);
-                                
+                                metrics.active_users.add(
+                                    1.0,
+                                    &[
+                                        KeyValue::new("user_type", "user"),
+                                        KeyValue::new("action", "sign_in"),
+                                    ],
+                                );
+
                                 Ok(SignInResponse::Success {
                                     jwt: "valid_token".to_string(),
                                 })
@@ -289,14 +309,21 @@ async fn main() {
                 let metrics = metrics.clone();
                 async move {
                     tracing::info!("User {} signed out", user.user_id);
-                    
+
                     // Track user sign-out
-                    let user_type = if user.permissions.contains("admin") { "admin" } else { "user" };
-                    metrics.active_users.add(-1.0, &[
-                        KeyValue::new("user_type", user_type),
-                        KeyValue::new("action", "sign_out"),
-                    ]);
-                    
+                    let user_type = if user.permissions.contains("admin") {
+                        "admin"
+                    } else {
+                        "user"
+                    };
+                    metrics.active_users.add(
+                        -1.0,
+                        &[
+                            KeyValue::new("user_type", user_type),
+                            KeyValue::new("action", "sign_out"),
+                        ],
+                    );
+
                     Ok(())
                 }
             }
