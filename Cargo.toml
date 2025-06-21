@@ -16,7 +16,7 @@ members = [
     "crates/identity/ras-identity-oauth2",
     "crates/identity/ras-identity-session",
     "crates/tools/openrpc-to-bruno",
-    "examples/basic-service",
+    "examples/basic-jsonrpc-service",
     "examples/google-oauth-example/server",
     "examples/rest-service-example",
     "examples/google-oauth-example/api",

@@ -48,6 +48,10 @@ pub fn generate_openrpc_code(
         "_update_refs_recursive_{}",
         service_name.to_string().to_lowercase()
     );
+    let generate_example_fn_name = quote::format_ident!(
+        "_generate_example_from_schema_{}",
+        service_name.to_string().to_lowercase()
+    );
 
     // Collect unique types for schema generation
     let mut unique_types = std::collections::HashMap::new();
@@ -224,7 +228,7 @@ pub fn generate_openrpc_code(
         }
 
         /// Generate example value from schema
-        fn _generate_example_from_schema(schema: &serde_json::Value, schemas: &std::collections::HashMap<String, serde_json::Value>) -> serde_json::Value {
+        fn #generate_example_fn_name(schema: &serde_json::Value, schemas: &std::collections::HashMap<String, serde_json::Value>) -> serde_json::Value {
             // Check if schema has examples field
             if let Some(examples) = schema.get("examples") {
                 if let Some(arr) = examples.as_array() {
@@ -243,7 +247,7 @@ pub fn generate_openrpc_code(
             if let Some(ref_str) = schema.get("$ref").and_then(|v| v.as_str()) {
                 if let Some(ref_name) = ref_str.strip_prefix("#/components/schemas/") {
                     if let Some(ref_schema) = schemas.get(ref_name) {
-                        return _generate_example_from_schema(ref_schema, schemas);
+                        return #generate_example_fn_name(ref_schema, schemas);
                     }
                 }
             }
@@ -251,12 +255,12 @@ pub fn generate_openrpc_code(
             // Handle oneOf/anyOf - pick the first variant
             if let Some(one_of) = schema.get("oneOf").and_then(|v| v.as_array()) {
                 if let Some(first_variant) = one_of.first() {
-                    return _generate_example_from_schema(first_variant, schemas);
+                    return #generate_example_fn_name(first_variant, schemas);
                 }
             }
             if let Some(any_of) = schema.get("anyOf").and_then(|v| v.as_array()) {
                 if let Some(first_variant) = any_of.first() {
-                    return _generate_example_from_schema(first_variant, schemas);
+                    return #generate_example_fn_name(first_variant, schemas);
                 }
             }
 
@@ -267,7 +271,7 @@ pub fn generate_openrpc_code(
                 Some("boolean") => serde_json::json!(true),
                 Some("array") => {
                     if let Some(items) = schema.get("items") {
-                        serde_json::json!([_generate_example_from_schema(items, schemas)])
+                        serde_json::json!([#generate_example_fn_name(items, schemas)])
                     } else {
                         serde_json::json!(["example_item"])
                     }
@@ -276,7 +280,7 @@ pub fn generate_openrpc_code(
                     let mut obj = serde_json::Map::new();
                     if let Some(props) = schema.get("properties").and_then(|v| v.as_object()) {
                         for (key, prop_schema) in props {
-                            obj.insert(key.clone(), _generate_example_from_schema(prop_schema, schemas));
+                            obj.insert(key.clone(), #generate_example_fn_name(prop_schema, schemas));
                         }
                         serde_json::json!(obj)
                     } else {
@@ -314,7 +318,7 @@ pub fn generate_openrpc_code(
                 if method.request_type_name != "()" {
                     // Get the schema for the request type to generate an example
                     let example = if let Some(schema) = schemas.get(&method.request_type_name) {
-                        _generate_example_from_schema(schema, &schemas)
+                        #generate_example_fn_name(schema, &schemas)
                     } else {
                         json!({"example": "value"})
                     };
@@ -348,14 +352,14 @@ pub fn generate_openrpc_code(
                 if method.request_type_name != "()" {
                     // Get the schema for the request type to generate an example
                     let request_example = if let Some(schema) = schemas.get(&method.request_type_name) {
-                        _generate_example_from_schema(schema, &schemas)
+                        #generate_example_fn_name(schema, &schemas)
                     } else {
                         json!({"example": "value"})
                     };
                     
                     let response_example = if method.response_type_name != "()" {
                         if let Some(schema) = schemas.get(&method.response_type_name) {
-                            _generate_example_from_schema(schema, &schemas)
+                            #generate_example_fn_name(schema, &schemas)
                         } else {
                             json!({"example": "response"})
                         }

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use schemars::JsonSchema;
 
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Debug)]
 pub enum SignInRequest {
     WithCredentials { username: String, password: String },
 }
@@ -77,6 +77,7 @@ async fn main() {
     let rpc_router = MyServiceBuilder::new("/rpc")
         .auth_provider(MyAuthProvider)
         .sign_in_handler(|request| async move {
+            println!("{request:?}");
             match request {
                 SignInRequest::WithCredentials { username, password } => {
                     if username == "admin" && password == "secret" {

@@ -1,5 +1,5 @@
 [package]
-name = "basic-service"
+name = "basic-jsonrpc-service"
 version = "0.1.1"
 edition = "2024"
 publish = false
