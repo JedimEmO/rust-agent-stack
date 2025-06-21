@@ -849,12 +849,42 @@
             
             // Parameters section
             if (method.params && method.params.length > 0) {
-                const paramsSchema = method.params[0].schema;
-                const example = generateExampleFromSchema(paramsSchema);
+                const param = method.params[0];
+                const paramsSchema = param.schema;
+                const resolvedSchema = resolveSchemaRef(paramsSchema);
+                // Use the parameter's example if provided, otherwise generate from schema
+                const example = param.example || generateExampleFromSchema(paramsSchema);
+                
+                // Display parameter information
+                let paramInfo = '';
+                if (resolvedSchema && resolvedSchema.properties) {
+                    paramInfo = `
+                        <div style="margin-bottom: 1rem; padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                            <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                                <strong>Parameters:</strong>
+                            </div>
+                            ${Object.entries(resolvedSchema.properties).map(([key, prop]) => {
+                                const required = resolvedSchema.required && resolvedSchema.required.includes(key);
+                                const propType = prop.type || 'any';
+                                const description = prop.description || '';
+                                return `
+                                    <div style="margin-bottom: 0.5rem; padding-left: 1rem;">
+                                        <code style="font-family: 'JetBrains Mono', monospace; color: var(--primary-color);">${escapeHtml(key)}</code>
+                                        <span style="color: var(--text-muted); font-size: 0.75rem;">
+                                            (${escapeHtml(propType)}${required ? ', required' : ''})
+                                        </span>
+                                        ${description ? `<div style="color: var(--text-secondary); font-size: 0.75rem; margin-left: 1rem;">${escapeHtml(description)}</div>` : ''}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `;
+                }
                 
                 html += `
                     <div class="form-section">
                         <h3>Parameters</h3>
+                        ${paramInfo}
                         <textarea class="code-editor" id="request-params" placeholder="Enter JSON parameters...">${
                             JSON.stringify(example, null, 2)
                         }</textarea>
@@ -936,6 +966,15 @@
             
             if (schema.example) return schema.example;
             
+            // Handle oneOf/anyOf schemas - pick first variant
+            if (schema.oneOf && schema.oneOf.length > 0) {
+                return generateExampleFromSchema(schema.oneOf[0]);
+            }
+            
+            if (schema.anyOf && schema.anyOf.length > 0) {
+                return generateExampleFromSchema(schema.anyOf[0]);
+            }
+            
             if (schema.type === 'object' && schema.properties) {
                 const example = {};
                 Object.entries(schema.properties).forEach(([key, prop]) => {
@@ -1005,8 +1044,14 @@
                     options.headers['Authorization'] = `Bearer ${jwtToken}`;
                 }
                 
-                // Make request
-                const response = await fetch('{BASE_PATH}', options);
+                // Determine the RPC endpoint - use the same base path as the explorer
+                // If explorer is at /api/explorer, then RPC is at /api/rpc
+                const currentPath = window.location.pathname;
+                const basePath = currentPath.substring(0, currentPath.lastIndexOf('/explorer'));
+                const rpcEndpoint = (basePath || '') + '/rpc';
+                
+                // Make request to the JSON-RPC endpoint
+                const response = await fetch(rpcEndpoint, options);
                 const responseData = await response.json();
                 
                 // Show response

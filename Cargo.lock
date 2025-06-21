@@ -2288,12 +2288,14 @@ dependencies = [
 name = "ras-jsonrpc-macro"
 version = "0.1.1"
 dependencies = [
+ "async-trait",
  "axum",
  "bon",
  "futures",
  "proc-macro2",
  "quote",
  "rand 0.8.5",
+ "ras-auth-core",
  "ras-identity-session",
  "ras-jsonrpc-core",
  "ras-jsonrpc-types",

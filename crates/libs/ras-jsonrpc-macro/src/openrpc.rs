@@ -172,7 +172,7 @@ pub fn generate_openrpc_code(
             response_type_name: String,
         }
 
-        /// Helper function to flatten $defs from a schema and extract them into a separate collection
+        /// Helper function to extract examples from a JSON schema
         fn #flatten_fn_name(
             mut schema: serde_json::Value,
             extracted_defs: &mut std::collections::HashMap<String, serde_json::Value>
@@ -223,6 +223,71 @@ pub fn generate_openrpc_code(
             }
         }
 
+        /// Generate example value from schema
+        fn _generate_example_from_schema(schema: &serde_json::Value, schemas: &std::collections::HashMap<String, serde_json::Value>) -> serde_json::Value {
+            // Check if schema has examples field
+            if let Some(examples) = schema.get("examples") {
+                if let Some(arr) = examples.as_array() {
+                    if let Some(first) = arr.first() {
+                        return first.clone();
+                    }
+                }
+            }
+
+            // Check if schema has example field (singular)
+            if let Some(example) = schema.get("example") {
+                return example.clone();
+            }
+
+            // Check for $ref
+            if let Some(ref_str) = schema.get("$ref").and_then(|v| v.as_str()) {
+                if let Some(ref_name) = ref_str.strip_prefix("#/components/schemas/") {
+                    if let Some(ref_schema) = schemas.get(ref_name) {
+                        return _generate_example_from_schema(ref_schema, schemas);
+                    }
+                }
+            }
+
+            // Handle oneOf/anyOf - pick the first variant
+            if let Some(one_of) = schema.get("oneOf").and_then(|v| v.as_array()) {
+                if let Some(first_variant) = one_of.first() {
+                    return _generate_example_from_schema(first_variant, schemas);
+                }
+            }
+            if let Some(any_of) = schema.get("anyOf").and_then(|v| v.as_array()) {
+                if let Some(first_variant) = any_of.first() {
+                    return _generate_example_from_schema(first_variant, schemas);
+                }
+            }
+
+            // Generate based on type
+            match schema.get("type").and_then(|v| v.as_str()) {
+                Some("string") => serde_json::json!("example_string"),
+                Some("number") | Some("integer") => serde_json::json!(42),
+                Some("boolean") => serde_json::json!(true),
+                Some("array") => {
+                    if let Some(items) = schema.get("items") {
+                        serde_json::json!([_generate_example_from_schema(items, schemas)])
+                    } else {
+                        serde_json::json!(["example_item"])
+                    }
+                }
+                Some("object") => {
+                    let mut obj = serde_json::Map::new();
+                    if let Some(props) = schema.get("properties").and_then(|v| v.as_object()) {
+                        for (key, prop_schema) in props {
+                            obj.insert(key.clone(), _generate_example_from_schema(prop_schema, schemas));
+                        }
+                        serde_json::json!(obj)
+                    } else {
+                        serde_json::json!({"example_key": "example_value"})
+                    }
+                }
+                Some("null") => serde_json::json!(null),
+                _ => serde_json::json!({"example": "value"})
+            }
+        }
+
         // Generate schema functions for each type
         #(#schema_fns)*
 
@@ -247,13 +312,21 @@ pub fn generate_openrpc_code(
 
                 // Add request parameter only if not unit type
                 if method.request_type_name != "()" {
+                    // Get the schema for the request type to generate an example
+                    let example = if let Some(schema) = schemas.get(&method.request_type_name) {
+                        _generate_example_from_schema(schema, &schemas)
+                    } else {
+                        json!({"example": "value"})
+                    };
+
                     params.push(json!({
                         "name": "params",
                         "description": format!("Request parameters of type {}", method.request_type_name),
                         "required": true,
                         "schema": {
                             "$ref": format!("#/components/schemas/{}", method.request_type_name)
-                        }
+                        },
+                        "example": example
                     }));
                 }
 
@@ -270,6 +343,34 @@ pub fn generate_openrpc_code(
                     }
                 }
 
+                // Generate example pairing for the method
+                let mut examples = vec![];
+                if method.request_type_name != "()" {
+                    // Get the schema for the request type to generate an example
+                    let request_example = if let Some(schema) = schemas.get(&method.request_type_name) {
+                        _generate_example_from_schema(schema, &schemas)
+                    } else {
+                        json!({"example": "value"})
+                    };
+                    
+                    let response_example = if method.response_type_name != "()" {
+                        if let Some(schema) = schemas.get(&method.response_type_name) {
+                            _generate_example_from_schema(schema, &schemas)
+                        } else {
+                            json!({"example": "response"})
+                        }
+                    } else {
+                        json!(null)
+                    };
+
+                    examples.push(json!({
+                        "name": format!("{}_example", method.name),
+                        "description": format!("Example call to {}", method.name),
+                        "params": [{"name": "params", "value": request_example}],
+                        "result": {"name": "result", "value": response_example}
+                    }));
+                }
+
                 let mut method_obj = json!({
                     "name": method.name,
                     "description": format!("Calls the {} method", method.name),
@@ -282,6 +383,13 @@ pub fn generate_openrpc_code(
                         }
                     }
                 });
+
+                // Add examples if available
+                if !examples.is_empty() {
+                    if let Some(obj) = method_obj.as_object_mut() {
+                        obj.insert("examples".to_string(), json!(examples));
+                    }
+                }
 
                 // Add extensions to the method object
                 if let Some(obj) = method_obj.as_object_mut() {

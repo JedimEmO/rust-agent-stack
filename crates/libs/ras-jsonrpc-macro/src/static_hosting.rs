@@ -23,7 +23,7 @@ impl Default for StaticHostingConfig {
 pub fn generate_static_hosting_code(
     config: &StaticHostingConfig,
     service_name: &syn::Ident,
-    base_path: &str,
+    _base_path: &str,
 ) -> TokenStream {
     if !config.serve_explorer {
         return TokenStream::new();
@@ -58,8 +58,7 @@ pub fn generate_static_hosting_code(
                 // Replace placeholders
                 let html = TEMPLATE
                     .replace("{SERVICE_NAME}", #service_name_str)
-                    .replace("{OPENRPC_PATH}", &#openrpc_path_js)
-                    .replace("{BASE_PATH}", #base_path);
+                    .replace("{OPENRPC_PATH}", &#openrpc_path_js);
                 
                 Html(html)
             }

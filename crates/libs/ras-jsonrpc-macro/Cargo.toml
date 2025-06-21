@@ -44,3 +44,5 @@ futures = { workspace = true }
 # Server dependencies for tests
 axum = { workspace = true }
 ras-jsonrpc-core = { path = "../ras-jsonrpc-core" }
+ras-auth-core = { path = "../ras-auth-core" }
+async-trait = { workspace = true }
