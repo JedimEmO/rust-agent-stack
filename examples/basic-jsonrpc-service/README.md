@@ -1,59 +1,108 @@
-# Basic Service Example
+# Basic JSON-RPC Service with OpenTelemetry Metrics
 
-A complete working example of a JSON-RPC service built with the `rust-jsonrpc-macro` crate.
+This example demonstrates a basic JSON-RPC service with OpenTelemetry metrics exported via OTLP (OpenTelemetry Protocol) and exposed through a Prometheus metrics endpoint.
 
-## Overview
+## Features
 
-This example demonstrates how to build a fully functional JSON-RPC service with:
-
-- ✅ **Authentication** - JWT-style token validation
-- ✅ **Authorization** - Permission-based access control
-- ✅ **Multiple Methods** - Unauthorized and permission-based endpoints
-- ✅ **Axum Integration** - Complete web server setup
-- ✅ **Error Handling** - Proper JSON-RPC error responses
+- ✅ **JSON-RPC service** with authentication and permissions
+- ✅ **OpenTelemetry metrics** collection with OTLP export
+- ✅ **Prometheus metrics endpoint** at `/metrics`
+- ✅ **Automatic metric collection** for RPC requests
+- ✅ **Authentication tracking** with user-specific metrics
 - ✅ **Interactive Explorer** - Built-in JSON-RPC Explorer UI
 - ✅ **OpenRPC Document** - Auto-generated API specification
 
-## Service Definition
+## Metrics Collected
 
-The service implements three methods:
+1. **`rpc_requests_started_total`** (Counter) - Total number of RPC requests started
+   - Labels: `method`, `user_agent`, `authenticated`, `user_id`, `has_admin`
 
-1. **`sign_in`** (UNAUTHORIZED) - Authenticate users and return JWT tokens
-2. **`sign_out`** (requires valid token) - Sign out authenticated users  
-3. **`delete_everything`** (requires "admin" permission) - Admin-only destructive operation
+2. **`rpc_requests_completed_total`** (Counter) - Total number of RPC requests where usage_tracker completed
+   - Labels: Same as above
+   - **Note**: This tracks usage_tracker completion, not actual method execution completion
+
+3. **`active_users`** (Counter) - Tracks user sign-ins/sign-outs (gauge-like behavior)
+   - Labels: `user_type`, `action`
+
+### Important Limitation
+
+**Request duration tracking is not available** in this example. The `usage_tracker` callback runs BEFORE the actual RPC method executes, so we cannot measure method execution time without modifying the `jsonrpc_service` macro. For production use cases requiring duration metrics, consider implementing a custom middleware or enhancing the macro.
 
 ## Running the Example
 
 ```bash
-# From the workspace root
-cargo run -p basic-service
+cargo run -p basic-jsonrpc-service
 ```
 
-The server will start on `http://0.0.0.0:3000` with the following endpoints:
+The service will start on `http://localhost:3000` with the following endpoints:
 
-- **Main page**: http://localhost:3000/ - Simple "Hello, World!" response
-- **JSON-RPC endpoint**: http://localhost:3000/api/rpc - The JSON-RPC service endpoint  
-- **JSON-RPC Explorer**: http://localhost:3000/api/explorer - Interactive API explorer UI
-- **OpenRPC Document**: http://localhost:3000/api/explorer/openrpc.json - Machine-readable API specification
+- **JSON-RPC endpoint**: http://localhost:3000/api/rpc
+- **JSON-RPC Explorer**: http://localhost:3000/api/explorer
+- **Prometheus metrics**: http://localhost:3000/metrics
+- **OpenRPC Document**: http://localhost:3000/api/explorer/openrpc.json
 
-## Using the Interactive Explorer
+## Configuration
 
-The JSON-RPC Explorer provides a web-based UI for testing your API:
+### Environment Variables
 
-1. Navigate to http://localhost:3000/api/explorer
-2. You'll see all available methods in the sidebar with their authentication requirements
-3. Start by calling the `sign_in` method to get a JWT token
-4. Use the "Authentication" section to save your JWT token
-5. Test authenticated methods like `sign_out` or admin-only methods like `delete_everything`
+- `OTLP_ENDPOINT`: The endpoint for the OTLP exporter (default: `http://localhost:4317`)
 
-The explorer features:
-- Real-time request/response display
-- Authentication token management
-- Method documentation from OpenRPC
-- Dark mode support
-- Auto-generated request examples
+## Integration with OTLP
 
-## Testing the Service
+While this example uses OpenTelemetry with a Prometheus exporter, you can integrate with OTLP (OpenTelemetry Protocol) backends by using an OpenTelemetry Collector:
+
+### 1. Create a Collector Configuration
+
+Create `collector-config.yaml`:
+
+```yaml
+receivers:
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'jsonrpc-service'
+          scrape_interval: 10s
+          static_configs:
+            - targets: ['host.docker.internal:3000']  # or 'localhost:3000' if not using Docker
+
+processors:
+  batch:
+
+exporters:
+  otlp:
+    endpoint: "your-otlp-endpoint:4317"  # Replace with your OTLP backend
+    tls:
+      insecure: true  # Set to false in production with proper certs
+  logging:
+    verbosity: detailed
+
+service:
+  pipelines:
+    metrics:
+      receivers: [prometheus]
+      processors: [batch]
+      exporters: [otlp, logging]
+```
+
+### 2. Run the Collector
+
+```bash
+docker run -p 4317:4317 \
+  -v $(pwd)/collector-config.yaml:/etc/otel-collector-config.yaml \
+  otel/opentelemetry-collector:latest \
+  --config=/etc/otel-collector-config.yaml
+```
+
+### 3. Start the Service
+
+The collector will scrape metrics from `http://localhost:3000/metrics` and forward them to your OTLP backend.
+
+## Using the Service
+
+### Example Credentials
+
+- Username: `user`, Password: `password` (basic user)
+- Username: `admin`, Password: `secret` (admin user)
 
 ### 1. Sign In (Get a Token)
 
@@ -87,62 +136,8 @@ curl -X POST http://localhost:3000/api/rpc \
 }
 ```
 
-**Regular User:**
-```bash
-curl -X POST http://localhost:3000/api/rpc \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "sign_in",
-    "params": {
-      "WithCredentials": {
-        "username": "user",
-        "password": "password"
-      }
-    },
-    "id": 1
-  }'
-```
+### 2. Make Authenticated Requests
 
-**Response:**
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "Success": {
-      "jwt": "valid_token"
-    }
-  },
-  "id": 1
-}
-```
-
-### 2. Sign Out (Requires Authentication)
-
-```bash
-curl -X POST http://localhost:3000/api/rpc \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer valid_token" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "sign_out",
-    "params": {},
-    "id": 2
-  }'
-```
-
-**Response:**
-```json
-{
-  "jsonrpc": "2.0",
-  "result": null,
-  "id": 2
-}
-```
-
-### 3. Delete Everything (Requires Admin Permission)
-
-**With Admin Token:**
 ```bash
 curl -X POST http://localhost:3000/api/rpc \
   -H "Content-Type: application/json" \
@@ -151,229 +146,100 @@ curl -X POST http://localhost:3000/api/rpc \
     "jsonrpc": "2.0",
     "method": "delete_everything",
     "params": {},
-    "id": 3
-  }'
-```
-
-**Response:**
-```json
-{
-  "jsonrpc": "2.0",
-  "result": null,
-  "id": 3
-}
-```
-
-**With Regular User Token (Insufficient Permissions):**
-```bash
-curl -X POST http://localhost:3000/api/rpc \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer valid_token" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "delete_everything",
-    "params": {},
-    "id": 3
-  }'
-```
-
-**Response:**
-```json
-{
-  "jsonrpc": "2.0",
-  "error": {
-    "code": -32002,
-    "message": "Insufficient permissions",
-    "data": {
-      "required": ["admin"],
-      "has": ["user"]
-    }
-  },
-  "id": 3
-}
-```
-
-## Error Cases
-
-### Invalid Credentials
-```bash
-curl -X POST http://localhost:3000/api/rpc \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "sign_in",
-    "params": {
-      "WithCredentials": {
-        "username": "wrong",
-        "password": "wrong"
-      }
-    },
-    "id": 1
-  }'
-```
-
-**Response:**
-```json
-{
-  "jsonrpc": "2.0",
-  "result": {
-    "Failure": {
-      "msg": "Invalid credentials"
-    }
-  },
-  "id": 1
-}
-```
-
-### Missing Authentication
-```bash
-curl -X POST http://localhost:3000/api/rpc \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "sign_out",
-    "params": {},
     "id": 2
   }'
 ```
 
-**Response:**
-```json
-{
-  "jsonrpc": "2.0",
-  "error": {
-    "code": -32001,
-    "message": "Authentication required"
-  },
-  "id": 2
-}
+### 3. Check Metrics
+
+Visit `http://localhost:3000/metrics` to see collected metrics:
+
+```
+# HELP rpc_requests_started_total Total number of RPC requests started
+# TYPE rpc_requests_started_total counter
+rpc_requests_started_total{method="sign_in",user_agent="curl/7.81.0",authenticated="false"} 2
+rpc_requests_started_total{method="delete_everything",user_agent="curl/7.81.0",authenticated="true",user_id="admin123",has_admin="true"} 1
+
+# HELP rpc_requests_completed_total Total number of RPC requests completed (Note: This tracks usage_tracker completion, not actual method execution)
+# TYPE rpc_requests_completed_total counter
+rpc_requests_completed_total{method="sign_in",user_agent="curl/7.81.0",authenticated="false"} 2
+rpc_requests_completed_total{method="delete_everything",user_agent="curl/7.81.0",authenticated="true",user_id="admin123",has_admin="true"} 1
+
+# HELP active_users Number of active users
+# TYPE active_users counter
+active_users{user_type="admin",action="sign_in"} 1
+active_users{user_type="user",action="sign_in"} 1
+active_users{user_type="user",action="sign_out"} -1
 ```
 
-### Invalid Token
-```bash
-curl -X POST http://localhost:3000/api/rpc \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer invalid_token" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "sign_out",
-    "params": {},
-    "id": 2
-  }'
+## Architecture
+
+The example demonstrates:
+
+1. **Dual Metric Export**: Both push-based (OTLP) and pull-based (Prometheus) metrics
+2. **Graceful Fallback**: Continues with Prometheus-only if OTLP collector is unavailable
+3. **Request Interception**: Uses `with_usage_tracker` to capture all RPC requests
+4. **Rich Labels**: Captures method, authentication status, user info, and user agent
+
+## Integration with Monitoring Systems
+
+### Prometheus
+
+Configure Prometheus to scrape the `/metrics` endpoint:
+
+```yaml
+scrape_configs:
+  - job_name: 'jsonrpc-service'
+    static_configs:
+      - targets: ['localhost:3000']
 ```
 
-**Response:**
-```json
-{
-  "jsonrpc": "2.0",
-  "error": {
-    "code": -32001,
-    "message": "Authentication required"
-  },
-  "id": 2
-}
-```
+### Grafana
 
-### Method Not Found
-```bash
-curl -X POST http://localhost:3000/api/rpc \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "unknown_method",
-    "params": {},
-    "id": 4
-  }'
-```
+Import metrics from either Prometheus or the OTLP collector to visualize:
+- Request rates by method and user
+- Active user counts
+- Authentication success/failure ratios
 
-**Response:**
-```json
-{
-  "jsonrpc": "2.0",
-  "error": {
-    "code": -32601,
-    "message": "Method not found: unknown_method"
-  },
-  "id": 4
-}
-```
+### Jaeger/Tempo
 
-## Code Structure
-
-### Authentication Provider
-
-The example implements a simple `MyAuthProvider` that:
-
-- Validates tokens (`"valid_token"` for users, `"admin_token"` for admins)
-- Assigns permissions based on token type
-- Returns `AuthenticatedUser` with user ID and permissions
-
-### Service Implementation
-
-The service is defined using the `jsonrpc_service!` macro and configured with:
-
-- **Base URL**: `/rpc` (nested under `/api` in the router)
-- **Auth Provider**: `MyAuthProvider` instance
-- **Method Handlers**: Async closures for each defined method
-
-### Integration
-
-The service integrates with axum as a standard router that can be:
-
-- Nested under other routes
-- Combined with additional middleware
-- Composed with other axum services
-
-## Key Features Demonstrated
-
-1. **Type Safety**: All request/response types are validated at compile time
-2. **Authentication Flow**: Token extraction, validation, and error handling
-3. **Permission Checking**: Fine-grained authorization with clear error messages
-4. **JSON-RPC Compliance**: Proper error codes and response formats
-5. **Async Support**: All handlers use async/await for non-blocking operations
-6. **Logging**: Structured logging with the `tracing` crate
+While this example focuses on metrics, the OTLP setup can be extended to support distributed tracing by adding:
+- `opentelemetry-tracing` dependencies
+- Trace context propagation
+- Span creation in handlers
 
 ## Extending the Example
 
-To add new methods:
+To add custom metrics:
 
-1. **Define Request/Response Types**:
-   ```rust
-   #[derive(Serialize, Deserialize)]
-   struct CreateUserRequest {
-       username: String,
-       email: String,
-   }
-   ```
+1. **Add to the Metrics struct**:
+```rust
+struct Metrics {
+    // ... existing metrics
+    custom_operations: Counter<u64>,
+}
+```
 
-2. **Add to Service Definition**:
-   ```rust
-   jsonrpc_service!({
-       service_name: MyService,
-       openrpc: true,
-       explorer: true,
-       methods: [
-           // ... existing methods
-           WITH_PERMISSIONS(["admin"]) create_user(CreateUserRequest) -> UserId,
-       ]
-   });
-   ```
+2. **Initialize in `Metrics::new()`**:
+```rust
+custom_operations: meter
+    .u64_counter("custom_operations_total")
+    .with_description("Custom business operations")
+    .build(),
+```
 
-3. **Implement Handler**:
-   ```rust
-   .create_user_handler(|user, request| async move {
-       // Implementation here
-       Ok(UserId { id: "new_user_123".to_string() })
-   })
-   ```
+3. **Record in handlers**:
+```rust
+metrics.custom_operations.add(1, &[
+    KeyValue::new("operation", "important_action"),
+]);
+```
 
-## Dependencies
+## Production Considerations
 
-See [`Cargo.toml`](Cargo.toml) for the complete dependency list. Key dependencies include:
-
-- `rust-jsonrpc-macro` - The procedural macro
-- `rust-jsonrpc-core` - Authentication traits
-- `axum` - Web framework
-- `tokio` - Async runtime
-- `serde` - Serialization
-- `tracing` - Logging
+- **OTLP Authentication**: Configure TLS and authentication for secure metric export
+- **Cardinality**: Be careful with label values to avoid metric explosion
+- **Sampling**: Consider implementing adaptive sampling for high-traffic services
+- **Resource Attributes**: Add more service metadata (version, environment, etc.)
+- **Error Handling**: Implement proper error tracking metrics
+- **Performance**: The metrics collection adds minimal overhead to request processing
