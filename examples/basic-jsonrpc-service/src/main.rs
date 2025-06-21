@@ -75,6 +75,34 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     let rpc_router = MyServiceBuilder::new("/rpc")
+        .with_usage_tracker(|headers, user, payload| {
+            let user_agent = headers
+                .get("user-agent")
+                .and_then(|h| h.to_str().ok())
+                .unwrap_or("unknown")
+                .to_string();
+            
+            let method = payload.method.clone();
+            
+            let user_info = user.map(|u| (u.user_id.clone(), u.permissions.clone()));
+            
+            async move {
+                match user_info {
+                    Some((user_id, permissions)) => {
+                        tracing::info!(
+                            "RPC call: method={}, user={}, permissions={:?}, user_agent={}", 
+                            method, user_id, permissions, user_agent
+                        );
+                    }
+                    None => {
+                        tracing::info!(
+                            "RPC call: method={}, user=anonymous, user_agent={}", 
+                            method, user_agent
+                        );
+                    }
+                }
+            }
+        })
         .auth_provider(MyAuthProvider)
         .sign_in_handler(|request| async move {
             println!("{request:?}");

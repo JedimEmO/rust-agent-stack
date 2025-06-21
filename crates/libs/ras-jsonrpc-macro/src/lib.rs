@@ -455,30 +455,10 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                 quote! {
                     #method_str => {
                         if let Some(handler) = &self.#field_name {
-                            // Extract and validate auth token
-                            let token = match headers
-                                .get("Authorization")
-                                .and_then(|h| h.to_str().ok())
-                                .and_then(|s| s.strip_prefix("Bearer ")) {
-                                Some(t) => t,
+                            // Check if user is authenticated
+                            let user = match &authenticated_user {
+                                Some(u) => u,
                                 None => return ras_jsonrpc_types::JsonRpcResponse::error(
-                                    ras_jsonrpc_types::JsonRpcError::authentication_required(),
-                                    request.id.clone()
-                                ),
-                            };
-
-                            // Authenticate user
-                            let auth_provider = match self.auth_provider.as_ref() {
-                                Some(p) => p,
-                                None => return ras_jsonrpc_types::JsonRpcResponse::error(
-                                    ras_jsonrpc_types::JsonRpcError::internal_error("".to_string()),
-                                    request.id.clone()
-                                ),
-                            };
-                            
-                            let user = match auth_provider.authenticate(token.to_string()).await {
-                                Ok(u) => u,
-                                Err(_) => return ras_jsonrpc_types::JsonRpcResponse::error(
                                     ras_jsonrpc_types::JsonRpcError::authentication_required(),
                                     request.id.clone()
                                 ),
@@ -503,7 +483,7 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                                         let group_result = self.auth_provider
                                             .as_ref()
                                             .unwrap()
-                                            .check_permissions(&user, permission_group);
+                                            .check_permissions(user, permission_group);
                                         if group_result.is_ok() {
                                             has_permission = true;
                                             break;
@@ -546,7 +526,7 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                             };
 
                             // Call handler
-                            match handler(user, params).await {
+                            match handler(user.clone(), params).await {
                                 Ok(result) => {
                                     match serde_json::to_value(result) {
                                         Ok(result_value) => ras_jsonrpc_types::JsonRpcResponse::success(result_value, request.id.clone()),
@@ -585,6 +565,7 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
         pub struct #builder_name {
             base_url: String,
             auth_provider: Option<Box<dyn ras_jsonrpc_core::AuthProvider>>,
+            usage_tracker: Option<Box<dyn Fn(&axum::http::HeaderMap, Option<&ras_jsonrpc_core::AuthenticatedUser>, &ras_jsonrpc_types::JsonRpcRequest) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> + Send + Sync>>,
             #(#builder_fields)*
         }
 
@@ -595,6 +576,7 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                 Self {
                     base_url: base_url.into(),
                     auth_provider: None,
+                    usage_tracker: None,
                     #(#field_inits,)*
                 }
             }
@@ -602,6 +584,19 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
             /// Set the auth provider
             pub fn auth_provider<T: ras_jsonrpc_core::AuthProvider>(mut self, provider: T) -> Self {
                 self.auth_provider = Some(Box::new(provider));
+                self
+            }
+
+            /// Set the usage tracker function
+            /// This function will be called for each request with headers, authenticated user (if any), and the JSON-RPC request
+            pub fn with_usage_tracker<F, Fut>(mut self, tracker: F) -> Self
+            where
+                F: Fn(&axum::http::HeaderMap, Option<&ras_jsonrpc_core::AuthenticatedUser>, &ras_jsonrpc_types::JsonRpcRequest) -> Fut + Send + Sync + 'static,
+                Fut: std::future::Future<Output = ()> + Send + 'static,
+            {
+                self.usage_tracker = Some(Box::new(move |headers, user, request| {
+                    Box::pin(tracker(headers, user, request))
+                }));
                 self
             }
 
@@ -643,6 +638,26 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                 // Validate JSON-RPC version
                 if request.jsonrpc != "2.0" {
                     return ras_jsonrpc_types::JsonRpcResponse::error(ras_jsonrpc_types::JsonRpcError::invalid_request(), request_id);
+                }
+
+                // Try to authenticate user if auth provider is available
+                let authenticated_user = if let Some(auth_provider) = &self.auth_provider {
+                    if let Some(token) = headers
+                        .get("Authorization")
+                        .and_then(|h| h.to_str().ok())
+                        .and_then(|s| s.strip_prefix("Bearer ")) {
+                        auth_provider.authenticate(token.to_string()).await.ok()
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                // Call usage tracker if configured
+                if let Some(tracker) = &self.usage_tracker {
+                    let user_ref = authenticated_user.as_ref();
+                    tracker(&headers, user_ref, &request).await;
                 }
 
                 // Dispatch method
