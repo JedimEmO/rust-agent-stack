@@ -16,13 +16,15 @@ members = [
     "crates/identity/ras-identity-oauth2",
     "crates/identity/ras-identity-session",
     "crates/tools/openrpc-to-bruno",
+    "examples/basic-jsonrpc-api",
     "examples/basic-jsonrpc-service",
     "examples/google-oauth-example/server",
     "examples/rest-service-example",
     "examples/google-oauth-example/api",
     "examples/bidirectional-chat/api",
     "examples/bidirectional-chat/server",
-    "examples/bidirectional-chat/bidirectional-chat-tui"
+    "examples/bidirectional-chat/bidirectional-chat-tui",
+    "examples/dominator-example"
 ]
 
 [workspace.dependencies]

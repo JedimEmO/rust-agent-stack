@@ -1,0 +1,20 @@
+[package]
+name = "basic-jsonrpc-api"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+default = ["server"]
+server = ["ras-jsonrpc-macro/server", "axum"]
+client = ["ras-jsonrpc-macro/client", "reqwest"]
+
+[dependencies]
+ras-jsonrpc-macro = { path = "../../crates/libs/ras-jsonrpc-macro" }
+ras-jsonrpc-core = { path = "../../crates/libs/ras-jsonrpc-core" }
+ras-jsonrpc-types = { path = "../../crates/libs/ras-jsonrpc-types" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+schemars.workspace = true
+axum = { workspace = true, optional = true}
+reqwest = { workspace = true, optional = true}

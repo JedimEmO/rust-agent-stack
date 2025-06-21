@@ -10,13 +10,11 @@ server = []
 client = []
 
 [dependencies]
-ras-jsonrpc-macro = { path = "../../crates/libs/ras-jsonrpc-macro", features = ["server"] }
+basic-jsonrpc-api = { path = "../basic-jsonrpc-api" }
 ras-jsonrpc-core = { path = "../../crates/libs/ras-jsonrpc-core" }
-ras-jsonrpc-types = { path = "../../crates/libs/ras-jsonrpc-types" }
 axum = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-schemars.workspace = true
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

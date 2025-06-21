@@ -1,4 +1,5 @@
 use axum::{Router, extract::State, routing::get};
+use basic_jsonrpc_api::{SignInRequest, SignInResponse, MyServiceBuilder};
 use opentelemetry::{
     KeyValue, global,
     metrics::{Counter, Meter},
@@ -6,27 +7,7 @@ use opentelemetry::{
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use prometheus::{Encoder, TextEncoder};
 use ras_jsonrpc_core::{AuthFuture, AuthProvider, AuthenticatedUser};
-use ras_jsonrpc_macro::jsonrpc_service;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, sync::Arc};
-
-#[derive(Serialize, Deserialize, JsonSchema, Debug)]
-pub enum SignInRequest {
-    WithCredentials { username: String, password: String },
-}
-
-#[derive(Serialize, Deserialize, JsonSchema)]
-pub enum SignInResponse {
-    Success { jwt: String },
-    Failure { msg: String },
-}
-
-impl Default for SignInResponse {
-    fn default() -> Self {
-        Self::Success { jwt: String::new() }
-    }
-}
 
 // Example auth provider
 pub struct MyAuthProvider;
@@ -97,16 +78,6 @@ impl Metrics {
     }
 }
 
-jsonrpc_service!({
-    service_name: MyService,
-    openrpc: true,
-    explorer: true,
-    methods: [
-        UNAUTHORIZED sign_in(SignInRequest) -> SignInResponse,
-        WITH_PERMISSIONS([]) sign_out(()) -> (),
-        WITH_PERMISSIONS(["admin"]) delete_everything(()) -> (),
-    ]
-});
 
 async fn metrics_handler(State(prometheus_registry): State<Arc<prometheus::Registry>>) -> String {
     let encoder = TextEncoder::new();
