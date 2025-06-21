@@ -67,6 +67,7 @@ impl AuthProvider for MyAuthProvider {
 struct Metrics {
     rpc_requests_started: Counter<u64>,
     rpc_requests_completed: Counter<u64>,
+    rpc_method_duration: opentelemetry::metrics::Histogram<f64>,
     active_users: Counter<f64>,
 }
 
@@ -82,6 +83,11 @@ impl Metrics {
                 .u64_counter("rpc_requests_completed_total")
                 .with_description("Total number of RPC requests completed (Note: This tracks usage_tracker completion, not actual method execution)")
                 .with_unit("requests")
+                .build(),
+            rpc_method_duration: meter
+                .f64_histogram("rpc_method_duration_seconds")
+                .with_description("Duration of RPC method execution in seconds")
+                .with_unit("seconds")
                 .build(),
             active_users: meter
                 .f64_counter("active_users")
@@ -164,9 +170,7 @@ async fn main() {
                 async move {
                     // Record metrics
                     // NOTE: The usage_tracker is called BEFORE the actual RPC method executes,
-                    // so we can only track that a request was started here. To track actual
-                    // method execution duration, the jsonrpc_service macro would need to be
-                    // enhanced with a duration tracking capability.
+                    // so we can only track that a request was started here.
                     let attributes = vec![
                         KeyValue::new("method", method.clone()),
                         KeyValue::new("user_agent", user_agent.clone()),
@@ -204,6 +208,39 @@ async fn main() {
                     
                     // Mark usage tracker completion (not the actual method completion)
                     metrics.rpc_requests_completed.add(1, &authenticated_attributes);
+                }
+            }
+        })
+        .with_method_duration_tracker({
+            let metrics = metrics.clone();
+            move |method: &str, user: Option<&ras_jsonrpc_core::AuthenticatedUser>, duration: std::time::Duration| {
+                let metrics = metrics.clone();
+                let method = method.to_string();
+                let user_id = user.map(|u| u.user_id.clone());
+                let is_admin = user.map(|u| u.permissions.contains("admin")).unwrap_or(false);
+                
+                async move {
+                    let mut attributes = vec![
+                        KeyValue::new("method", method.clone()),
+                    ];
+                    
+                    if let Some(ref user_id) = user_id {
+                        attributes.push(KeyValue::new("user_id", user_id.clone()));
+                        attributes.push(KeyValue::new("authenticated", "true"));
+                        attributes.push(KeyValue::new("has_admin", is_admin.to_string()));
+                    } else {
+                        attributes.push(KeyValue::new("authenticated", "false"));
+                    }
+                    
+                    // Record the duration in seconds
+                    metrics.rpc_method_duration.record(duration.as_secs_f64(), &attributes);
+                    
+                    tracing::info!(
+                        "RPC method completed: method={}, duration={:?}, user={}", 
+                        method,
+                        duration,
+                        user_id.as_deref().unwrap_or("anonymous")
+                    );
                 }
             }
         })
@@ -285,9 +322,9 @@ async fn main() {
     println!("  - Metrics are exposed in Prometheus format at /metrics");
     println!("  - {}", otlp_note);
     println!();
-    println!("NOTE: Request duration tracking is not available in this example.");
-    println!("      The usage_tracker runs BEFORE method execution, so actual method");
-    println!("      execution time cannot be measured without enhancing the macro.");
+    println!("NOTE: Method duration tracking is now available!");
+    println!("      The new with_method_duration_tracker captures actual method execution time.");
+    println!("      Check the rpc_method_duration_seconds histogram in the /metrics endpoint.");
     println!();
     println!("Example credentials:");
     println!("  - Username: user, Password: password (basic user)");

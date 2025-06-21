@@ -415,8 +415,17 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                                 }
                             };
 
-                            // Call handler
-                            match handler(params).await {
+                            // Call handler with duration tracking
+                            let start_time = std::time::Instant::now();
+                            let handler_result = handler(params).await;
+                            let duration = start_time.elapsed();
+                            
+                            // Track method duration if configured
+                            if let Some(duration_tracker) = &self.method_duration_tracker {
+                                duration_tracker(#method_str, None, duration).await;
+                            }
+                            
+                            match handler_result {
                                 Ok(result) => {
                                     match serde_json::to_value(result) {
                                         Ok(result_value) => ras_jsonrpc_types::JsonRpcResponse::success(result_value, request.id.clone()),
@@ -525,8 +534,17 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                                 }
                             };
 
-                            // Call handler
-                            match handler(user.clone(), params).await {
+                            // Call handler with duration tracking
+                            let start_time = std::time::Instant::now();
+                            let handler_result = handler(user.clone(), params).await;
+                            let duration = start_time.elapsed();
+                            
+                            // Track method duration if configured
+                            if let Some(duration_tracker) = &self.method_duration_tracker {
+                                duration_tracker(#method_str, Some(user), duration).await;
+                            }
+                            
+                            match handler_result {
                                 Ok(result) => {
                                     match serde_json::to_value(result) {
                                         Ok(result_value) => ras_jsonrpc_types::JsonRpcResponse::success(result_value, request.id.clone()),
@@ -566,6 +584,7 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
             base_url: String,
             auth_provider: Option<Box<dyn ras_jsonrpc_core::AuthProvider>>,
             usage_tracker: Option<Box<dyn Fn(&axum::http::HeaderMap, Option<&ras_jsonrpc_core::AuthenticatedUser>, &ras_jsonrpc_types::JsonRpcRequest) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> + Send + Sync>>,
+            method_duration_tracker: Option<Box<dyn Fn(&str, Option<&ras_jsonrpc_core::AuthenticatedUser>, std::time::Duration) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> + Send + Sync>>,
             #(#builder_fields)*
         }
 
@@ -577,6 +596,7 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                     base_url: base_url.into(),
                     auth_provider: None,
                     usage_tracker: None,
+                    method_duration_tracker: None,
                     #(#field_inits,)*
                 }
             }
@@ -596,6 +616,19 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
             {
                 self.usage_tracker = Some(Box::new(move |headers, user, request| {
                     Box::pin(tracker(headers, user, request))
+                }));
+                self
+            }
+
+            /// Set the method duration tracker function
+            /// This function will be called after each method completes with the method name, authenticated user (if any), and the duration
+            pub fn with_method_duration_tracker<F, Fut>(mut self, tracker: F) -> Self
+            where
+                F: Fn(&str, Option<&ras_jsonrpc_core::AuthenticatedUser>, std::time::Duration) -> Fut + Send + Sync + 'static,
+                Fut: std::future::Future<Output = ()> + Send + 'static,
+            {
+                self.method_duration_tracker = Some(Box::new(move |method, user, duration| {
+                    Box::pin(tracker(method, user, duration))
                 }));
                 self
             }
