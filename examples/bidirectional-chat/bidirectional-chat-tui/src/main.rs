@@ -76,7 +76,7 @@ async fn run_app(
     server_url: &str,
     event_rx: &mut mpsc::UnboundedReceiver<AppEvent>,
 ) -> Result<()> {
-    let mut jwt_token: Option<String> = None;
+    let mut _jwt_token: Option<String> = None;
 
     loop {
         // Draw UI
@@ -145,7 +145,7 @@ async fn run_app(
 
                                 match result {
                                     Ok((token, user_id)) => {
-                                        jwt_token = Some(token);
+                                        _jwt_token = Some(token.clone());
                                         let mut app = app_state.lock().await;
                                         app.username = Some(user_id);
                                         app.screen = AppScreen::RoomList;
@@ -155,7 +155,7 @@ async fn run_app(
                                         // Connect to WebSocket
                                         let mut client = chat_client.lock().await;
                                         if let Err(e) = client
-                                            .connect(server_url, jwt_token.clone().unwrap())
+                                            .connect(server_url, token)
                                             .await
                                         {
                                             app_state.lock().await.error_message =

@@ -10,10 +10,10 @@ use ras_jsonrpc_bidirectional_client::ClientBuilder;
 use ras_jsonrpc_bidirectional_macro::jsonrpc_bidirectional_service;
 use ras_jsonrpc_bidirectional_server::DefaultConnectionManager;
 use ras_jsonrpc_bidirectional_server::service::{
-    BuiltWebSocketService, WebSocketService, websocket_handler,
+    BuiltWebSocketService, websocket_handler,
 };
 use ras_jsonrpc_bidirectional_types::{
-    BidirectionalMessage, ConnectionId, ConnectionManager, ServerNotification,
+    ConnectionId,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;

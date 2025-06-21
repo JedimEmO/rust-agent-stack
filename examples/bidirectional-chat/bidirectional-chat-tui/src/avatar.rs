@@ -84,7 +84,7 @@ impl AvatarManager {
             .collect()
     }
 
-    pub fn get_compact_avatar_for_user(&mut self, username: &str) -> String {
+    pub fn _get_compact_avatar_for_user(&mut self, username: &str) -> String {
         // For inline display, just show the face part
         let avatar_index = self.user_avatars.get(username).copied().unwrap_or_else(|| {
             let mut hasher = DefaultHasher::new();

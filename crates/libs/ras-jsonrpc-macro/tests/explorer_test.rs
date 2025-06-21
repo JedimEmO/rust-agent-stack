@@ -77,30 +77,44 @@ mod tests {
 
     #[test]
     fn test_explorer_with_custom_path() {
-        // This test verifies the macro accepts custom explorer path
-        jsonrpc_service!({
-            service_name: TestService,
-            openrpc: true,
-            explorer: { path: "/api/docs" },
-            methods: [
-                UNAUTHORIZED test_method(()) -> String,
-            ]
-        });
-
-        // Should compile without errors
+        mod custom_path_service {
+            use ras_jsonrpc_macro::jsonrpc_service;
+            use serde::{Deserialize, Serialize};
+            
+            jsonrpc_service!({
+                service_name: TestService,
+                openrpc: true,
+                explorer: { path: "/api/docs" },
+                methods: [
+                    UNAUTHORIZED test_method(()) -> String,
+                ]
+            });
+            
+            pub fn test_routes() {
+                // Test that the explorer routes function is generated
+                let _explorer_routes = testservice_explorer_routes();
+            }
+        }
+        
+        custom_path_service::test_routes();
     }
 
     #[test]
     fn test_explorer_requires_openrpc() {
-        // This test verifies explorer requires openrpc to be enabled
-        jsonrpc_service!({
-            service_name: NoOpenRpcService,
-            explorer: true,  // This should be ignored without openrpc
-            methods: [
-                UNAUTHORIZED test_method(()) -> String,
-            ]
-        });
-
+        mod no_openrpc_service {
+            use ras_jsonrpc_macro::jsonrpc_service;
+            use serde::{Deserialize, Serialize};
+            
+            jsonrpc_service!({
+                service_name: NoOpenRpcService,
+                explorer: true,  // This should be ignored without openrpc
+                methods: [
+                    UNAUTHORIZED test_method(()) -> String,
+                ]
+            });
+        }
+        
         // Explorer routes should not be generated
+        // This test just verifies that the macro compiles
     }
 }
