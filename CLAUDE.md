@@ -294,4 +294,8 @@ When deploying the bidirectional chat example to production:
 - **Persistence**: Configure database storage for messages instead of JSON files
 - **Scaling**: Consider Redis for pub/sub across multiple server instances
 - **Monitoring**: Use structured logging with appropriate log levels
-- **Configuration**: Use environment-specific config files and secure credential management
+- **Configuration**: Use environment-specific config files and secure credential managementYou can ask the dominator guru for help with both dominator and dwind. He is very knowlegeable!uid
+
+## UI
+
+You can ask the dominator guru for help with both dominator and dwind. He is very knowlegeable!

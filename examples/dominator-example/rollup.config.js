@@ -33,7 +33,7 @@ export default {
             port: 8080,
             host: "0.0.0.0",
             proxy: [
-                {from: "/api", to: "http://localhost:3000/api"}
+                { from: "/api", to: "http://localhost:3000/api" }
             ],
             spa: true,
         }),

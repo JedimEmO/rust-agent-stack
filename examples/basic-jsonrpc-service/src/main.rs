@@ -1,5 +1,8 @@
 use axum::{Router, extract::State, routing::get};
-use basic_jsonrpc_api::{SignInRequest, SignInResponse, MyServiceBuilder};
+use basic_jsonrpc_api::{
+    SignInRequest, SignInResponse, MyServiceBuilder, Task, TaskPriority, CreateTaskRequest,
+    UpdateTaskRequest, TaskListResponse, UserProfile, DashboardStats,
+};
 use opentelemetry::{
     KeyValue, global,
     metrics::{Counter, Meter},
@@ -7,7 +10,9 @@ use opentelemetry::{
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use prometheus::{Encoder, TextEncoder};
 use ras_jsonrpc_core::{AuthFuture, AuthProvider, AuthenticatedUser};
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::{HashMap, HashSet}, sync::{Arc, Mutex}};
+use chrono::Utc;
+use uuid::Uuid;
 
 // Example auth provider
 pub struct MyAuthProvider;
@@ -87,6 +92,92 @@ async fn metrics_handler(State(prometheus_registry): State<Arc<prometheus::Regis
     String::from_utf8(buffer).unwrap()
 }
 
+// Simple in-memory task storage
+#[derive(Clone)]
+struct TaskStorage {
+    tasks: Arc<Mutex<HashMap<String, Task>>>,
+}
+
+impl TaskStorage {
+    fn new() -> Self {
+        Self {
+            tasks: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    fn create_task(&self, req: CreateTaskRequest) -> Task {
+        let task = Task {
+            id: Uuid::new_v4().to_string(),
+            title: req.title,
+            description: req.description,
+            completed: false,
+            priority: req.priority,
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
+        };
+        
+        self.tasks.lock().unwrap().insert(task.id.clone(), task.clone());
+        task
+    }
+
+    fn update_task(&self, req: UpdateTaskRequest) -> Option<Task> {
+        let mut tasks = self.tasks.lock().unwrap();
+        
+        tasks.get_mut(&req.id).map(|task| {
+            if let Some(title) = req.title {
+                task.title = title;
+            }
+            if let Some(description) = req.description {
+                task.description = description;
+            }
+            if let Some(completed) = req.completed {
+                task.completed = completed;
+            }
+            if let Some(priority) = req.priority {
+                task.priority = priority;
+            }
+            task.updated_at = Utc::now().to_rfc3339();
+            task.clone()
+        })
+    }
+
+    fn delete_task(&self, id: String) -> bool {
+        self.tasks.lock().unwrap().remove(&id).is_some()
+    }
+
+    fn get_task(&self, id: String) -> Option<Task> {
+        self.tasks.lock().unwrap().get(&id).cloned()
+    }
+
+    fn list_tasks(&self) -> TaskListResponse {
+        let tasks = self.tasks.lock().unwrap();
+        let task_vec: Vec<Task> = tasks.values().cloned().collect();
+        let total = task_vec.len();
+        
+        TaskListResponse {
+            tasks: task_vec,
+            total,
+        }
+    }
+
+    fn get_stats(&self) -> DashboardStats {
+        let tasks = self.tasks.lock().unwrap();
+        let total_tasks = tasks.len();
+        let completed_tasks = tasks.values().filter(|t| t.completed).count();
+        let pending_tasks = total_tasks - completed_tasks;
+        let high_priority_tasks = tasks.values()
+            .filter(|t| matches!(t.priority, TaskPriority::High))
+            .count();
+        
+        DashboardStats {
+            total_tasks,
+            completed_tasks,
+            pending_tasks,
+            high_priority_tasks,
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
@@ -122,6 +213,9 @@ async fn main() {
     let otlp_note = std::env::var("OTLP_ENDPOINT")
         .map(|endpoint| format!("Configure your OpenTelemetry Collector to scrape metrics from http://localhost:3000/metrics and forward to {}", endpoint))
         .unwrap_or_else(|_| "To use OTLP, run an OpenTelemetry Collector that scrapes http://localhost:3000/metrics".to_string());
+
+    // Initialize task storage
+    let task_storage = Arc::new(TaskStorage::new());
 
     let rpc_router = MyServiceBuilder::new("/rpc")
         .with_usage_tracker({
@@ -302,6 +396,94 @@ async fn main() {
         .delete_everything_handler(|user, _request| async move {
             tracing::warn!("Admin {} is deleting everything!", user.user_id);
             Ok(())
+        })
+        // Task management handlers
+        .list_tasks_handler({
+            let storage = task_storage.clone();
+            move |_user, _request| {
+                let storage = storage.clone();
+                async move {
+                    Ok(storage.list_tasks())
+                }
+            }
+        })
+        .create_task_handler({
+            let storage = task_storage.clone();
+            move |_user, request| {
+                let storage = storage.clone();
+                async move {
+                    Ok(storage.create_task(request))
+                }
+            }
+        })
+        .update_task_handler({
+            let storage = task_storage.clone();
+            move |_user, request| {
+                let storage = storage.clone();
+                async move {
+                    storage.update_task(request)
+                        .ok_or_else(|| "Task not found".into())
+                }
+            }
+        })
+        .delete_task_handler({
+            let storage = task_storage.clone();
+            move |_user, task_id| {
+                let storage = storage.clone();
+                async move {
+                    Ok(storage.delete_task(task_id))
+                }
+            }
+        })
+        .get_task_handler({
+            let storage = task_storage.clone();
+            move |_user, task_id| {
+                let storage = storage.clone();
+                async move {
+                    Ok(storage.get_task(task_id))
+                }
+            }
+        })
+        // User profile handlers
+        .get_profile_handler(|user, _request| async move {
+            let email = if user.permissions.contains("admin") {
+                "admin@example.com"
+            } else {
+                "user@example.com"
+            };
+            
+            Ok(UserProfile {
+                username: user.user_id.clone(),
+                email: email.to_string(),
+                permissions: user.permissions.iter().cloned().collect(),
+                created_at: Utc::now().to_rfc3339(),
+            })
+        })
+        .update_profile_handler(|user, request| async move {
+            let email = request.email.unwrap_or_else(|| {
+                if user.permissions.contains("admin") {
+                    "admin@example.com".to_string()
+                } else {
+                    "user@example.com".to_string()
+                }
+            });
+            
+            Ok(UserProfile {
+                username: user.user_id.clone(),
+                email,
+                permissions: user.permissions.iter().cloned().collect(),
+                created_at: Utc::now().to_rfc3339(),
+            })
+        })
+        // Dashboard handler
+        .get_dashboard_stats_handler({
+            let storage = task_storage.clone();
+            move |_user, _request| {
+                let storage = storage.clone();
+                async move {
+                    Ok(storage.get_stats())
+                }
+            }
         })
         .build();
 
