@@ -21,8 +21,12 @@ cargo test -p <crate-name>  # e.g., cargo test -p ras-auth-core
 cargo run -p google-oauth-example
 cargo run -p bidirectional-chat-server
 cargo run -p bidirectional-chat-tui
-cargo run -p basic-service
+cargo run -p basic-jsonrpc-service
 cargo run -p rest-service-example
+
+# Build and run WASM example (dominator-example)
+cd examples/dominator-example
+npm ci && npm start
 
 # Check code without building
 cargo check
@@ -80,8 +84,14 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
   - **bidirectional-chat-server**: WebSocket server with persistence and room management
   - **bidirectional-chat-tui**: Terminal UI client with ratatui interface
   - **bidirectional-chat-api**: Shared types and service definitions
-- **basic-service**: Simple JSON-RPC service example demonstrating macro usage
-- **rest-service-example**: REST API example using ras-rest-macro with authentication
+- **basic-jsonrpc-api**: Shared API definitions for basic JSON-RPC service with client/server features
+- **basic-jsonrpc-service**: Simple JSON-RPC service implementation with OpenTelemetry metrics integration
+- **rest-service-example**: REST API example using ras-rest-macro with authentication and Prometheus metrics
+- **dominator-example**: Full-stack WASM application using Dominator framework with reactive UI
+  - Real-time task management with authentication
+  - Glass morphism UI design with dwind styling
+  - WebSocket JSON-RPC client connecting to basic-jsonrpc-service
+  - Features: login, task CRUD, dashboard stats, dark theme
 
 ### Key Design Decisions
 1. **Procedural Macro Architecture**: Using proc-macros for JSON-RPC suggests focus on ergonomic, type-safe RPC interfaces with compile-time validation
@@ -89,10 +99,13 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
 3. **Agent Stack Focus**: Repository name indicates this is part of a larger agent system, with JSON-RPC as the communication protocol
 4. **Pluggable Identity Providers**: Authentication is decoupled using the `IdentityProvider` trait, allowing flexible auth mechanisms (local users, OAuth2, etc.)
 5. **JWT-based Sessions**: Session management uses JWTs with configurable secrets and TTL, enabling stateless authentication across services
+6. **WASM Support**: First-class support for WebAssembly client applications using Dominator framework
+7. **Observability**: Built-in OpenTelemetry integration for metrics and monitoring
 
 ### Integration Points
 - **MCP (Model Context Protocol)**: Use the Context7 tool to find up-to-date documentation for dependencies.
-- **Potential JS/TS Integration**: `.gitignore` includes `node_modules/`, suggesting possible JavaScript/TypeScript components
+- **WASM/Web Integration**: Full WebAssembly support with Dominator framework for reactive web UIs
+- **Metrics/Monitoring**: OpenTelemetry integration with Prometheus exporter support
 
 ### Development Guidelines
 
@@ -101,6 +114,14 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
 - Add dependencies to `[workspace.dependencies]` in the root Cargo.toml
 - Reference them with `{ workspace = true }` in individual crate Cargo.toml files
 - Use path dependencies for internal crates: `{ path = "../crate-name" }`
+
+#### WASM/UI Dependencies (for Dominator-based applications)
+- **dominator**: Reactive UI framework for building WebAssembly applications
+- **dwind/dwind-macros**: CSS-in-Rust styling framework with Tailwind-like utilities
+- **dwui**: UI component library built on top of Dominator
+- **futures-signals-component-macro**: Reactive component macros for state management
+- **wasm-bindgen**: Core WASM/JS interop library
+- **wasm-pack**: Tool for building and packaging WASM modules
 
 #### Crate Organization
 - **ras-auth-core**: Shared authentication types and traits, minimal dependencies (serde, thiserror)
@@ -198,7 +219,10 @@ jsonrpc_bidirectional_service!({
 - **OpenRPC docs**: Optional documentation generation for client_to_server methods
 
 **Authentication Model:**
-- JWT authentication during WebSocket handshake (Authorization header)
+- JWT authentication during WebSocket handshake with multiple header support:
+  - Bearer token in Authorization header
+  - WebSocket protocol header (`sec-websocket-protocol: token.{jwt_token}`)
+  - X-Auth-Token header
 - Persistent auth context for connection lifetime
 - Permission-based access control for client_to_server methods
 - Automatic connection cleanup on token expiration
@@ -227,11 +251,15 @@ The authentication system is designed with flexibility and security in mind:
 1. **Identity Verification** (`IdentityProvider`): Validates credentials against various providers
    - Accepts provider-specific payloads as `JsonValue` for decoupling
    - Returns a `VerifiedIdentity` with basic user information
+   - Supports provider-specific metadata storage
    
 2. **Session Creation** (`SessionService`): Issues JWTs after successful identity verification
    - Generates session-specific JTIs for tracking
    - Configurable JWT secrets and TTL
    - Maintains active session registry (for revocation)
+   - Session termination capability via `end_session()` method
+   - Configurable JWT algorithm (not just HS256)
+   - Refresh token support (configuration field available)
 
 ### Integration with JSON-RPC
 - `JwtAuthProvider` implements the `AuthProvider` trait from `ras-jsonrpc-core`
@@ -249,17 +277,19 @@ The authentication system is designed with flexibility and security in mind:
 
 ### Security Considerations
 - Passwords are hashed using Argon2 (industry standard)
-- JWTs use configurable secrets (HS256 by default)
-- Session tracking enables token revocation
+- JWTs use configurable secrets and algorithms
+- Session tracking enables token revocation with active session registry
 - Provider parameters use `JsonValue` to prevent type coupling and allow flexible configuration
 - Permissions are embedded in JWT claims for stateless authorization
+- Rate limiting: Semaphore-based concurrent authentication attempt limiting (5 concurrent attempts)
+- OAuth2 security: PKCE enforced by default, state management with TTL
 
 #### Authentication Attack Vector Protection
 - **Username Enumeration Prevention**: All authentication failures return identical `InvalidCredentials` errors regardless of whether the username exists or the password is wrong
 - **Timing Attack Resistance**: Constant-time authentication using real Argon2 dummy hash for non-existent users to ensure consistent response times
 - **Input Validation**: Robust handling of malformed payloads, empty credentials, and special characters
-- **Brute Force Protection**: Consistent error handling across repeated authentication attempts
-- **Thread Safety**: Concurrent authentication attempts are handled safely without information leakage
+- **Brute Force Protection**: Consistent error handling across repeated authentication attempts with semaphore-based rate limiting
+- **Thread Safety**: Concurrent authentication attempts are handled safely without information leakage (5 concurrent limit)
 - **Security Testing**: Comprehensive test suite covering username enumeration, timing attacks, password spraying, and other common attack vectors
 
 ## Examples and Usage
@@ -288,14 +318,72 @@ Real-time chat system showcasing WebSocket-based bidirectional JSON-RPC communic
 - **Persistence**: Chat history and room state can be persisted using simple JSON file storage with `serde_json`
 - **Integration Testing**: Extensive test coverage including WebSocket tests, authentication flows, and concurrent user scenarios
 
+### Basic JSON-RPC Service Example (`examples/basic-jsonrpc-service/`)
+
+Simple service demonstrating JSON-RPC macros with authentication and metrics:
+
+**Features:**
+- Task management API with CRUD operations
+- JWT authentication with local user provider
+- OpenTelemetry metrics with Prometheus exporter
+- API/Service separation pattern for clean architecture
+
+### Dominator WASM Example (`examples/dominator-example/`)
+
+Full-stack WebAssembly application showcasing reactive UI with Dominator framework:
+
+**Quick Start:**
+```bash
+cd examples/dominator-example
+./build.sh  # Builds WASM and starts development server
+# Open browser to http://localhost:8080
+```
+
+**Key Features:**
+- Reactive state management with futures-signals
+- Glass morphism UI design with dwind styling
+- WebSocket JSON-RPC client integration
+- Real-time task management with priority levels
+- Dashboard with animated statistics
+- Dark theme with smooth transitions
+- Responsive design for all screen sizes
+
+**Architecture:**
+- Pure client-side rendering (no SSR)
+- Connects to basic-jsonrpc-service backend
+- Uses bon builder pattern for API calls
+- Component-based architecture with reactive signals
+
 ### Production Deployment Considerations
-When deploying the bidirectional chat example to production:
+
+#### General Guidelines:
 - **Security**: Use proper JWT secrets, enable CORS only for trusted origins, implement rate limiting
-- **Persistence**: Configure database storage for messages instead of JSON files
+- **Persistence**: Configure database storage instead of JSON files
 - **Scaling**: Consider Redis for pub/sub across multiple server instances
-- **Monitoring**: Use structured logging with appropriate log levels
-- **Configuration**: Use environment-specific config files and secure credential managementYou can ask the dominator guru for help with both dominator and dwind. He is very knowlegeable!uid
+- **Monitoring**: Use structured logging with OpenTelemetry integration
+- **Configuration**: Use environment-specific config files and secure credential management
 
-## UI
+#### WASM-specific Considerations:
+- **Build optimization**: Use `--release` flag for production builds
+- **Asset serving**: Configure CDN for WASM and static assets
+- **WebSocket proxy**: Ensure proper WebSocket forwarding in reverse proxy
+- **CORS configuration**: Set appropriate CORS headers for API endpoints
 
-You can ask the dominator guru for help with both dominator and dwind. He is very knowlegeable!
+## UI Development with Dominator
+
+The project includes first-class support for building reactive WebAssembly UIs using the Dominator framework:
+
+### Key Libraries:
+- **dominator**: Zero-cost reactive UI framework with signals-based state management
+- **dwind**: CSS-in-Rust with Tailwind-like utilities and compile-time optimization
+- **dwui**: Pre-built UI components for common patterns
+- **futures-signals**: Reactive state management primitives
+
+### Development Tips:
+1. Use `Mutable` and `MutableVec` for reactive state
+2. Leverage dwind's compile-time CSS generation for zero-runtime overhead
+3. Component functions should return `Dom` elements
+4. Use `clone!` macro for capturing state in closures
+5. Prefer `html!` macro for complex DOM structures
+
+For detailed Dominator documentation and patterns, ask the Dominator guru!

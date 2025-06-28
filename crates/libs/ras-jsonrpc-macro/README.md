@@ -413,7 +413,7 @@ This crate works seamlessly with:
 
 See the [`examples/`](../../examples/) directory for complete working examples:
 
-- [`basic-service`](../../examples/basic-service) - Complete service with authentication
+- [`basic-jsonrpc-service`](../../examples/basic-jsonrpc-service) - Complete service with authentication
 - [`usage.rs`](examples/usage.rs) - Standalone usage example
 - [`openrpc_demo.rs`](examples/openrpc_demo.rs) - OpenRPC document generation example
 

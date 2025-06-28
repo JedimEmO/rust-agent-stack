@@ -310,7 +310,7 @@ cargo test -p google-oauth-example test_permissions
 
 ## Related Examples
 
-- **basic-service**: Simpler JSON-RPC service example
+- **basic-jsonrpc-service**: Simpler JSON-RPC service example
 - Check other examples in the `/examples` directory for additional patterns
 
 ## Contributing

@@ -458,7 +458,7 @@ All notable changes to this project will be documented in this file.
 - Comprehensive test suite and integration tests for macro functionality
 - Workspace-level dependency management with shared crate versions
 - Example applications demonstrating JSON-RPC service implementation
-  - basic-service: Complete working example with authentication and multiple endpoints
+  - basic-jsonrpc-service: Complete working example with authentication and multiple endpoints
   - Usage examples showing macro-generated service builders
 - Enhanced project documentation and development guidelines
   - Updated CLAUDE.md with comprehensive crate organization patterns
