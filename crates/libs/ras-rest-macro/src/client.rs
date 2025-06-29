@@ -74,6 +74,9 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
                 let server_url = self.server_url.ok_or("Server URL is required")?;
 
                 let mut client_builder = reqwest::Client::builder();
+                
+                // Timeout is not supported in WASM builds
+                #[cfg(not(target_arch = "wasm32"))]
                 if let Some(timeout) = self.timeout {
                     client_builder = client_builder.timeout(timeout);
                 }
@@ -220,7 +223,8 @@ fn generate_client_method_with_timeout(endpoint: &EndpointDefinition) -> proc_ma
 
             #request_body_handling
 
-            // Override timeout if provided
+            // Override timeout if provided (not supported in WASM builds)
+            #[cfg(not(target_arch = "wasm32"))]
             if let Some(timeout) = timeout {
                 request_builder = request_builder.timeout(timeout);
             }

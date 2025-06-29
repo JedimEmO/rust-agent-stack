@@ -76,6 +76,7 @@ pub fn generate_openapi_code(
                         .replace(" ", "_")
                 );
                 quote! {
+                    #[cfg(feature = "server")]
                     fn #fn_name() -> serde_json::Value {
                         let schema = schemars::schema_for!(#type_tokens);
                         let mut schema_value = serde_json::to_value(&schema).unwrap_or_else(|_| {
@@ -174,6 +175,7 @@ pub fn generate_openapi_code(
         .collect();
 
     quote! {
+        #[cfg(feature = "server")]
         #[derive(serde::Serialize)]
         struct #endpoint_info_struct_name {
             method: String,
@@ -186,6 +188,7 @@ pub fn generate_openapi_code(
         }
 
         // Helper function to normalize nullable properties for better Swagger UI compatibility
+        #[cfg(feature = "server")]
         fn normalize_nullable_properties(value: &mut serde_json::Value) {
             match value {
                 serde_json::Value::Object(obj) => {
@@ -244,6 +247,7 @@ pub fn generate_openapi_code(
         #(#schema_fns)*
 
         /// Generate OpenAPI 3.0 document for this service
+        #[cfg(feature = "server")]
         pub fn #openapi_fn_name() -> serde_json::Value {
             use serde_json::json;
             use schemars::{schema_for, JsonSchema};
@@ -366,6 +370,7 @@ pub fn generate_openapi_code(
         }
 
         /// Write OpenAPI document to the target directory
+        #[cfg(feature = "server")]
         pub fn #openapi_to_file_fn_name() -> std::io::Result<()> {
             let doc = #openapi_fn_name();
             let output_path = #output_path_code;

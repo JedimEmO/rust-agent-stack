@@ -415,8 +415,11 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
     };
 
     // Generate static hosting code if enabled
-    let static_hosting_code =
-        static_hosting::generate_static_hosting_code(&service_def, &service_def.static_hosting);
+    let static_hosting_code = if service_def.static_hosting.serve_docs {
+        static_hosting::generate_static_hosting_code(&service_def, &service_def.static_hosting)
+    } else {
+        quote! {}
+    };
 
     // Generate client code
     let client_code = crate::client::generate_client_code(&service_def);
@@ -589,9 +592,12 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         }
     });
 
-    // Generate static hosting route registration
-    let static_routes =
-        static_hosting::generate_static_routes(&service_def, &service_def.static_hosting);
+    // Generate static hosting route registration - only if docs are enabled
+    let static_routes = if service_def.static_hosting.serve_docs {
+        static_hosting::generate_static_routes(&service_def, &service_def.static_hosting)
+    } else {
+        quote! {}
+    };
 
     let output = quote! {
         #[cfg(feature = "server")]
@@ -609,8 +615,15 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
             #(#builder_fields)*
         }
 
+        #[cfg(feature = "server")]
+        const _: () = {
+            #schema_checks
+        };
+
+        // Generate OpenAPI function at module level if serve_docs is enabled
+        #[cfg(feature = "server")]
         #openapi_code
-        #schema_checks
+        
         #static_hosting_code
 
         #[cfg(feature = "server")]

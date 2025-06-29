@@ -51,6 +51,7 @@ pub fn generate_static_hosting_code(
         quote::format_ident!("{}_docs_handler", service_name.to_string().to_lowercase());
 
     quote! {
+        #[cfg(feature = "server")]
         // Handler for serving the documentation index
         async fn #docs_handler_name() -> ::axum::response::Html<String> {
             let openapi_spec = #openapi_fn_name();
@@ -61,6 +62,7 @@ pub fn generate_static_hosting_code(
             ::axum::response::Html(html_content)
         }
 
+        #[cfg(feature = "server")]
         // Generate HTML content for the API explorer page
         fn generate_docs_html(openapi_spec: &str, theme: &str, base_path: &str, docs_path: &str) -> String {
             format!(
@@ -1174,6 +1176,7 @@ pub fn generate_static_hosting_code(
             )
         }
 
+        #[cfg(feature = "server")]
         // Generate OpenAPI JSON endpoint handler
         async fn openapi_json_handler() -> ::axum::Json<::serde_json::Value> {
             ::axum::Json(#openapi_fn_name())
@@ -1198,9 +1201,12 @@ pub fn generate_static_routes(
     );
 
     quote! {
-        // Register static hosting routes
-        router = router
-            .route(#docs_path, ::axum::routing::get(#docs_handler_name))
-            .route(#openapi_path, ::axum::routing::get(openapi_json_handler));
+        #[cfg(feature = "server")]
+        {
+            // Register static hosting routes
+            router = router
+                .route(#docs_path, ::axum::routing::get(#docs_handler_name))
+                .route(#openapi_path, ::axum::routing::get(openapi_json_handler));
+        }
     }
 }
