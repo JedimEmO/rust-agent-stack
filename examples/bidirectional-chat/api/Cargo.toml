@@ -19,6 +19,7 @@ ras-jsonrpc-bidirectional-types = { path = "../../../crates/libs/ras-jsonrpc-bid
 ras-jsonrpc-bidirectional-server = { path = "../../../crates/libs/ras-jsonrpc-bidirectional-server", optional = true }
 ras-jsonrpc-bidirectional-client = { path = "../../../crates/libs/ras-jsonrpc-bidirectional-client", optional = true }
 ras-auth-core = { path = "../../../crates/libs/ras-auth-core" }
+ras-rest-core = { path = "../../../crates/libs/ras-rest-core" }
 ras-jsonrpc-types = { path = "../../../crates/libs/ras-jsonrpc-types" }
 ras-rest-macro = { path = "../../../crates/libs/ras-rest-macro" }
 reqwest = { workspace = true, features = ["json"] }

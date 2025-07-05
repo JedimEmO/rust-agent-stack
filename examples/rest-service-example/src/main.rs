@@ -4,6 +4,7 @@ use ras_identity_core::{IdentityProvider, IdentityResult, UserPermissions, Verif
 use ras_identity_local::LocalUserProvider;
 use ras_identity_session::{JwtAuthProvider, SessionConfig, SessionService};
 use ras_rest_macro::rest_service;
+use ras_rest_core::{RestResult, RestResponse, RestError};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -257,17 +258,17 @@ impl UserHandlers {
         }
     }
 
-    async fn get_users(&self) -> Result<UsersResponse, Box<dyn std::error::Error + Send + Sync>> {
+    async fn get_users(&self) -> RestResult<UsersResponse> {
         let store = self.store.lock().unwrap();
         let users = store.values().cloned().collect();
-        Ok(UsersResponse { users })
+        Ok(RestResponse::ok(UsersResponse { users }))
     }
 
     async fn create_user(
         &self,
         _user: &ras_auth_core::AuthenticatedUser,
         request: CreateUserRequest,
-    ) -> Result<UserResponse, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> RestResult<UserResponse> {
         let mut store = self.store.lock().unwrap();
         let id = store.len() as i32 + 1;
         let user = UserResponse {
@@ -276,19 +277,20 @@ impl UserHandlers {
             email: request.email,
         };
         store.insert(id, user.clone());
-        Ok(user)
+        Ok(RestResponse::created(user))
     }
 
     async fn get_user(
         &self,
         _user: &ras_auth_core::AuthenticatedUser,
         id: i32,
-    ) -> Result<UserResponse, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> RestResult<UserResponse> {
         let store = self.store.lock().unwrap();
         store
             .get(&id)
             .cloned()
-            .ok_or_else(|| "User not found".into())
+            .map(RestResponse::ok)
+            .ok_or_else(|| RestError::not_found("User not found"))
     }
 
     async fn update_user(
@@ -296,14 +298,14 @@ impl UserHandlers {
         _user: &ras_auth_core::AuthenticatedUser,
         id: i32,
         request: UpdateUserRequest,
-    ) -> Result<UserResponse, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> RestResult<UserResponse> {
         let mut store = self.store.lock().unwrap();
         if let Some(user) = store.get_mut(&id) {
             user.name = request.name;
             user.email = request.email;
-            Ok(user.clone())
+            Ok(RestResponse::ok(user.clone()))
         } else {
-            Err("User not found".into())
+            Err(RestError::not_found("User not found"))
         }
     }
 
@@ -311,12 +313,12 @@ impl UserHandlers {
         &self,
         _user: &ras_auth_core::AuthenticatedUser,
         id: i32,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> RestResult<()> {
         let mut store = self.store.lock().unwrap();
         if store.remove(&id).is_some() {
-            Ok(())
+            Ok(RestResponse::no_content())
         } else {
-            Err("User not found".into())
+            Err(RestError::not_found("User not found"))
         }
     }
 }
@@ -335,7 +337,7 @@ impl AuthHandlers {
     async fn register_user(
         &self,
         request: RegisterUserRequest,
-    ) -> Result<AuthResponse, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> RestResult<AuthResponse> {
         info!("Registering new user: {}", request.username);
 
         // Track user registration
@@ -354,7 +356,7 @@ impl AuthHandlers {
                 request.display_name.clone(),
             )
             .await
-            .map_err(|e| format!("Failed to register user: {}", e))?;
+            .map_err(|e| RestError::conflict(format!("Failed to register user: {}", e)))?;
 
         // Since we have the same issue with two separate provider instances,
         // we need to manually keep them in sync. This is not ideal but fixes the immediate bug.
@@ -372,7 +374,7 @@ impl AuthHandlers {
             .session_service
             .begin_session("local", auth_payload)
             .await
-            .map_err(|e| format!("Failed to create session: {}", e))?;
+            .map_err(|e| RestError::internal_server_error(format!("Failed to create session: {}", e)))?;
 
         // Create identity for permissions lookup
         let identity = VerifiedIdentity {
@@ -386,9 +388,9 @@ impl AuthHandlers {
         let permissions = ExamplePermissions
             .get_permissions(&identity)
             .await
-            .map_err(|e| format!("Failed to get permissions: {}", e))?;
+            .map_err(|e| RestError::internal_server_error(format!("Failed to get permissions: {}", e)))?;
 
-        Ok(AuthResponse {
+        Ok(RestResponse::created(AuthResponse {
             token,
             user_info: AuthUserInfo {
                 subject: identity.subject,
@@ -396,13 +398,13 @@ impl AuthHandlers {
                 display_name: identity.display_name,
                 permissions,
             },
-        })
+        }))
     }
 
     async fn login_user(
         &self,
         request: LoginRequest,
-    ) -> Result<AuthResponse, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> RestResult<AuthResponse> {
         info!("User login attempt: {}", request.username);
 
         // Track user login
@@ -430,7 +432,10 @@ impl AuthHandlers {
             .session_service
             .begin_session("local", auth_payload)
             .await
-            .map_err(|e| format!("Authentication failed: {}", e))?;
+            .map_err(|_e| {
+                // Return 401 Unauthorized for authentication failures
+                RestError::unauthorized("Invalid credentials")
+            })?;
 
         // Create identity for permissions lookup
         let identity = VerifiedIdentity {
@@ -444,9 +449,9 @@ impl AuthHandlers {
         let permissions = ExamplePermissions
             .get_permissions(&identity)
             .await
-            .map_err(|e| format!("Failed to get permissions: {}", e))?;
+            .map_err(|e| RestError::internal_server_error(format!("Failed to get permissions: {}", e)))?;
 
-        Ok(AuthResponse {
+        Ok(RestResponse::ok(AuthResponse {
             token,
             user_info: AuthUserInfo {
                 subject: identity.subject,
@@ -454,13 +459,13 @@ impl AuthHandlers {
                 display_name: identity.display_name,
                 permissions,
             },
-        })
+        }))
     }
 
     async fn logout_user(
         &self,
         user: &ras_auth_core::AuthenticatedUser,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> RestResult<()> {
         info!("User logout: {}", user.user_id);
 
         // Track user logout
@@ -483,18 +488,18 @@ impl AuthHandlers {
             }
         }
 
-        Ok(())
+        Ok(RestResponse::no_content())
     }
 
     async fn get_user_info(
         &self,
         user: &ras_auth_core::AuthenticatedUser,
-    ) -> Result<UserInfoResponse, Box<dyn std::error::Error + Send + Sync>> {
-        Ok(UserInfoResponse {
+    ) -> RestResult<UserInfoResponse> {
+        Ok(RestResponse::ok(UserInfoResponse {
             user_id: user.user_id.clone(),
             permissions: user.permissions.iter().cloned().collect(),
             metadata: user.metadata.clone(),
-        })
+        }))
     }
 }
 

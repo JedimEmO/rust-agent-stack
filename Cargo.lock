@@ -340,6 +340,7 @@ dependencies = [
  "ras-jsonrpc-bidirectional-server",
  "ras-jsonrpc-bidirectional-types",
  "ras-jsonrpc-types",
+ "ras-rest-core",
  "ras-rest-macro",
  "reqwest 0.12.19",
  "schemars",
@@ -370,6 +371,7 @@ dependencies = [
  "ras-jsonrpc-bidirectional-server",
  "ras-jsonrpc-bidirectional-types",
  "ras-jsonrpc-types",
+ "ras-rest-core",
  "ras-rest-macro",
  "reqwest 0.12.19",
  "schemars",
@@ -2795,6 +2797,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ras-rest-core"
+version = "0.1.0"
+dependencies = [
+ "ras-auth-core",
+ "serde",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "ras-rest-macro"
 version = "0.1.0"
 dependencies = [
@@ -2808,6 +2819,7 @@ dependencies = [
  "ras-auth-core",
  "ras-identity-session",
  "ras-jsonrpc-core",
+ "ras-rest-core",
  "reqwest 0.12.19",
  "schemars",
  "serde",
@@ -3013,6 +3025,7 @@ dependencies = [
  "ras-identity-core",
  "ras-identity-local",
  "ras-identity-session",
+ "ras-rest-core",
  "ras-rest-macro",
  "schemars",
  "serde",

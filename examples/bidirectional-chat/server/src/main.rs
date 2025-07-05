@@ -40,6 +40,7 @@ mod persistence;
 
 use bidirectional_chat_api::auth::*;
 use config::Config;
+use ras_rest_core::{RestResult, RestResponse, RestError};
 use persistence::{
     PersistedCatAvatar, PersistedMessage, PersistedRoom, PersistedUserProfile, PersistenceManager,
 };
@@ -1310,7 +1311,7 @@ impl AuthHandlers {
     async fn handle_login(
         &self,
         request: LoginRequest,
-    ) -> Result<LoginResponse, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> RestResult<LoginResponse> {
         debug!("Processing login request");
 
         // Create auth payload
@@ -1328,7 +1329,7 @@ impl AuthHandlers {
             .await
             .map_err(|e| {
                 warn!(provider = %provider_id, "Login failed: {}", e);
-                format!("Authentication failed: {}", e)
+                RestError::unauthorized("Invalid credentials")
             })?;
 
         // Parse token to get user info (for response)
@@ -1338,21 +1339,21 @@ impl AuthHandlers {
             .await
             .map_err(|e| {
                 warn!("Token verification failed: {}", e);
-                format!("Token verification failed: {}", e)
+                RestError::internal_server_error("Token verification failed")
             })?;
 
         info!(user_id = %claims.sub, "User logged in successfully");
-        Ok(LoginResponse {
+        Ok(RestResponse::ok(LoginResponse {
             token,
             expires_at: claims.exp,
             user_id: claims.sub,
-        })
+        }))
     }
 
     async fn handle_register(
         &self,
         request: RegisterRequest,
-    ) -> Result<RegisterResponse, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> RestResult<RegisterResponse> {
         debug!("Processing registration request");
 
         // Add user
@@ -1366,25 +1367,25 @@ impl AuthHandlers {
             .await
             .map_err(|e| {
                 warn!(username = %request.username, "Registration failed: {}", e);
-                format!("Registration failed: {}", e)
+                RestError::conflict("Username already exists")
             })?;
 
         info!(username = %request.username, email = ?request.email, "User registered successfully");
 
-        Ok(RegisterResponse {
+        Ok(RestResponse::created(RegisterResponse {
             message: "User registered successfully".to_string(),
             username: request.username,
             display_name: request.display_name,
-        })
+        }))
     }
 
     async fn handle_health(
         &self,
-    ) -> Result<HealthResponse, Box<dyn std::error::Error + Send + Sync>> {
-        Ok(HealthResponse {
+    ) -> RestResult<HealthResponse> {
+        Ok(RestResponse::ok(HealthResponse {
             status: "OK".to_string(),
             timestamp: Utc::now().to_rfc3339(),
-        })
+        }))
     }
 }
 

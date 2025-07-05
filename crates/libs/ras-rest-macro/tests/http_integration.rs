@@ -1,6 +1,7 @@
 use rand::Rng;
 use ras_jsonrpc_core::{AuthError, AuthFuture, AuthProvider, AuthenticatedUser};
 use ras_rest_macro::rest_service;
+use ras_rest_core::{RestResponse, RestError};
 use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -158,7 +159,7 @@ async fn create_rest_test_server() -> (String, tokio::task::JoinHandle<()>) {
         .auth_provider(TestRestAuthProvider::new())
         // UNAUTHORIZED endpoints
         .get_users_handler(|| async move {
-            Ok(UsersResponse {
+            Ok(RestResponse::ok(UsersResponse {
                 users: vec![
                     User {
                         id: Some(1),
@@ -174,10 +175,10 @@ async fn create_rest_test_server() -> (String, tokio::task::JoinHandle<()>) {
                     },
                 ],
                 total: 2,
-            })
+            }))
         })
         .get_users_by_user_id_posts_handler(|user_id| async move {
-            Ok(PostsResponse {
+            Ok(RestResponse::ok(PostsResponse {
                 posts: vec![Post {
                     id: Some(1),
                     user_id,
@@ -187,60 +188,60 @@ async fn create_rest_test_server() -> (String, tokio::task::JoinHandle<()>) {
                     published: true,
                 }],
                 total: 1,
-            })
+            }))
         })
-        .get_health_handler(|| async move { Ok("OK".to_string()) })
+        .get_health_handler(|| async move { Ok(RestResponse::ok("OK".to_string())) })
         // WITH_PERMISSIONS(["admin"]) endpoints
         .post_users_handler(|_user, request| async move {
-            Ok(User {
+            Ok(RestResponse::created(User {
                 id: Some(rand::thread_rng().gen_range(100..999)),
                 name: request.name,
                 email: request.email,
                 permissions: request.permissions,
-            })
+            }))
         })
         .put_users_by_id_handler(|_user, id, request| async move {
-            Ok(User {
+            Ok(RestResponse::ok(User {
                 id: Some(id),
                 name: request.name,
                 email: request.email,
                 permissions: vec!["user".to_string()],
-            })
+            }))
         })
-        .delete_users_by_id_handler(|_user, _id| async move { Ok(()) })
+        .delete_users_by_id_handler(|_user, _id| async move { Ok(RestResponse::no_content()) })
         // WITH_PERMISSIONS(["user"]) endpoints
         .get_users_by_id_handler(|_user, id| async move {
             if id == 404 {
-                Err("User not found".into())
+                Err(RestError::not_found("User not found"))
             } else {
-                Ok(User {
+                Ok(RestResponse::ok(User {
                     id: Some(id),
                     name: "Found User".to_string(),
                     email: "found@example.com".to_string(),
                     permissions: vec!["user".to_string()],
-                })
+                }))
             }
         })
         .post_users_by_user_id_posts_handler(|_user, user_id, request| async move {
-            Ok(Post {
+            Ok(RestResponse::created(Post {
                 id: Some(rand::thread_rng().gen_range(100..999)),
                 user_id,
                 title: request.title,
                 content: request.content,
                 tags: request.tags,
                 published: false,
-            })
+            }))
         })
         // WITH_PERMISSIONS([]) endpoints
         .get_users_by_user_id_posts_by_post_id_handler(|_user, user_id, post_id| async move {
-            Ok(Post {
+            Ok(RestResponse::ok(Post {
                 id: Some(post_id),
                 user_id,
                 title: "Protected Post".to_string(),
                 content: "This requires authentication".to_string(),
                 tags: vec!["protected".to_string()],
                 published: true,
-            })
+            }))
         })
         .get_status_handler(|user| {
             let value = json!({
@@ -250,27 +251,27 @@ async fn create_rest_test_server() -> (String, tokio::task::JoinHandle<()>) {
                 "timestamp": chrono::Utc::now().to_rfc3339()
             });
 
-            async move { Ok(value) }
+            async move { Ok(RestResponse::ok(value)) }
         })
         .post_admin_action_handler(|_user, _request| async move {
-            Ok("Admin action completed".to_string())
+            Ok(RestResponse::ok("Admin action completed".to_string()))
         })
         // WITH_PERMISSIONS(["user", "moderator"]) endpoints
         .put_users_by_user_id_posts_by_post_id_handler(
             |_user, user_id, post_id, request| async move {
-                Ok(Post {
+                Ok(RestResponse::ok(Post {
                     id: Some(post_id),
                     user_id,
                     title: request.title,
                     content: request.content,
                     tags: request.tags,
                     published: true,
-                })
+                }))
             },
         )
         // WITH_PERMISSIONS(["admin", "moderator"]) endpoints
         .delete_users_by_user_id_posts_by_post_id_handler(|_user, _user_id, _post_id| async move {
-            Ok(())
+            Ok(RestResponse::no_content())
         });
 
     let app = builder.build();
@@ -440,7 +441,7 @@ async fn test_admin_permission_endpoints() {
     .await
     .unwrap();
 
-    assert_eq!(response.status(), 200);
+    assert_eq!(response.status(), 201); // Created
     let user: User = response.json().await.unwrap();
     assert_eq!(user.name, "New User");
     assert_eq!(user.email, "new@example.com");
@@ -474,7 +475,7 @@ async fn test_admin_permission_endpoints() {
     .await
     .unwrap();
 
-    assert_eq!(response.status(), 200);
+    assert_eq!(response.status(), 204); // No Content
 }
 
 #[tokio::test]
@@ -518,7 +519,7 @@ async fn test_user_permission_endpoints() {
     .await
     .unwrap();
 
-    assert_eq!(response.status(), 500);
+    assert_eq!(response.status(), 404); // Not Found
 
     // Test POST /api/v1/users/123/posts with user token
     let response = make_rest_request(
@@ -534,7 +535,7 @@ async fn test_user_permission_endpoints() {
     .await
     .unwrap();
 
-    assert_eq!(response.status(), 200);
+    assert_eq!(response.status(), 201); // Created
     let post: Post = response.json().await.unwrap();
     assert_eq!(post.user_id, 123);
     assert_eq!(post.title, "My New Post");
@@ -606,7 +607,7 @@ async fn test_multiple_permissions_endpoints() {
     .await
     .unwrap();
 
-    assert_eq!(response.status(), 200);
+    assert_eq!(response.status(), 204); // No Content
 
     // Test DELETE /api/v1/users/123/posts/456 with moderator token - should succeed
     let response = make_rest_request(
@@ -618,7 +619,7 @@ async fn test_multiple_permissions_endpoints() {
     .await
     .unwrap();
 
-    assert_eq!(response.status(), 200);
+    assert_eq!(response.status(), 204); // No Content
 }
 
 #[tokio::test]
@@ -758,7 +759,7 @@ async fn test_path_parameters() {
     .await
     .unwrap();
 
-    assert_eq!(response.status(), 200);
+    assert_eq!(response.status(), 201); // Created
     let post: Post = response.json().await.unwrap();
     assert_eq!(post.user_id, 999);
     assert_eq!(post.title, "Path Param Post");
@@ -851,7 +852,7 @@ async fn test_new_permission_logic() {
     .unwrap();
     assert_eq!(
         response.status(),
-        200,
+        204, // No Content
         "Admin token should succeed for delete - has admin"
     );
 
@@ -866,7 +867,7 @@ async fn test_new_permission_logic() {
     .unwrap();
     assert_eq!(
         response.status(),
-        200,
+        204, // No Content
         "Moderator token should succeed for delete - has moderator"
     );
 }

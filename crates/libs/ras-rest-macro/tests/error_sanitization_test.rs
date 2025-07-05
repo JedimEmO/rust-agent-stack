@@ -1,6 +1,7 @@
 use axum::{Router, http::StatusCode};
 use ras_auth_core::{AuthError, AuthProvider, AuthenticatedUser};
 use ras_rest_macro::rest_service;
+use ras_rest_core::{RestResponse, RestError};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashSet;
@@ -86,9 +87,13 @@ async fn test_error_sanitization() {
     let service = ErrorTestServiceBuilder::new()
         .auth_provider(MockAuthProvider)
         .post_error_test_handler(|_user, _req| async move {
-            Err(Box::new(CustomError {
-                message: "This contains sensitive database schema information!".to_string(),
-            }) as Box<dyn std::error::Error + Send + Sync>)
+            Err(RestError::with_internal(
+                500,
+                "Internal server error",
+                CustomError {
+                    message: "This contains sensitive database schema information!".to_string(),
+                }
+            ))
         })
         .build();
 
@@ -127,7 +132,7 @@ async fn test_unauthenticated_error_sanitization() {
     // Create a service with a handler that would succeed, but no auth token provided
     let service = ErrorTestServiceBuilder::new()
         .auth_provider(MockAuthProvider)
-        .post_error_test_handler(|_user, _req| async move { Ok(TestResponse {}) })
+        .post_error_test_handler(|_user, _req| async move { Ok(RestResponse::ok(TestResponse {})) })
         .build();
 
     let app = Router::new().merge(service);

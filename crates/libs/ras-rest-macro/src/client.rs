@@ -203,6 +203,32 @@ fn generate_client_method_with_timeout(endpoint: &EndpointDefinition) -> proc_ma
     };
 
     let response_type = &endpoint.response_type;
+    
+    // Check if response type is unit type ()
+    let is_unit_type = quote!(#response_type).to_string() == "()";
+    
+    let response_handling = if is_unit_type {
+        quote! {
+            if response.status().is_success() {
+                Ok(())
+            } else {
+                let status = response.status();
+                let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                Err(format!("HTTP error {}: {}", status, error_text).into())
+            }
+        }
+    } else {
+        quote! {
+            if response.status().is_success() {
+                let result = response.json().await?;
+                Ok(result)
+            } else {
+                let status = response.status();
+                let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                Err(format!("HTTP error {}: {}", status, error_text).into())
+            }
+        }
+    };
 
     quote! {
         /// Call the #method_name endpoint with a custom timeout
@@ -231,14 +257,7 @@ fn generate_client_method_with_timeout(endpoint: &EndpointDefinition) -> proc_ma
 
             let response = request_builder.send().await?;
 
-            if response.status().is_success() {
-                let result = response.json().await?;
-                Ok(result)
-            } else {
-                let status = response.status();
-                let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-                Err(format!("HTTP error {}: {}", status, error_text).into())
-            }
+            #response_handling
         }
     }
 }

@@ -12,6 +12,7 @@ ras-jsonrpc-bidirectional-macro = { path = "../../../crates/libs/ras-jsonrpc-bid
 ras-jsonrpc-bidirectional-server = { path = "../../../crates/libs/ras-jsonrpc-bidirectional-server" }
 ras-jsonrpc-bidirectional-types = { path = "../../../crates/libs/ras-jsonrpc-bidirectional-types" }
 ras-rest-macro = { path = "../../../crates/libs/ras-rest-macro", features = ["server"] }
+ras-rest-core = { path = "../../../crates/libs/ras-rest-core" }
 ras-identity-core = { path = "../../../crates/identity/ras-identity-core" }
 ras-identity-local = { path = "../../../crates/identity/ras-identity-local" }
 ras-identity-session = { path = "../../../crates/identity/ras-identity-session" }

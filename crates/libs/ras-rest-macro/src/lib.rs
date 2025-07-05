@@ -452,7 +452,7 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         }
 
         quote! {
-            async fn #handler_name(&self, #(#params),*) -> Result<#response_type, Box<dyn std::error::Error + Send + Sync>>;
+            async fn #handler_name(&self, #(#params),*) -> ras_rest_core::RestResult<#response_type>;
         }
     });
 
@@ -485,7 +485,7 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         }
 
         quote! {
-            #field_name: Option<std::sync::Arc<dyn Fn(#(#handler_params),*) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<#response_type, Box<dyn std::error::Error + Send + Sync>>> + Send>> + Send + Sync>>,
+            #field_name: Option<std::sync::Arc<dyn Fn(#(#handler_params),*) -> std::pin::Pin<Box<dyn std::future::Future<Output = ras_rest_core::RestResult<#response_type>> + Send>> + Send + Sync>>,
         }
     });
 
@@ -527,7 +527,7 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
             pub fn #setter_name<F, Fut>(mut self, handler: F) -> Self
             where
                 F: Fn(#(#handler_params),*) -> Fut + Send + Sync + 'static,
-                Fut: std::future::Future<Output = Result<#response_type, Box<dyn std::error::Error + Send + Sync>>> + Send + 'static,
+                Fut: std::future::Future<Output = ras_rest_core::RestResult<#response_type>> + Send + 'static,
             {
                 self.#field_name = Some(std::sync::Arc::new(move |#(#handler_args),*| Box::pin(handler(#(#handler_args),*))));
                 self
@@ -777,20 +777,30 @@ fn generate_handler_body(
                 let start_time = std::time::Instant::now();
 
                 let result = match handler(#(#args),*).await {
-                    Ok(result) => {
+                    Ok(rest_response) => {
                         use axum::response::IntoResponse;
+                        let status_code = axum::http::StatusCode::from_u16(rest_response.status)
+                            .unwrap_or(axum::http::StatusCode::OK);
                         (
-                            axum::http::StatusCode::OK,
-                            axum::Json(result)
+                            status_code,
+                            axum::Json(rest_response.body)
                         ).into_response()
                     },
-                    Err(e) => {
+                    Err(rest_error) => {
                         use axum::response::IntoResponse;
-                        tracing::error!(error = ?e, "Internal server error");
+                        
+                        // Log internal error if present
+                        if let Some(internal) = &rest_error.internal_error {
+                            tracing::error!(error = ?internal, "Request failed with status {}", rest_error.status);
+                        }
+                        
+                        let status_code = axum::http::StatusCode::from_u16(rest_error.status)
+                            .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+                        
                         (
-                            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                            status_code,
                             axum::Json(serde_json::json!({
-                                "error": "Internal server error"
+                                "error": &rest_error.message
                             }))
                         ).into_response()
                     },
@@ -930,20 +940,30 @@ fn generate_handler_body(
                 let start_time = std::time::Instant::now();
 
                 let result = match handler(#(#args),*).await {
-                    Ok(result) => {
+                    Ok(rest_response) => {
                         use axum::response::IntoResponse;
+                        let status_code = axum::http::StatusCode::from_u16(rest_response.status)
+                            .unwrap_or(axum::http::StatusCode::OK);
                         (
-                            axum::http::StatusCode::OK,
-                            axum::Json(result)
+                            status_code,
+                            axum::Json(rest_response.body)
                         ).into_response()
                     },
-                    Err(e) => {
+                    Err(rest_error) => {
                         use axum::response::IntoResponse;
-                        tracing::error!(error = ?e, "Internal server error");
+                        
+                        // Log internal error if present
+                        if let Some(internal) = &rest_error.internal_error {
+                            tracing::error!(error = ?internal, "Request failed with status {}", rest_error.status);
+                        }
+                        
+                        let status_code = axum::http::StatusCode::from_u16(rest_error.status)
+                            .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+                        
                         (
-                            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                            status_code,
                             axum::Json(serde_json::json!({
-                                "error": "Internal server error"
+                                "error": &rest_error.message
                             }))
                         ).into_response()
                     },
