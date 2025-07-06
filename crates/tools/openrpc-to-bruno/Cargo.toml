@@ -33,4 +33,4 @@ tokio = { workspace = true }
 
 [dev-dependencies]
 tokio-test = { workspace = true }
-tempfile = "3.0"
+tempfile = { workspace = true }

@@ -534,6 +534,9 @@ mod tests {
             .await
             .unwrap();
 
+        // Wait a bit for the message to be received
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
         // Cleanup
         client1
             .disconnect()

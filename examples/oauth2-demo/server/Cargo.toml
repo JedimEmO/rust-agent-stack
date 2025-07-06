@@ -30,11 +30,11 @@ jsonwebtoken = { workspace = true }
 schemars.workspace = true
 
 # Additional dependencies for this example
-tracing-subscriber = "0.3"
-tower = "0.5"
-tower-http = { version = "0.6", features = ["fs", "cors"] }
-dotenvy = "0.15"
-mime_guess = "2.0"
+tracing-subscriber = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true, features = ["fs", "cors"] }
+dotenvy = { workspace = true }
+mime_guess = { workspace = true }
 
 [build-dependencies]
 oauth2-demo-api = { path = "../api"}

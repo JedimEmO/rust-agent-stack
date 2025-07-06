@@ -9,10 +9,10 @@ ras-observability-core = { path = "../../core/ras-observability-core" }
 ras-auth-core = { path = "../../core/ras-auth-core" }
 
 # OpenTelemetry dependencies
-opentelemetry = "0.28"
-opentelemetry_sdk = { version = "0.28", features = ["rt-tokio", "metrics"] }
-opentelemetry-prometheus = "0.28"
-prometheus = "0.13"
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+opentelemetry-prometheus = { workspace = true }
+prometheus = { workspace = true }
 
 # Web framework and utilities
 axum = { workspace = true }

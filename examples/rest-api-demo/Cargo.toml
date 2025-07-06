@@ -34,7 +34,7 @@ jsonwebtoken = { workspace = true }
 # Additional dependencies
 tracing-subscriber = { workspace = true }
 schemars = { workspace = true }
-dotenvy = "0.15"
+dotenvy = { workspace = true }
 
 # Observability
 ras-observability-core = { path = "../../crates/core/ras-observability-core" }

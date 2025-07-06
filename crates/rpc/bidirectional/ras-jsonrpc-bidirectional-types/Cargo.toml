@@ -17,7 +17,7 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 
 # WebSocket dependencies
-tokio-tungstenite = "0.26"
+tokio-tungstenite = { workspace = true }
 
 [dev-dependencies]
 tokio-test = { workspace = true }

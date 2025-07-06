@@ -21,16 +21,16 @@ uuid = { workspace = true }
 axum = { workspace = true }
 
 # OAuth2 specific dependencies
-reqwest = { version = "0.11", features = ["json"] }
-base64 = "0.22"
-sha2 = "0.10"
-rand = "0.8"
-url = "2.5"
+reqwest = { workspace = true }
+base64 = { workspace = true }
+sha2 = { workspace = true }
+rand = { workspace = true }
+url = { workspace = true }
 
 [dev-dependencies]
 tokio-test = { workspace = true }
-wiremock = "0.6"
-tracing-subscriber = "0.3"
+wiremock = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 # For the example
 ras-identity-session = { path = "../ras-identity-session" }

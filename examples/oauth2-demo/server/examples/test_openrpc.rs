@@ -2,7 +2,7 @@ use std::fs;
 
 // Simple test to verify OpenRPC generation works
 fn main() {
-    use api::*;
+    use oauth2_demo_api::*;
 
     // Create target/openrpc directory if it doesn't exist
     fs::create_dir_all("openrpc").expect("Failed to create directory");

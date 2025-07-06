@@ -99,12 +99,10 @@ impl WebSocketTransport for NativeWebSocketTransport {
             .map_err(|e| ClientError::connection(format!("Failed to build request: {}", e)))?;
 
         // Configure connection
-        let config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig {
-            max_message_size: Some(16 * 1024 * 1024), // 16MB
-            max_frame_size: Some(16 * 1024 * 1024),   // 16MB
-            accept_unmasked_frames: false,
-            ..Default::default()
-        };
+        let mut config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default();
+        config.max_message_size = Some(16 * 1024 * 1024); // 16MB
+        config.max_frame_size = Some(16 * 1024 * 1024);   // 16MB
+        config.accept_unmasked_frames = false;
 
         // Connect with timeout
         let connect_future = connect_async_with_config(request, Some(config), false);
@@ -148,7 +146,7 @@ impl WebSocketTransport for NativeWebSocketTransport {
 
         debug!("Sending message: {}", json);
 
-        let ws_message = Message::Text(json);
+        let ws_message = Message::Text(json.into());
 
         let mut connection_guard = self.connection.write().await;
         if let Some(ref mut ws) = *connection_guard {
