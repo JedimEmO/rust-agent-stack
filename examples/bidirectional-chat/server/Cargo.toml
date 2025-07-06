@@ -6,14 +6,14 @@ edition = "2024"
 [dependencies]
 # Local dependencies
 bidirectional-chat-api = { path = "../api" }
-ras-auth-core = { path = "../../../crates/libs/ras-auth-core" }
-ras-jsonrpc-types = { path = "../../../crates/libs/ras-jsonrpc-types" }
-ras-jsonrpc-bidirectional-macro = { path = "../../../crates/libs/ras-jsonrpc-bidirectional-macro" }
-ras-jsonrpc-bidirectional-server = { path = "../../../crates/libs/ras-jsonrpc-bidirectional-server" }
-ras-jsonrpc-bidirectional-types = { path = "../../../crates/libs/ras-jsonrpc-bidirectional-types" }
-ras-rest-macro = { path = "../../../crates/libs/ras-rest-macro", features = ["server"] }
-ras-rest-core = { path = "../../../crates/libs/ras-rest-core" }
-ras-identity-core = { path = "../../../crates/identity/ras-identity-core" }
+ras-auth-core = { path = "../../../crates/core/ras-auth-core" }
+ras-jsonrpc-types = { path = "../../../crates/rpc/ras-jsonrpc-types" }
+ras-jsonrpc-bidirectional-macro = { path = "../../../crates/rpc/bidirectional/ras-jsonrpc-bidirectional-macro" }
+ras-jsonrpc-bidirectional-server = { path = "../../../crates/rpc/bidirectional/ras-jsonrpc-bidirectional-server" }
+ras-jsonrpc-bidirectional-types = { path = "../../../crates/rpc/bidirectional/ras-jsonrpc-bidirectional-types" }
+ras-rest-macro = { path = "../../../crates/rest/ras-rest-macro", features = ["server"] }
+ras-rest-core = { path = "../../../crates/rest/ras-rest-core" }
+ras-identity-core = { path = "../../../crates/core/ras-identity-core" }
 ras-identity-local = { path = "../../../crates/identity/ras-identity-local" }
 ras-identity-session = { path = "../../../crates/identity/ras-identity-session" }
 

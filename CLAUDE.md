@@ -50,27 +50,44 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
 
 ### Workspace Structure
 - Uses Cargo workspace with resolver version 3 (latest)
-- Organized under `crates/` with subcategories:
-  - `libs/` - Library crates
+- Organized under `crates/` with functional grouping:
+  - `core/` - Shared foundational traits and types
+  - `rpc/` - JSON-RPC protocol implementation
+  - `rest/` - REST API implementation
   - `identity/` - Identity and authentication providers
+  - `observability/` - Monitoring and metrics
+  - `specs/` - Specification types (OpenRPC, etc.)
   - `tools/` - Development tools and utilities
 
 ### Current Crates
 
-#### Core Libraries (`crates/libs/`)
+#### Core Libraries (`crates/core/`)
 - **ras-auth-core**: Shared authentication traits and types (`AuthProvider`, `AuthenticatedUser`, `AuthError`) used across JSON-RPC and REST services
-- **ras-jsonrpc-macro**: Procedural macro for type-safe JSON-RPC interfaces with auth integration and optional OpenRPC document generation
-- **ras-jsonrpc-core**: Core traits and utilities for JSON-RPC services (re-exports auth types from ras-auth-core)
+- **ras-identity-core**: Core `IdentityProvider` and `UserPermissions` traits
+- **ras-observability-core**: Core observability traits
+
+#### RPC Libraries (`crates/rpc/`)
 - **ras-jsonrpc-types**: Pure JSON-RPC 2.0 protocol types and utilities
+- **ras-jsonrpc-core**: Core traits and utilities for JSON-RPC services (re-exports auth types from ras-auth-core)
+- **ras-jsonrpc-macro**: Procedural macro for type-safe JSON-RPC interfaces with auth integration and optional OpenRPC document generation
+
+##### Bidirectional RPC (`crates/rpc/bidirectional/`)
 - **ras-jsonrpc-bidirectional-types**: Core types for bidirectional JSON-RPC communication over WebSockets
 - **ras-jsonrpc-bidirectional-server**: WebSocket server runtime with Axum integration for bidirectional JSON-RPC
 - **ras-jsonrpc-bidirectional-client**: Cross-platform WebSocket client (native + WASM) for bidirectional JSON-RPC
 - **ras-jsonrpc-bidirectional-macro**: Procedural macro for generating bidirectional WebSocket JSON-RPC services
+
+#### REST Libraries (`crates/rest/`)
+- **ras-rest-core**: Core REST service traits
 - **ras-rest-macro**: Procedural macro for type-safe REST APIs with auth integration and OpenAPI 3.0 generation
+
+#### Specification Types (`crates/specs/`)
 - **openrpc-types**: Complete OpenRPC 1.3.2 specification types with validation, builders, and JSON Schema Draft 7 support
 
+#### Observability (`crates/observability/`)
+- **ras-observability-otel**: OpenTelemetry implementation for metrics and monitoring
+
 #### Identity Management (`crates/identity/`)
-- **ras-identity-core**: Core `IdentityProvider` and `UserPermissions` traits
 - **ras-identity-local**: Username/password auth with Argon2 hashing
 - **ras-identity-oauth2**: OAuth2 provider with Google support, PKCE, and state management
 - **ras-identity-session**: JWT session management and `JwtAuthProvider` implementation
@@ -124,14 +141,25 @@ This is a Rust workspace project for building an agent stack with JSON-RPC commu
 - **wasm-pack**: Tool for building and packaging WASM modules
 
 #### Crate Organization
-- **ras-auth-core**: Shared authentication types and traits, minimal dependencies (serde, thiserror)
-- **ras-jsonrpc-types**: Pure protocol types, minimal dependencies (only serde)
-- **ras-jsonrpc-core**: JSON-RPC runtime support, depends on auth-core and types crate
-- **ras-jsonrpc-macro**: Procedural macro only, depends on syn/quote for parsing
-- **ras-rest-macro**: REST procedural macro, depends on auth-core for shared types
-- **ras-identity-core**: Core traits only, minimal dependencies
-- **ras-identity-local/oauth2**: Specific provider implementations, depend on core
-- **ras-identity-session**: JWT session management, integrates with both identity and auth-core
+- **Core** (`crates/core/`):
+  - **ras-auth-core**: Shared authentication types and traits, minimal dependencies (serde, thiserror)
+  - **ras-identity-core**: Core traits only, minimal dependencies
+  - **ras-observability-core**: Core observability traits
+- **RPC** (`crates/rpc/`):
+  - **ras-jsonrpc-types**: Pure protocol types, minimal dependencies (only serde)
+  - **ras-jsonrpc-core**: JSON-RPC runtime support, depends on auth-core and types crate
+  - **ras-jsonrpc-macro**: Procedural macro only, depends on syn/quote for parsing
+  - **Bidirectional** (`crates/rpc/bidirectional/`): WebSocket-based bidirectional RPC implementation
+- **REST** (`crates/rest/`):
+  - **ras-rest-core**: Core REST traits
+  - **ras-rest-macro**: REST procedural macro, depends on auth-core for shared types
+- **Identity** (`crates/identity/`):
+  - **ras-identity-local/oauth2**: Specific provider implementations, depend on core
+  - **ras-identity-session**: JWT session management, integrates with both identity and auth-core
+- **Observability** (`crates/observability/`):
+  - **ras-observability-otel**: OpenTelemetry implementation
+- **Specs** (`crates/specs/`):
+  - **openrpc-types**: OpenRPC specification types
 
 #### Development Notes
 - Edition 2024 is used (cutting edge Rust)

@@ -8,8 +8,8 @@ repository = "https://github.com/example/rust-agent-stack"
 homepage = "https://github.com/example/rust-agent-stack"
 
 [dependencies]
-ras-identity-core = { path = "../ras-identity-core" }
-ras-auth-core = { path = "../../libs/ras-auth-core" }
+ras-identity-core = { path = "../../core/ras-identity-core" }
+ras-auth-core = { path = "../../core/ras-auth-core" }
 
 async-trait = { workspace = true }
 chrono = { workspace = true }

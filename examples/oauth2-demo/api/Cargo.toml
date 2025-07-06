@@ -1,0 +1,23 @@
+[package]
+name = "oauth2-demo-api"
+version = "0.1.0"
+edition = "2024"
+publish = ["kellnr"]
+
+[features]
+default = ["server"]
+server = []
+client = []
+
+[dependencies]
+# JSON-RPC infrastructure
+ras-jsonrpc-macro = { path = "../../../crates/rpc/ras-jsonrpc-macro", features = ["server"] }
+ras-jsonrpc-core = { path = "../../../crates/rpc/ras-jsonrpc-core" }
+ras-jsonrpc-types = { path = "../../../crates/rpc/ras-jsonrpc-types" }
+
+# Web framework and utilities
+axum = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+schemars.workspace = true
+reqwest.workspace = true

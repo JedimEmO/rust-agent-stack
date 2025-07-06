@@ -14,14 +14,14 @@ serde_json = { workspace = true }
 schemars = { workspace = true }
 async-trait = { workspace = true }
 tokio = { workspace = true }
-ras-jsonrpc-bidirectional-macro = { path = "../../../crates/libs/ras-jsonrpc-bidirectional-macro" }
-ras-jsonrpc-bidirectional-types = { path = "../../../crates/libs/ras-jsonrpc-bidirectional-types" }
-ras-jsonrpc-bidirectional-server = { path = "../../../crates/libs/ras-jsonrpc-bidirectional-server", optional = true }
-ras-jsonrpc-bidirectional-client = { path = "../../../crates/libs/ras-jsonrpc-bidirectional-client", optional = true }
-ras-auth-core = { path = "../../../crates/libs/ras-auth-core" }
-ras-rest-core = { path = "../../../crates/libs/ras-rest-core" }
-ras-jsonrpc-types = { path = "../../../crates/libs/ras-jsonrpc-types" }
-ras-rest-macro = { path = "../../../crates/libs/ras-rest-macro" }
+ras-jsonrpc-bidirectional-macro = { path = "../../../crates/rpc/bidirectional/ras-jsonrpc-bidirectional-macro" }
+ras-jsonrpc-bidirectional-types = { path = "../../../crates/rpc/bidirectional/ras-jsonrpc-bidirectional-types" }
+ras-jsonrpc-bidirectional-server = { path = "../../../crates/rpc/bidirectional/ras-jsonrpc-bidirectional-server", optional = true }
+ras-jsonrpc-bidirectional-client = { path = "../../../crates/rpc/bidirectional/ras-jsonrpc-bidirectional-client", optional = true }
+ras-auth-core = { path = "../../../crates/core/ras-auth-core" }
+ras-rest-core = { path = "../../../crates/rest/ras-rest-core" }
+ras-jsonrpc-types = { path = "../../../crates/rpc/ras-jsonrpc-types" }
+ras-rest-macro = { path = "../../../crates/rest/ras-rest-macro" }
 reqwest = { workspace = true, features = ["json"] }
 tracing.workspace = true
 axum = { workspace = true, optional = true }

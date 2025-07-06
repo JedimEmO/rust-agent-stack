@@ -1,0 +1,41 @@
+[package]
+name = "rest-api-demo"
+version = "0.1.0"
+edition = "2024"
+description = "Example REST service using ras-rest-macro"
+
+[features]
+default = ["server"]
+server = []
+client = []
+
+[dependencies]
+# REST and JSON-RPC infrastructure
+ras-rest-macro = { path = "../../crates/rest/ras-rest-macro", features = ["server"] }
+ras-rest-core = { path = "../../crates/rest/ras-rest-core" }
+ras-auth-core = { path = "../../crates/core/ras-auth-core" }
+
+# Identity management
+ras-identity-core = { path = "../../crates/core/ras-identity-core" }
+ras-identity-local = { path = "../../crates/identity/ras-identity-local" }
+ras-identity-session = { path = "../../crates/identity/ras-identity-session" }
+
+# Web framework and utilities
+axum = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+jsonwebtoken = { workspace = true }
+
+# Additional dependencies
+tracing-subscriber = { workspace = true }
+schemars = { workspace = true }
+dotenvy = "0.15"
+
+# Observability
+ras-observability-core = { path = "../../crates/core/ras-observability-core" }
+ras-observability-otel = { path = "../../crates/observability/ras-observability-otel" }

@@ -1,0 +1,28 @@
+[package]
+name = "basic-jsonrpc-service"
+version = "0.1.1"
+edition = "2024"
+publish = false
+
+[features]
+default = ["server"]
+server = []
+client = []
+
+[dependencies]
+basic-jsonrpc-api = { path = "../api" }
+ras-jsonrpc-core = { path = "../../../crates/rpc/ras-jsonrpc-core" }
+ras-jsonrpc-types = { path = "../../../crates/rpc/ras-jsonrpc-types" }
+axum = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
+anyhow = { workspace = true }
+
+# Observability
+ras-observability-core = { path = "../../../crates/core/ras-observability-core" }
+ras-observability-otel = { path = "../../../crates/observability/ras-observability-otel" }

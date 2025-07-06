@@ -1,33 +1,38 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/libs/ras-auth-core",
-    "crates/libs/ras-jsonrpc-macro",
-    "crates/libs/ras-jsonrpc-core",
-    "crates/libs/ras-jsonrpc-types",
-    "crates/libs/ras-jsonrpc-bidirectional-types",
-    "crates/libs/ras-jsonrpc-bidirectional-macro",
-    "crates/libs/ras-jsonrpc-bidirectional-server",
-    "crates/libs/ras-jsonrpc-bidirectional-client",
-    "crates/libs/ras-rest-macro",
-    "crates/libs/ras-rest-core",
-    "crates/libs/ras-observability-core",
-    "crates/libs/ras-observability-otel",
-    "crates/libs/openrpc-types",
-    "crates/identity/ras-identity-core",
-    "crates/identity/ras-identity-local",
-    "crates/identity/ras-identity-oauth2",
-    "crates/identity/ras-identity-session",
-    "crates/tools/openrpc-to-bruno",
-    "examples/basic-jsonrpc-api",
-    "examples/basic-jsonrpc-service",
-    "examples/google-oauth-example/server",
-    "examples/rest-service-example",
-    "examples/google-oauth-example/api",
+    # Core
+    "crates/core/*",
+    
+    # RPC
+    "crates/rpc/ras-jsonrpc-types",
+    "crates/rpc/ras-jsonrpc-core",
+    "crates/rpc/ras-jsonrpc-macro",
+    "crates/rpc/bidirectional/*",
+    
+    # REST
+    "crates/rest/*",
+    
+    # Identity
+    "crates/identity/*",
+    
+    # Observability
+    "crates/observability/*",
+    
+    # Specs
+    "crates/specs/*",
+    
+    # Tools
+    "crates/tools/*",
+    
+    # Examples
+    "examples/basic-jsonrpc/*",
+    "examples/oauth2-demo/*",
+    "examples/rest-api-demo",
+    "examples/wasm-ui-demo",
     "examples/bidirectional-chat/api",
     "examples/bidirectional-chat/server",
-    "examples/bidirectional-chat/bidirectional-chat-tui",
-    "examples/dominator-example"
+    "examples/bidirectional-chat/tui",
 ]
 
 [workspace.dependencies]

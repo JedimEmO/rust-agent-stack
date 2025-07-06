@@ -1,0 +1,48 @@
+[package]
+name = "ras-jsonrpc-macro"
+version = "0.1.1"
+edition = "2024"
+description = "Procedural macro for type-safe JSON-RPC interfaces with auth integration and OpenRPC document generation"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/example/rust-agent-stack"
+homepage = "https://github.com/example/rust-agent-stack"
+
+[lib]
+proc-macro = true
+
+[features]
+default = ["server", "client"]  # Enable server by default for backward compatibility
+server = ["axum", "ras-jsonrpc-core"]
+client = ["reqwest"]
+
+[dependencies]
+syn = { workspace = true }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }
+bon = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+schemars = { workspace = true }
+
+# Server dependencies
+axum = { workspace = true, optional = true }
+ras-jsonrpc-core = { path = "../ras-jsonrpc-core", optional = true }
+
+# Client dependencies
+reqwest = { workspace = true, optional = true }
+
+# Always needed for types
+ras-jsonrpc-types = { path = "../ras-jsonrpc-types" }
+
+[dev-dependencies]
+tokio = { workspace = true }
+reqwest = { workspace = true }
+tower = { workspace = true }
+rand = { workspace = true }
+ras-identity-session = { path = "../../identity/ras-identity-session" }
+futures = { workspace = true }
+# Server dependencies for tests
+axum = { workspace = true }
+ras-jsonrpc-core = { path = "../ras-jsonrpc-core" }
+ras-auth-core = { path = "../../core/ras-auth-core" }
+async-trait = { workspace = true }

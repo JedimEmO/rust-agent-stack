@@ -116,20 +116,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e16d2d3311acee920a9eb8d33b8cbc1787ce4a264e85f964c2404b969bdcd487"
 
 [[package]]
-name = "api"
-version = "0.1.0"
-dependencies = [
- "axum",
- "ras-jsonrpc-core",
- "ras-jsonrpc-macro",
- "ras-jsonrpc-types",
- "reqwest 0.12.19",
- "schemars",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "argon2"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -921,31 +907,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dominator-example"
-version = "0.1.0"
-dependencies = [
- "basic-jsonrpc-api",
- "console_error_panic_hook",
- "dominator",
- "dwind",
- "dwind-macros",
- "futures-signals",
- "gloo-events 0.2.0",
- "gloo-net",
- "gloo-timers",
- "gloo-utils",
- "once_cell",
- "reqwest 0.12.19",
- "serde",
- "serde_json",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "wasm-bindgen-test",
- "web-sys",
- "wee_alloc",
-]
-
-[[package]]
 name = "dotenvy"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1326,35 +1287,6 @@ dependencies = [
  "serde_json",
  "wasm-bindgen",
  "web-sys",
-]
-
-[[package]]
-name = "google-oauth-example"
-version = "0.1.1"
-dependencies = [
- "anyhow",
- "api",
- "async-trait",
- "axum",
- "chrono",
- "dotenvy",
- "jsonwebtoken",
- "mime_guess",
- "ras-identity-core",
- "ras-identity-oauth2",
- "ras-identity-session",
- "ras-jsonrpc-core",
- "ras-jsonrpc-macro",
- "ras-jsonrpc-types",
- "schemars",
- "serde",
- "serde_json",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "uuid",
 ]
 
 [[package]]
@@ -2092,6 +2024,49 @@ checksum = "91df4bbde75afed763b708b7eee1e8e7651e02d97f6d5dd763e89367e957b23b"
 dependencies = [
  "hermit-abi",
  "libc",
+]
+
+[[package]]
+name = "oauth2-demo-api"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "ras-jsonrpc-core",
+ "ras-jsonrpc-macro",
+ "ras-jsonrpc-types",
+ "reqwest 0.12.19",
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "oauth2-demo-server"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "chrono",
+ "dotenvy",
+ "jsonwebtoken",
+ "mime_guess",
+ "oauth2-demo-api",
+ "ras-identity-core",
+ "ras-identity-oauth2",
+ "ras-identity-session",
+ "ras-jsonrpc-core",
+ "ras-jsonrpc-macro",
+ "ras-jsonrpc-types",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
@@ -3034,7 +3009,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rest-service-example"
+name = "rest-api-demo"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -4237,6 +4212,31 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "wasm-ui-demo"
+version = "0.1.0"
+dependencies = [
+ "basic-jsonrpc-api",
+ "console_error_panic_hook",
+ "dominator",
+ "dwind",
+ "dwind-macros",
+ "futures-signals",
+ "gloo-events 0.2.0",
+ "gloo-net",
+ "gloo-timers",
+ "gloo-utils",
+ "once_cell",
+ "reqwest 0.12.19",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+ "web-sys",
+ "wee_alloc",
 ]
 
 [[package]]

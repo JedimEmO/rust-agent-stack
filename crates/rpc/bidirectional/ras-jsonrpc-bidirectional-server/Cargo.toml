@@ -1,0 +1,33 @@
+[package]
+name = "ras-jsonrpc-bidirectional-server"
+version = "0.1.0"
+edition = "2024"
+description = "WebSocket server implementation for bidirectional JSON-RPC communication"
+keywords = ["jsonrpc", "websocket", "axum", "bidirectional", "server"]
+categories = ["web-programming", "network-programming"]
+
+[dependencies]
+# Workspace dependencies
+axum = { workspace = true, features = ["ws"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+bon = { workspace = true }
+chrono = { workspace = true }
+
+# Internal dependencies
+ras-auth-core = { path = "../../../core/ras-auth-core" }
+ras-jsonrpc-types = { path = "../../ras-jsonrpc-types" }
+ras-jsonrpc-bidirectional-types = { path = "../ras-jsonrpc-bidirectional-types" }
+
+# WebSocket specific dependencies
+futures = { workspace = true }
+
+# Connection management
+dashmap = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }

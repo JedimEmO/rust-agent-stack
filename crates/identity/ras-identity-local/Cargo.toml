@@ -11,7 +11,7 @@ homepage = "https://github.com/example/rust-agent-stack"
 timing-tests = []
 
 [dependencies]
-ras-identity-core = { path = "../ras-identity-core" }
+ras-identity-core = { path = "../../core/ras-identity-core" }
 
 async-trait = { workspace = true }
 argon2 = { workspace = true }

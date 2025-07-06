@@ -26,7 +26,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 # OpenRPC types
-openrpc-types = { path = "../../libs/openrpc-types" }
+openrpc-types = { path = "../../specs/openrpc-types" }
 
 # File system operations
 tokio = { workspace = true }
