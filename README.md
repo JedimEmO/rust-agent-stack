@@ -46,6 +46,8 @@ crates/
 │   ├── ras-jsonrpc-bidirectional-* # WebSocket support
 │   ├── ras-rest-core        # REST types and utilities
 │   ├── ras-rest-macro       # REST service macro
+│   ├── ras-observability-core # Unified observability traits
+│   ├── ras-observability-otel # OpenTelemetry implementation
 │   └── openrpc-types        # OpenRPC specifications
 ├── identity/                # Identity providers
 │   ├── ras-identity-core    # Core identity traits
@@ -193,6 +195,31 @@ RESTful API with OpenAPI documentation and Prometheus metrics.
 - **Secure Password Storage** - Argon2 hashing with proper salts
 - **JWT Best Practices** - Configurable algorithms and secrets
 - **PKCE OAuth2** - Proof Key for Code Exchange by default
+
+### Built-in Observability
+
+Add production-ready metrics with one line of code:
+
+```rust
+use ras_observability_otel::standard_setup;
+
+// Set up OpenTelemetry with Prometheus
+let otel = standard_setup("my-service")?;
+
+// Use with service builders
+let service = MyServiceBuilder::new()
+    .with_usage_tracker(/* ... */)
+    .with_method_duration_tracker(/* ... */)
+    .build();
+
+// Metrics available at /metrics endpoint
+```
+
+Features:
+- Unified metrics for both REST and JSON-RPC
+- Request counting, duration tracking, user activity
+- Zero-config Prometheus integration
+- Extensible trait-based design
 
 ## Development
 

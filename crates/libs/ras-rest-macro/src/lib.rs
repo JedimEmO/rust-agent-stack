@@ -541,7 +541,7 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         // Generate OpenAPI function at module level if serve_docs is enabled
         #[cfg(feature = "server")]
         #openapi_code
-        
+
         #static_hosting_code
 
         #[cfg(feature = "server")]
@@ -705,15 +705,15 @@ fn generate_handler_body(
                     },
                     Err(rest_error) => {
                         use axum::response::IntoResponse;
-                        
+
                         // Log internal error if present
                         if let Some(internal) = &rest_error.internal_error {
                             tracing::error!(error = ?internal, "Request failed with status {}", rest_error.status);
                         }
-                        
+
                         let status_code = axum::http::StatusCode::from_u16(rest_error.status)
                             .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
-                        
+
                         (
                             status_code,
                             axum::Json(serde_json::json!({
@@ -868,15 +868,15 @@ fn generate_handler_body(
                     },
                     Err(rest_error) => {
                         use axum::response::IntoResponse;
-                        
+
                         // Log internal error if present
                         if let Some(internal) = &rest_error.internal_error {
                             tracing::error!(error = ?internal, "Request failed with status {}", rest_error.status);
                         }
-                        
+
                         let status_code = axum::http::StatusCode::from_u16(rest_error.status)
                             .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
-                        
+
                         (
                             status_code,
                             axum::Json(serde_json::json!({

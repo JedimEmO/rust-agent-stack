@@ -1,32 +1,35 @@
-# Basic JSON-RPC Service with OpenTelemetry Metrics
+# Basic JSON-RPC Service with Unified Observability
 
-This example demonstrates a basic JSON-RPC service with OpenTelemetry metrics exported via OTLP (OpenTelemetry Protocol) and exposed through a Prometheus metrics endpoint.
+This example demonstrates a basic JSON-RPC service using the new unified observability crates (`ras-observability-core` and `ras-observability-otel`) for production-ready metrics collection.
 
 ## Features
 
 - ✅ **JSON-RPC service** with authentication and permissions
-- ✅ **OpenTelemetry metrics** collection with OTLP export
+- ✅ **Unified observability** using ras-observability-* crates
 - ✅ **Prometheus metrics endpoint** at `/metrics`
 - ✅ **Automatic metric collection** for RPC requests
-- ✅ **Authentication tracking** with user-specific metrics
+- ✅ **Method duration tracking** with low-cardinality labels
 - ✅ **Interactive Explorer** - Built-in JSON-RPC Explorer UI
 - ✅ **OpenRPC Document** - Auto-generated API specification
 
 ## Metrics Collected
 
-1. **`rpc_requests_started_total`** (Counter) - Total number of RPC requests started
-   - Labels: `method`, `user_agent`, `authenticated`, `user_id`, `has_admin`
+1. **`requests_started_total`** (Counter) - Total number of requests started
+   - Labels: `method`, `protocol` (JSON-RPC)
 
-2. **`rpc_requests_completed_total`** (Counter) - Total number of RPC requests where usage_tracker completed
-   - Labels: Same as above
-   - **Note**: This tracks usage_tracker completion, not actual method execution completion
+2. **`requests_completed_total`** (Counter) - Total number of requests completed
+   - Labels: `method`, `protocol`, `success`
 
-3. **`active_users`** (Counter) - Tracks user sign-ins/sign-outs (gauge-like behavior)
-   - Labels: `user_type`, `action`
+3. **`method_duration_seconds`** (Histogram) - Method execution duration
+   - Labels: `method`, `protocol` (no user attributes to prevent cardinality explosion)
 
-### Important Limitation
+### Design Principles
 
-**Request duration tracking is not available** in this example. The `usage_tracker` callback runs BEFORE the actual RPC method executes, so we cannot measure method execution time without modifying the `jsonrpc_service` macro. For production use cases requiring duration metrics, consider implementing a custom middleware or enhancing the macro.
+This example follows best practices for production metrics:
+- **Low cardinality**: No user-specific labels in metrics
+- **Meaningful aggregations**: Duration percentiles (P50, P95, P99) are actually useful
+- **Cost-effective**: Won't explode your metrics storage
+- **User tracking via logs**: User details are logged but not in metrics
 
 ## Running the Example
 

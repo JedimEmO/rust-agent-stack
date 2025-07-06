@@ -64,13 +64,13 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
             }
 
             /// Build the client
-            /// 
+            ///
             /// # Errors
-            /// 
+            ///
             /// Returns an error if the underlying HTTP client fails to build
             pub fn build(self) -> Result<#client_name, Box<dyn std::error::Error + Send + Sync>> {
                 let mut client_builder = reqwest::Client::builder();
-                
+
                 // Timeout is not supported in WASM builds
                 #[cfg(not(target_arch = "wasm32"))]
                 if let Some(timeout) = self.timeout {
@@ -199,10 +199,10 @@ fn generate_client_method_with_timeout(endpoint: &EndpointDefinition) -> proc_ma
     };
 
     let response_type = &endpoint.response_type;
-    
+
     // Check if response type is unit type ()
     let is_unit_type = quote!(#response_type).to_string() == "()";
-    
+
     let response_handling = if is_unit_type {
         quote! {
             if response.status().is_success() {

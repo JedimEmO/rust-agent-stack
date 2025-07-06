@@ -9,12 +9,8 @@ use ras_auth_core::{AuthError, AuthFuture, AuthProvider, AuthenticatedUser};
 use ras_jsonrpc_bidirectional_client::ClientBuilder;
 use ras_jsonrpc_bidirectional_macro::jsonrpc_bidirectional_service;
 use ras_jsonrpc_bidirectional_server::DefaultConnectionManager;
-use ras_jsonrpc_bidirectional_server::service::{
-    BuiltWebSocketService, websocket_handler,
-};
-use ras_jsonrpc_bidirectional_types::{
-    ConnectionId,
-};
+use ras_jsonrpc_bidirectional_server::service::{BuiltWebSocketService, websocket_handler};
+use ras_jsonrpc_bidirectional_types::ConnectionId;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{collections::HashSet, sync::Arc, time::Duration};

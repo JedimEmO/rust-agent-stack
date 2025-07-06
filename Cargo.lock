@@ -314,12 +314,10 @@ dependencies = [
  "axum",
  "basic-jsonrpc-api",
  "chrono",
- "opentelemetry",
- "opentelemetry-prometheus",
- "opentelemetry_sdk",
- "prometheus",
  "ras-jsonrpc-core",
  "ras-jsonrpc-types",
+ "ras-observability-core",
+ "ras-observability-otel",
  "serde",
  "serde_json",
  "tokio",
@@ -2797,6 +2795,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "ras-observability-core"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "ras-auth-core",
+ "serde",
+]
+
+[[package]]
+name = "ras-observability-otel"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "opentelemetry",
+ "opentelemetry-prometheus",
+ "opentelemetry_sdk",
+ "prometheus",
+ "ras-auth-core",
+ "ras-observability-core",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "ras-rest-core"
 version = "0.1.0"
 dependencies = [
@@ -3018,14 +3043,12 @@ dependencies = [
  "chrono",
  "dotenvy",
  "jsonwebtoken",
- "opentelemetry",
- "opentelemetry-prometheus",
- "opentelemetry_sdk",
- "prometheus",
  "ras-auth-core",
  "ras-identity-core",
  "ras-identity-local",
  "ras-identity-session",
+ "ras-observability-core",
+ "ras-observability-otel",
  "ras-rest-core",
  "ras-rest-macro",
  "schemars",

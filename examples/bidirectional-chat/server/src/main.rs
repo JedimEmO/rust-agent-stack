@@ -11,9 +11,11 @@
 
 use anyhow::Result;
 use axum::{Router, routing::get};
+use bidirectional_chat_api::auth::{
+    ChatAuthServiceBuilder, HealthResponse, LoginRequest, LoginResponse, RegisterRequest,
+    RegisterResponse,
+};
 use bidirectional_chat_api::*;
-use bidirectional_chat_api::auth::{LoginRequest, LoginResponse, RegisterRequest, RegisterResponse, HealthResponse, ChatAuthServiceBuilder};
-use ras_rest_core::{RestResult, RestResponse, RestError};
 use chrono::Utc;
 use dashmap::DashMap;
 use ras_auth_core::AuthenticatedUser;
@@ -25,6 +27,7 @@ use ras_jsonrpc_bidirectional_server::{
     service::{BuiltWebSocketService, websocket_handler},
 };
 use ras_jsonrpc_bidirectional_types::{ConnectionId, ConnectionManager};
+use ras_rest_core::{RestError, RestResponse, RestResult};
 use serde_json::json;
 use std::{
     collections::{HashMap, HashSet},
@@ -1308,10 +1311,7 @@ impl UserPermissions for ChatPermissions {
 }
 
 impl AuthHandlers {
-    async fn handle_login(
-        &self,
-        request: LoginRequest,
-    ) -> RestResult<LoginResponse> {
+    async fn handle_login(&self, request: LoginRequest) -> RestResult<LoginResponse> {
         debug!("Processing login request");
 
         // Create auth payload
@@ -1350,10 +1350,7 @@ impl AuthHandlers {
         }))
     }
 
-    async fn handle_register(
-        &self,
-        request: RegisterRequest,
-    ) -> RestResult<RegisterResponse> {
+    async fn handle_register(&self, request: RegisterRequest) -> RestResult<RegisterResponse> {
         debug!("Processing registration request");
 
         // Add user
@@ -1379,9 +1376,7 @@ impl AuthHandlers {
         }))
     }
 
-    async fn handle_health(
-        &self,
-    ) -> RestResult<HealthResponse> {
+    async fn handle_health(&self) -> RestResult<HealthResponse> {
         Ok(RestResponse::ok(HealthResponse {
             status: "OK".to_string(),
             timestamp: Utc::now().to_rfc3339(),
@@ -1557,7 +1552,10 @@ async fn main() -> Result<()> {
             self.handlers.handle_login(request).await
         }
 
-        async fn post_auth_register(&self, request: RegisterRequest) -> RestResult<RegisterResponse> {
+        async fn post_auth_register(
+            &self,
+            request: RegisterRequest,
+        ) -> RestResult<RegisterResponse> {
             self.handlers.handle_register(request).await
         }
 

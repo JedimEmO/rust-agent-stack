@@ -57,7 +57,7 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
                 let server_url = self.server_url.ok_or("Server URL is required")?;
 
                 let mut client_builder = reqwest::Client::builder();
-                
+
                 #[cfg(not(target_arch = "wasm32"))]
                 if let Some(timeout) = self.timeout {
                     client_builder = client_builder.timeout(timeout);

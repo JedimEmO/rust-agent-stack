@@ -1,24 +1,22 @@
 #[macro_use]
 extern crate dominator;
 
-use dominator::{Dom, clone, events, class};
-use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
-use futures_signals::{
-    signal::{Mutable, SignalExt, Signal},
-    signal_vec::{MutableVec, SignalVecExt},
-};
-use std::sync::Arc;
-use wasm_bindgen_futures::spawn_local;
-use once_cell::sync::Lazy;
+use dominator::{Dom, class, clone, events};
 use dwind::prelude::*;
 use dwind_macros::dwclass;
+use futures_signals::{
+    signal::{Mutable, Signal, SignalExt},
+    signal_vec::{MutableVec, SignalVecExt},
+};
+use once_cell::sync::Lazy;
+use std::sync::Arc;
+use wasm_bindgen::JsCast;
+use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::spawn_local;
 
 use basic_jsonrpc_api::{
-    MyServiceClient, MyServiceClientBuilder, 
-    SignInRequest, SignInResponse,
-    Task, TaskPriority, CreateTaskRequest, UpdateTaskRequest,
-    TaskListResponse, DashboardStats,
+    CreateTaskRequest, DashboardStats, MyServiceClient, MyServiceClientBuilder, SignInRequest,
+    SignInResponse, Task, TaskListResponse, TaskPriority, UpdateTaskRequest,
 };
 
 // Global allocator for smaller WASM size
@@ -111,19 +109,19 @@ struct App {
     password: Mutable<String>,
     login_error: Mutable<Option<String>>,
     is_loading: Mutable<bool>,
-    
+
     // Tasks state
     tasks: MutableVec<Task>,
     selected_task: Mutable<Option<Task>>,
-    
+
     // Task form state
     new_task_title: Mutable<String>,
     new_task_description: Mutable<String>,
     new_task_priority: Mutable<TaskPriority>,
-    
+
     // Dashboard stats
     stats: Mutable<Option<DashboardStats>>,
-    
+
     // RPC client
     client: MyServiceClient,
 }
@@ -136,57 +134,57 @@ impl App {
         let protocol = location.protocol().unwrap();
         let host = location.host().unwrap();
         let api_url = format!("{}//{}/api/rpc", protocol, host);
-        
+
         // Initialize the RPC client
         let client = MyServiceClientBuilder::new()
             .server_url(&api_url)
             .build()
             .expect("Failed to build client");
-        
+
         Arc::new(Self {
             auth_token: Mutable::new(None),
             username: Mutable::new(String::new()),
             password: Mutable::new(String::new()),
             login_error: Mutable::new(None),
             is_loading: Mutable::new(false),
-            
+
             tasks: MutableVec::new(),
             selected_task: Mutable::new(None),
-            
+
             new_task_title: Mutable::new(String::new()),
             new_task_description: Mutable::new(String::new()),
             new_task_priority: Mutable::new(TaskPriority::Medium),
-            
+
             stats: Mutable::new(None),
-            
+
             client,
         })
     }
-    
+
     fn is_authenticated(&self) -> impl Signal<Item = bool> + 'static {
         self.auth_token.signal_ref(|token| token.is_some())
     }
-    
+
     fn login(app: Arc<Self>) {
         let username = app.username.get_cloned();
         let password = app.password.get_cloned();
-        
+
         app.is_loading.set(true);
         app.login_error.set(None);
-        
+
         spawn_local(clone!(app => async move {
             let result = app.client.sign_in(SignInRequest::WithCredentials {
                 username,
                 password,
             }).await;
-            
+
             app.is_loading.set(false);
-            
+
             match result {
                 Ok(SignInResponse::Success { jwt }) => {
                     app.auth_token.set(Some(jwt));
                     app.password.set(String::new());
-                    
+
                     // Load initial data after login
                     Self::load_tasks(app.clone());
                     Self::load_stats(app.clone());
@@ -200,95 +198,95 @@ impl App {
             }
         }));
     }
-    
+
     fn logout(app: Arc<Self>) {
         spawn_local(clone!(app => async move {
             if let Some(token) = app.auth_token.get_cloned() {
                 let mut client = app.client.clone();
                 client.set_bearer_token(Some(token));
-                
+
                 let _ = client.sign_out(()).await;
             }
-            
+
             app.auth_token.set(None);
             app.tasks.lock_mut().clear();
             app.stats.set(None);
             app.selected_task.set(None);
         }));
     }
-    
+
     fn load_tasks(app: Arc<Self>) {
         spawn_local(clone!(app => async move {
             if let Some(token) = app.auth_token.get_cloned() {
                 let mut client = app.client.clone();
                 client.set_bearer_token(Some(token));
-                
+
                 if let Ok(TaskListResponse { tasks, .. }) = client.list_tasks(()).await {
                     app.tasks.lock_mut().replace_cloned(tasks);
                 }
             }
         }));
     }
-    
+
     fn load_stats(app: Arc<Self>) {
         spawn_local(clone!(app => async move {
             if let Some(token) = app.auth_token.get_cloned() {
                 let mut client = app.client.clone();
                 client.set_bearer_token(Some(token));
-                
+
                 if let Ok(stats) = client.get_dashboard_stats(()).await {
                     app.stats.set(Some(stats));
                 }
             }
         }));
     }
-    
+
     fn create_task(app: Arc<Self>) {
         let title = app.new_task_title.get_cloned();
         let description = app.new_task_description.get_cloned();
         let priority = app.new_task_priority.get_cloned();
-        
+
         if title.is_empty() {
             return;
         }
-        
+
         spawn_local(clone!(app => async move {
             if let Some(token) = app.auth_token.get_cloned() {
                 let mut client = app.client.clone();
                 client.set_bearer_token(Some(token));
-                
+
                 let request = CreateTaskRequest {
                     title,
                     description,
                     priority,
                 };
-                
+
                 if let Ok(task) = client.create_task(request).await {
                     app.tasks.lock_mut().push_cloned(task);
                     app.new_task_title.set(String::new());
                     app.new_task_description.set(String::new());
                     app.new_task_priority.set(TaskPriority::Medium);
-                    
+
                     // Reload stats
                     Self::load_stats(app.clone());
                 }
             }
         }));
     }
-    
+
     fn toggle_task_completion(app: Arc<Self>, task_id: String) {
         spawn_local(clone!(app => async move {
             if let Some(token) = app.auth_token.get_cloned() {
                 let mut client = app.client.clone();
                 client.set_bearer_token(Some(token));
-                
+
                 // Find the task to toggle
                 let task_index = app.tasks.lock_ref().iter()
                     .position(|t| t.id == task_id);
-                
+
                 if let Some(index) = task_index {
                     let completed = !app.tasks.lock_ref()[index].completed;
-                    
+
                     let request = UpdateTaskRequest {
                         id: task_id,
                         title: None,
@@ -296,10 +294,10 @@ impl App {
                         completed: Some(completed),
                         priority: None,
                     };
-                    
+
                     if let Ok(updated_task) = client.update_task(request).await {
                         app.tasks.lock_mut().set_cloned(index, updated_task);
-                        
+
                         // Reload stats
                         Self::load_stats(app.clone());
                     }
@@ -307,23 +305,23 @@ impl App {
             }
         }));
     }
-    
+
     fn delete_task(app: Arc<Self>, task_id: String) {
         spawn_local(clone!(app => async move {
             if let Some(token) = app.auth_token.get_cloned() {
                 let mut client = app.client.clone();
                 client.set_bearer_token(Some(token));
-                
+
                 if client.delete_task(task_id.clone()).await.is_ok() {
                     app.tasks.lock_mut().retain(|t| t.id != task_id);
-                    
+
                     // Clear selection if the deleted task was selected
                     if let Some(selected) = app.selected_task.get_cloned() {
                         if selected.id == task_id {
                             app.selected_task.set(None);
                         }
                     }
-                    
+
                     // Reload stats
                     Self::load_stats(app.clone());
                 }
@@ -351,7 +349,7 @@ fn render_login_form(app: Arc<App>) -> Dom {
                 .style("background", "radial-gradient(circle at center, rgba(59, 130, 246, 0.1) 0%, transparent 70%)")
                 .style("animation", "rotate 30s linear infinite")
             }),
-            
+
             html!("div", {
                 .apply(|b| dwclass!(b, "flex flex-col justify-center w-full max-w-md p-8"))
                 .style("position", "relative")
@@ -369,13 +367,13 @@ fn render_login_form(app: Arc<App>) -> Dom {
                             .style("margin-bottom", "0.5rem")
                             .text("Welcome Back")
                         }),
-                        
+
                         html!("p", {
                             .apply(|b| dwclass!(b, "text-bunker-400 text-center"))
                             .style("margin-bottom", "2rem")
                             .text("Sign in to manage your tasks")
                         }),
-                        
+
                         html!("div", {
                             .children(&mut [
                                 html!("div", {
@@ -408,7 +406,7 @@ fn render_login_form(app: Arc<App>) -> Dom {
                                         }),
                                     ])
                                 }),
-                                
+
                                 html!("div", {
                                     .style("margin-bottom", "2rem")
                                     .children(&mut [
@@ -439,7 +437,7 @@ fn render_login_form(app: Arc<App>) -> Dom {
                                         }),
                                     ])
                                 }),
-                                
+
                                 html!("div", {
                                     .child_signal(app.login_error.signal_cloned().map(|error| {
                                         error.map(|msg| {
@@ -452,7 +450,7 @@ fn render_login_form(app: Arc<App>) -> Dom {
                                         })
                                     }))
                                 }),
-                                
+
                                 html!("button", {
                                     .apply(|b| dwclass!(b, "w-full p-4 font-semibold rounded-lg transition-all"))
                                     .style("color", "white")
@@ -472,7 +470,7 @@ fn render_login_form(app: Arc<App>) -> Dom {
                                         App::login(app.clone());
                                     }))
                                 }),
-                                
+
                                 html!("div", {
                                     .style("margin-top", "2rem")
                                     .apply(|b| dwclass!(b, "text-sm text-bunker-500 text-center"))
@@ -506,7 +504,7 @@ fn render_stats_card(stats: &DashboardStats) -> Dom {
                 .style("margin-bottom", "2rem")
                 .text("Dashboard Overview")
             }),
-            
+
             html!("div", {
                 .apply(|b| dwclass!(b, "grid grid-cols-2 gap-6"))
                 .children(&mut [
@@ -543,7 +541,7 @@ fn render_stats_card(stats: &DashboardStats) -> Dom {
                             }),
                         ])
                     }),
-                    
+
                     // Completed Tasks
                     html!("div", {
                         .apply(|b| dwclass!(b, "p-6 rounded-xl"))
@@ -577,7 +575,7 @@ fn render_stats_card(stats: &DashboardStats) -> Dom {
                             }),
                         ])
                     }),
-                    
+
                     // Pending Tasks
                     html!("div", {
                         .apply(|b| dwclass!(b, "p-6 rounded-xl"))
@@ -611,7 +609,7 @@ fn render_stats_card(stats: &DashboardStats) -> Dom {
                             }),
                         ])
                     }),
-                    
+
                     // High Priority Tasks
                     html!("div", {
                         .apply(|b| dwclass!(b, "p-6 rounded-xl"))
@@ -661,7 +659,7 @@ fn render_task_form(app: Arc<App>) -> Dom {
                 .style("margin-bottom", "2rem")
                 .text("Create New Task")
             }),
-            
+
             html!("div", {
                 .children(&mut [
                     // Title field
@@ -695,7 +693,7 @@ fn render_task_form(app: Arc<App>) -> Dom {
                             }),
                         ])
                     }),
-                    
+
                     // Description field
                     html!("div", {
                         .style("margin-bottom", "1.5rem")
@@ -728,7 +726,7 @@ fn render_task_form(app: Arc<App>) -> Dom {
                             }),
                         ])
                     }),
-                    
+
                     // Priority field
                     html!("div", {
                         .style("margin-bottom", "2rem")
@@ -759,7 +757,7 @@ fn render_task_form(app: Arc<App>) -> Dom {
                                             app.new_task_priority.set(TaskPriority::Low);
                                         }))
                                     }),
-                                    
+
                                     html!("button", {
                                         .apply(|b| dwclass!(b, "flex-1 p-3 text-sm font-medium rounded-lg border transition-all"))
                                         .style_signal("background-color", app.new_task_priority.signal_cloned().map(|p| {
@@ -777,7 +775,7 @@ fn render_task_form(app: Arc<App>) -> Dom {
                                             app.new_task_priority.set(TaskPriority::Medium);
                                         }))
                                     }),
-                                    
+
                                     html!("button", {
                                         .apply(|b| dwclass!(b, "flex-1 p-3 text-sm font-medium rounded-lg border transition-all"))
                                         .style_signal("background-color", app.new_task_priority.signal_cloned().map(|p| {
@@ -799,7 +797,7 @@ fn render_task_form(app: Arc<App>) -> Dom {
                             }),
                         ])
                     }),
-                    
+
                     html!("button", {
                         .apply(|b| dwclass!(b, "w-full p-4 font-semibold rounded-lg transition-all"))
                         .style("color", "white")
@@ -829,10 +827,14 @@ fn render_task_item(app: Arc<App>, task: Task) -> Dom {
     let task_id = task.id.clone();
     let (_priority_color, _priority_bg, priority_icon) = match task.priority {
         TaskPriority::High => ("text-red-400", "bg-red-900 bg-opacity-20", "🔥"),
-        TaskPriority::Medium => ("text-candlelight-400", "bg-candlelight-900 bg-opacity-20", "⚡"),
+        TaskPriority::Medium => (
+            "text-candlelight-400",
+            "bg-candlelight-900 bg-opacity-20",
+            "⚡",
+        ),
         TaskPriority::Low => ("text-apple-400", "bg-apple-900 bg-opacity-20", "💚"),
     };
-    
+
     html!("div", {
         .class("glass")
         .apply(|b| dwclass!(b, "p-6 rounded-xl hover:shadow-2xl transition-all"))
@@ -858,7 +860,7 @@ fn render_task_item(app: Arc<App>, task: Task) -> Dom {
                         }))
                     }))
                 }),
-                
+
                 html!("div", {
                     .apply(|b| dwclass!(b, "flex-1"))
                     .style("min-width", "0")
@@ -877,7 +879,7 @@ fn render_task_item(app: Arc<App>, task: Task) -> Dom {
                                     }))
                                     .text(&task.title)
                                 }),
-                                
+
                                 html!("span", {
                                     .class(match task.priority {
                                         TaskPriority::High => "text-red-400",
@@ -908,7 +910,7 @@ fn render_task_item(app: Arc<App>, task: Task) -> Dom {
                                 }),
                             ])
                         }),
-                        
+
                         html!("p", {
                             .apply(|b| dwclass!(b, "text-sm text-bunker-400"))
                             .style("margin-top", "0.5rem")
@@ -917,7 +919,7 @@ fn render_task_item(app: Arc<App>, task: Task) -> Dom {
                             }))
                             .text(&task.description)
                         }),
-                        
+
                         html!("div", {
                             .apply(|b| dwclass!(b, "flex gap-4 text-xs text-bunker-500"))
                             .style("margin-top", "0.75rem")
@@ -938,7 +940,7 @@ fn render_task_item(app: Arc<App>, task: Task) -> Dom {
                         }),
                     ])
                 }),
-                
+
                 html!("button", {
                     .apply(|b| dwclass!(b, "text-red-400 hover:text-red-300 text-sm font-medium rounded-lg transition-all"))
                     .style("padding", "0.25rem 0.75rem")
@@ -975,7 +977,7 @@ fn render_task_list(app: Arc<App>) -> Dom {
                     }),
                 ])
             }),
-            
+
             html!("div", {
                 .style("display", "flex")
                 .style("flex-direction", "column")
@@ -985,7 +987,7 @@ fn render_task_list(app: Arc<App>) -> Dom {
                         render_task_item(app.clone(), task)
                     })))
             }),
-            
+
             // Empty state
             html!("div", {
                 .apply(|b| dwclass!(b, "text-center"))
@@ -1049,7 +1051,7 @@ fn render_dashboard(app: Arc<App>) -> Dom {
                                     }),
                                 ])
                             }),
-                            
+
                             html!("button", {
                                 .apply(|b| dwclass!(b, "text-sm font-medium text-bunker-300 rounded-lg transition-all border border-bunker-700"))
                                 .style("padding", "0.5rem 1rem")
@@ -1063,7 +1065,7 @@ fn render_dashboard(app: Arc<App>) -> Dom {
                     }))
                 }))
             }),
-            
+
             // Main content
             html!("main", {
                 .apply(|b| dwclass!(b, "max-w-7xl p-6"))
@@ -1086,12 +1088,12 @@ fn render_dashboard(app: Arc<App>) -> Dom {
                                         stats.map(|s| render_stats_card(&s))
                                     }))
                                 }),
-                                
+
                                 // Task list
                                 render_task_list(app.clone()),
                             ])
                         }),
-                        
+
                         // Right column - Create form and selected task
                         html!("div", {
                             .style("display", "flex")
@@ -1100,7 +1102,7 @@ fn render_dashboard(app: Arc<App>) -> Dom {
                             .children(&mut [
                                 // Create task form
                                 render_task_form(app.clone()),
-                                
+
                                 // Selected task details
                                 html!("div", {
                                     .child_signal(app.selected_task.signal_cloned().map(clone!(app => move |task| {
@@ -1127,7 +1129,7 @@ fn render_dashboard(app: Arc<App>) -> Dom {
                                                             }),
                                                         ])
                                                     }),
-                                                    
+
                                                     html!("div", {
                                                         .style("display", "flex")
                                                         .style("flex-direction", "column")
@@ -1147,7 +1149,7 @@ fn render_dashboard(app: Arc<App>) -> Dom {
                                                                     }),
                                                                 ])
                                                             }),
-                                                            
+
                                                             // Meta info
                                                             html!("div", {
                                                                 .apply(|b| dwclass!(b, "grid grid-cols-2 gap-4"))
@@ -1170,7 +1172,7 @@ fn render_dashboard(app: Arc<App>) -> Dom {
                                                                             }),
                                                                         ])
                                                                     }),
-                                                                    
+
                                                                     html!("div", {
                                                                         .apply(|b| dwclass!(b, "rounded-lg p-4"))
                                                                         .style("background-color", "rgba(31, 41, 55, 0.5)")
@@ -1193,7 +1195,7 @@ fn render_dashboard(app: Arc<App>) -> Dom {
                                                                             }),
                                                                         ])
                                                                     }),
-                                                                    
+
                                                                     html!("div", {
                                                                         .apply(|b| dwclass!(b, "rounded-lg p-4"))
                                                                         .style("background-color", "rgba(31, 41, 55, 0.5)")
@@ -1211,7 +1213,7 @@ fn render_dashboard(app: Arc<App>) -> Dom {
                                                                             }),
                                                                         ])
                                                                     }),
-                                                                    
+
                                                                     html!("div", {
                                                                         .apply(|b| dwclass!(b, "rounded-lg p-4"))
                                                                         .style("background-color", "rgba(31, 41, 55, 0.5)")
@@ -1263,10 +1265,10 @@ fn render(app: Arc<App>) -> Dom {
 pub fn main() {
     // Initialize panic hook for better error messages
     console_error_panic_hook::set_once();
-    
+
     // Initialize dwind styles
     dwind::stylesheet();
-    
+
     // Create app and render
     let app = App::new();
     dominator::append_dom(&dominator::body(), render(app));

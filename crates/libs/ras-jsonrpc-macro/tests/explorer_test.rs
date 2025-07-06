@@ -80,7 +80,7 @@ mod tests {
         mod custom_path_service {
             use ras_jsonrpc_macro::jsonrpc_service;
             use serde::{Deserialize, Serialize};
-            
+
             jsonrpc_service!({
                 service_name: TestService,
                 openrpc: true,
@@ -89,13 +89,13 @@ mod tests {
                     UNAUTHORIZED test_method(()) -> String,
                 ]
             });
-            
+
             pub fn test_routes() {
                 // Test that the explorer routes function is generated
                 let _explorer_routes = testservice_explorer_routes();
             }
         }
-        
+
         custom_path_service::test_routes();
     }
 
@@ -104,7 +104,7 @@ mod tests {
         mod no_openrpc_service {
             use ras_jsonrpc_macro::jsonrpc_service;
             use serde::{Deserialize, Serialize};
-            
+
             jsonrpc_service!({
                 service_name: NoOpenRpcService,
                 explorer: true,  // This should be ignored without openrpc
@@ -113,7 +113,7 @@ mod tests {
                 ]
             });
         }
-        
+
         // Explorer routes should not be generated
         // This test just verifies that the macro compiles
     }

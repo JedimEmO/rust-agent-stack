@@ -1,7 +1,7 @@
 use rand::Rng;
 use ras_jsonrpc_core::{AuthError, AuthFuture, AuthProvider, AuthenticatedUser};
+use ras_rest_core::{RestError, RestResponse};
 use ras_rest_macro::rest_service;
-use ras_rest_core::{RestResponse, RestError};
 use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -171,7 +171,11 @@ impl TestRestServiceTrait for TestRestServiceImpl {
         }))
     }
 
-    async fn post_users(&self, _user: &AuthenticatedUser, request: CreateUserRequest) -> ras_rest_core::RestResult<User> {
+    async fn post_users(
+        &self,
+        _user: &AuthenticatedUser,
+        request: CreateUserRequest,
+    ) -> ras_rest_core::RestResult<User> {
         Ok(RestResponse::created(User {
             id: Some(rand::thread_rng().gen_range(100..999)),
             name: request.name,
@@ -180,7 +184,11 @@ impl TestRestServiceTrait for TestRestServiceImpl {
         }))
     }
 
-    async fn get_users_by_id(&self, _user: &AuthenticatedUser, id: i32) -> ras_rest_core::RestResult<User> {
+    async fn get_users_by_id(
+        &self,
+        _user: &AuthenticatedUser,
+        id: i32,
+    ) -> ras_rest_core::RestResult<User> {
         if id == 404 {
             Err(RestError::not_found("User not found"))
         } else {
@@ -193,7 +201,12 @@ impl TestRestServiceTrait for TestRestServiceImpl {
         }
     }
 
-    async fn put_users_by_id(&self, _user: &AuthenticatedUser, id: i32, request: UpdateUserRequest) -> ras_rest_core::RestResult<User> {
+    async fn put_users_by_id(
+        &self,
+        _user: &AuthenticatedUser,
+        id: i32,
+        request: UpdateUserRequest,
+    ) -> ras_rest_core::RestResult<User> {
         Ok(RestResponse::ok(User {
             id: Some(id),
             name: request.name,
@@ -202,11 +215,18 @@ impl TestRestServiceTrait for TestRestServiceImpl {
         }))
     }
 
-    async fn delete_users_by_id(&self, _user: &AuthenticatedUser, _id: i32) -> ras_rest_core::RestResult<()> {
+    async fn delete_users_by_id(
+        &self,
+        _user: &AuthenticatedUser,
+        _id: i32,
+    ) -> ras_rest_core::RestResult<()> {
         Ok(RestResponse::no_content())
     }
 
-    async fn get_users_by_user_id_posts(&self, user_id: i32) -> ras_rest_core::RestResult<PostsResponse> {
+    async fn get_users_by_user_id_posts(
+        &self,
+        user_id: i32,
+    ) -> ras_rest_core::RestResult<PostsResponse> {
         Ok(RestResponse::ok(PostsResponse {
             posts: vec![Post {
                 id: Some(1),
@@ -220,7 +240,12 @@ impl TestRestServiceTrait for TestRestServiceImpl {
         }))
     }
 
-    async fn post_users_by_user_id_posts(&self, _user: &AuthenticatedUser, user_id: i32, request: PostRequest) -> ras_rest_core::RestResult<Post> {
+    async fn post_users_by_user_id_posts(
+        &self,
+        _user: &AuthenticatedUser,
+        user_id: i32,
+        request: PostRequest,
+    ) -> ras_rest_core::RestResult<Post> {
         Ok(RestResponse::created(Post {
             id: Some(rand::thread_rng().gen_range(100..999)),
             user_id,
@@ -231,7 +256,12 @@ impl TestRestServiceTrait for TestRestServiceImpl {
         }))
     }
 
-    async fn get_users_by_user_id_posts_by_post_id(&self, _user: &AuthenticatedUser, user_id: i32, post_id: i32) -> ras_rest_core::RestResult<Post> {
+    async fn get_users_by_user_id_posts_by_post_id(
+        &self,
+        _user: &AuthenticatedUser,
+        user_id: i32,
+        post_id: i32,
+    ) -> ras_rest_core::RestResult<Post> {
         Ok(RestResponse::ok(Post {
             id: Some(post_id),
             user_id,
@@ -242,7 +272,13 @@ impl TestRestServiceTrait for TestRestServiceImpl {
         }))
     }
 
-    async fn put_users_by_user_id_posts_by_post_id(&self, _user: &AuthenticatedUser, user_id: i32, post_id: i32, request: PostRequest) -> ras_rest_core::RestResult<Post> {
+    async fn put_users_by_user_id_posts_by_post_id(
+        &self,
+        _user: &AuthenticatedUser,
+        user_id: i32,
+        post_id: i32,
+        request: PostRequest,
+    ) -> ras_rest_core::RestResult<Post> {
         Ok(RestResponse::ok(Post {
             id: Some(post_id),
             user_id,
@@ -253,7 +289,12 @@ impl TestRestServiceTrait for TestRestServiceImpl {
         }))
     }
 
-    async fn delete_users_by_user_id_posts_by_post_id(&self, _user: &AuthenticatedUser, _user_id: i32, _post_id: i32) -> ras_rest_core::RestResult<()> {
+    async fn delete_users_by_user_id_posts_by_post_id(
+        &self,
+        _user: &AuthenticatedUser,
+        _user_id: i32,
+        _post_id: i32,
+    ) -> ras_rest_core::RestResult<()> {
         Ok(RestResponse::no_content())
     }
 
@@ -271,7 +312,11 @@ impl TestRestServiceTrait for TestRestServiceImpl {
         Ok(RestResponse::ok(value))
     }
 
-    async fn post_admin_action(&self, _user: &AuthenticatedUser, _request: ()) -> ras_rest_core::RestResult<String> {
+    async fn post_admin_action(
+        &self,
+        _user: &AuthenticatedUser,
+        _request: (),
+    ) -> ras_rest_core::RestResult<String> {
         Ok(RestResponse::ok("Admin action completed".to_string()))
     }
 }
@@ -285,8 +330,8 @@ async fn create_rest_test_server() -> (String, tokio::task::JoinHandle<()>) {
         .expect("Failed to get local addr");
     let base_url = format!("http://127.0.0.1:{}", addr.port());
 
-    let builder = TestRestServiceBuilder::new(TestRestServiceImpl)
-        .auth_provider(TestRestAuthProvider::new());
+    let builder =
+        TestRestServiceBuilder::new(TestRestServiceImpl).auth_provider(TestRestAuthProvider::new());
 
     let app = builder.build();
 
@@ -889,9 +934,7 @@ async fn test_new_permission_logic() {
 #[tokio::test]
 async fn test_generated_rest_client() {
     let (base_url, _handle) = create_rest_test_server().await;
-    let mut client = TestRestServiceClientBuilder::new(base_url)
-        .build()
-        .unwrap();
+    let mut client = TestRestServiceClientBuilder::new(base_url).build().unwrap();
 
     client.set_bearer_token(Some("superuser-token"));
 

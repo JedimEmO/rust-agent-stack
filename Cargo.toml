@@ -11,6 +11,8 @@ members = [
     "crates/libs/ras-jsonrpc-bidirectional-client",
     "crates/libs/ras-rest-macro",
     "crates/libs/ras-rest-core",
+    "crates/libs/ras-observability-core",
+    "crates/libs/ras-observability-otel",
     "crates/libs/openrpc-types",
     "crates/identity/ras-identity-core",
     "crates/identity/ras-identity-local",

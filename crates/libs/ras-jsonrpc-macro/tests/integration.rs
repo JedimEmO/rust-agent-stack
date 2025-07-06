@@ -49,7 +49,7 @@ impl AuthProvider for TestAuthProvider {
 mod basic_service {
     use super::*;
     use ras_jsonrpc_macro::jsonrpc_service;
-    
+
     // Generate the service using our macro
     jsonrpc_service!({
         service_name: MyService,
@@ -64,7 +64,7 @@ mod basic_service {
 #[tokio::test]
 async fn test_macro_generates_code() {
     use basic_service::*;
-    
+
     // Create a service builder
     let builder = MyServiceBuilder::new("/api/v1")
         .auth_provider(TestAuthProvider)
@@ -99,7 +99,7 @@ async fn test_macro_generates_code() {
 mod openrpc_service {
     use super::*;
     use ras_jsonrpc_macro::jsonrpc_service;
-    
+
     jsonrpc_service!({
         service_name: OpenRpcService,
         openrpc: true,
@@ -115,7 +115,7 @@ mod openrpc_service {
 mod custom_path_service {
     use super::*;
     use ras_jsonrpc_macro::jsonrpc_service;
-    
+
     jsonrpc_service!({
         service_name: CustomPathService,
         openrpc: { output: "custom/path/service.json" },
@@ -129,7 +129,7 @@ mod custom_path_service {
 #[tokio::test]
 async fn test_openrpc_generation() {
     use openrpc_service::*;
-    
+
     // Create a service builder with OpenRPC enabled
     let builder = OpenRpcServiceBuilder::new("/api/v1")
         .auth_provider(TestAuthProvider)
@@ -178,7 +178,7 @@ async fn test_openrpc_generation() {
 #[tokio::test]
 async fn test_custom_openrpc_path() {
     use custom_path_service::*;
-    
+
     // Create a service builder
     let builder = CustomPathServiceBuilder::new("/api/v2")
         .auth_provider(TestAuthProvider)

@@ -23,8 +23,6 @@ chrono = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 anyhow = { workspace = true }
 
-# OpenTelemetry dependencies
-opentelemetry = "0.28"
-opentelemetry_sdk = { version = "0.28", features = ["rt-tokio", "metrics"] }
-opentelemetry-prometheus = "0.28"
-prometheus = "0.13"
+# Observability
+ras-observability-core = { path = "../../crates/libs/ras-observability-core" }
+ras-observability-otel = { path = "../../crates/libs/ras-observability-otel" }

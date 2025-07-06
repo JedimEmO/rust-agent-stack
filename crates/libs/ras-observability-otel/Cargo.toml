@@ -1,0 +1,33 @@
+[package]
+name = "ras-observability-otel"
+version = "0.1.0"
+edition = "2024"
+description = "OpenTelemetry implementation for Rust Agent Stack observability"
+
+[dependencies]
+ras-observability-core = { path = "../ras-observability-core" }
+ras-auth-core = { path = "../ras-auth-core" }
+
+# OpenTelemetry dependencies
+opentelemetry = "0.28"
+opentelemetry_sdk = { version = "0.28", features = ["rt-tokio", "metrics"] }
+opentelemetry-prometheus = "0.28"
+prometheus = "0.13"
+
+# Web framework and utilities
+axum = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread"] }
+tracing-subscriber = { workspace = true }
+
+[[example]]
+name = "simple_usage"
+path = "examples/simple_usage.rs"
+
+[[example]]
+name = "with_rest_service"
+path = "examples/with_rest_service.rs"

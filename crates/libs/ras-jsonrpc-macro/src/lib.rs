@@ -248,7 +248,7 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
     // Generate server code only if server feature is enabled in the macro crate
     let server_code = if cfg!(feature = "server") {
         let server_impl = generate_server_code(&service_def);
-        
+
         // Generate explorer code if enabled - only if server feature is enabled
         let explorer_code = if service_def.explorer.is_some() && service_def.openrpc.is_some() {
             let explorer_config = match &service_def.explorer {
@@ -273,17 +273,17 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         } else {
             quote! {}
         };
-        
+
         // Wrap all server code in a cfg attribute to ensure it's only compiled when server feature is enabled
         quote! {
             #[cfg(feature = "server")]
             mod _generated_server {
                 use super::*;
-                
+
                 #server_impl
                 #explorer_code
             }
-            
+
             #[cfg(feature = "server")]
             pub use _generated_server::*;
         }
@@ -294,16 +294,16 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
     // Generate client code only if client feature is enabled in the macro crate
     let client_code = if cfg!(feature = "client") {
         let client_impl = crate::client::generate_client_code(&service_def);
-        
+
         // Wrap all client code in a cfg attribute to ensure it's only compiled when client feature is enabled
         quote! {
             #[cfg(feature = "client")]
             mod _generated_client {
                 use super::*;
-                
+
                 #client_impl
             }
-            
+
             #[cfg(feature = "client")]
             pub use _generated_client::*;
         }

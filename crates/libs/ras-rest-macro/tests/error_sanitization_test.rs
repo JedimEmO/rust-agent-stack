@@ -1,7 +1,7 @@
 use axum::{Router, http::StatusCode};
 use ras_auth_core::{AuthError, AuthProvider, AuthenticatedUser};
+use ras_rest_core::{RestError, RestResponse};
 use ras_rest_macro::rest_service;
-use ras_rest_core::{RestResponse, RestError};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashSet;
@@ -86,13 +86,17 @@ struct ErrorTestServiceImpl;
 
 #[async_trait::async_trait]
 impl ErrorTestServiceTrait for ErrorTestServiceImpl {
-    async fn post_error_test(&self, _user: &AuthenticatedUser, _req: TestRequest) -> ras_rest_core::RestResult<TestResponse> {
+    async fn post_error_test(
+        &self,
+        _user: &AuthenticatedUser,
+        _req: TestRequest,
+    ) -> ras_rest_core::RestResult<TestResponse> {
         Err(RestError::with_internal(
             500,
             "Internal server error",
             CustomError {
                 message: "This contains sensitive database schema information!".to_string(),
-            }
+            },
         ))
     }
 }
@@ -102,7 +106,11 @@ struct SuccessTestServiceImpl;
 
 #[async_trait::async_trait]
 impl ErrorTestServiceTrait for SuccessTestServiceImpl {
-    async fn post_error_test(&self, _user: &AuthenticatedUser, _req: TestRequest) -> ras_rest_core::RestResult<TestResponse> {
+    async fn post_error_test(
+        &self,
+        _user: &AuthenticatedUser,
+        _req: TestRequest,
+    ) -> ras_rest_core::RestResult<TestResponse> {
         Ok(RestResponse::ok(TestResponse {}))
     }
 }

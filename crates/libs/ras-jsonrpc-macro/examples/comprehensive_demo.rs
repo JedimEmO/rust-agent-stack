@@ -38,7 +38,7 @@ pub struct StatusResponse {
 mod basic_service {
     use super::*;
     use ras_jsonrpc_macro::jsonrpc_service;
-    
+
     jsonrpc_service!({
         service_name: BasicService,
         methods: [
@@ -52,7 +52,7 @@ mod basic_service {
 mod api_service {
     use super::*;
     use ras_jsonrpc_macro::jsonrpc_service;
-    
+
     jsonrpc_service!({
         service_name: ApiService,
         openrpc: true,
@@ -70,7 +70,7 @@ mod api_service {
 mod documented_service {
     use super::*;
     use ras_jsonrpc_macro::jsonrpc_service;
-    
+
     jsonrpc_service!({
         service_name: DocumentedService,
         openrpc: { output: "docs/api/service.openrpc.json" },
@@ -123,7 +123,10 @@ fn main() {
     let doc_openrpc = documented_service::generate_documentedservice_openrpc();
     println!("   ✓ DocumentedService compiled successfully");
     println!("   ✓ OpenRPC document generated with custom path");
-    println!("     - Methods count: {}", doc_openrpc["methods"].as_array().unwrap().len());
+    println!(
+        "     - Methods count: {}",
+        doc_openrpc["methods"].as_array().unwrap().len()
+    );
 
     // Write to custom path
     match documented_service::generate_documentedservice_openrpc_to_file() {

@@ -88,18 +88,18 @@ jsonrpc_service!({
         UNAUTHORIZED sign_in(SignInRequest) -> SignInResponse,
         WITH_PERMISSIONS([]) sign_out(()) -> (),
         WITH_PERMISSIONS(["admin"]) delete_everything(()) -> (),
-        
+
         // Task management
         WITH_PERMISSIONS([]) list_tasks(()) -> TaskListResponse,
         WITH_PERMISSIONS([]) create_task(CreateTaskRequest) -> Task,
         WITH_PERMISSIONS([]) update_task(UpdateTaskRequest) -> Task,
         WITH_PERMISSIONS([]) delete_task(String) -> bool,
         WITH_PERMISSIONS([]) get_task(String) -> Option<Task>,
-        
+
         // User profile
         WITH_PERMISSIONS([]) get_profile(()) -> UserProfile,
         WITH_PERMISSIONS([]) update_profile(UpdateProfileRequest) -> UserProfile,
-        
+
         // Dashboard
         WITH_PERMISSIONS([]) get_dashboard_stats(()) -> DashboardStats,
     ]

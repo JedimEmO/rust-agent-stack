@@ -154,10 +154,7 @@ async fn run_app(
 
                                         // Connect to WebSocket
                                         let mut client = chat_client.lock().await;
-                                        if let Err(e) = client
-                                            .connect(server_url, token)
-                                            .await
-                                        {
+                                        if let Err(e) = client.connect(server_url, token).await {
                                             app_state.lock().await.error_message =
                                                 Some(format!("Failed to connect: {}", e));
                                         } else {
