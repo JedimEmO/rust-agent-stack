@@ -9,3 +9,7 @@ ras-auth-core = { path = "../ras-auth-core" }
 async-trait = { workspace = true }
 serde = { workspace = true }
 axum = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread"] }
+serde_json = { workspace = true }

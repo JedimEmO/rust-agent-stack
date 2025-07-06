@@ -237,3 +237,6 @@ pub mod extractors {
 
 // Re-export commonly used types
 pub use extractors::{user_agent, user_attributes};
+
+#[cfg(test)]
+mod tests;

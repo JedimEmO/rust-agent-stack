@@ -23,6 +23,9 @@ tokio = { workspace = true }
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread"] }
 tracing-subscriber = { workspace = true }
+axum-test = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [[example]]
 name = "simple_usage"

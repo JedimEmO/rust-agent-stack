@@ -277,3 +277,6 @@ async fn metrics_handler(
 pub fn standard_setup(service_name: &'static str) -> Result<OtelSetup, Box<dyn std::error::Error>> {
     OtelSetupBuilder::new(service_name).build()
 }
+
+#[cfg(test)]
+mod tests;
