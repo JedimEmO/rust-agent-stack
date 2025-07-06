@@ -146,6 +146,136 @@ rest_service!({
     ]
 });
 
+// Test service implementation
+struct TestRestServiceImpl;
+
+#[async_trait::async_trait]
+impl TestRestServiceTrait for TestRestServiceImpl {
+    async fn get_users(&self) -> ras_rest_core::RestResult<UsersResponse> {
+        Ok(RestResponse::ok(UsersResponse {
+            users: vec![
+                User {
+                    id: Some(1),
+                    name: "John Doe".to_string(),
+                    email: "john@example.com".to_string(),
+                    permissions: vec!["user".to_string()],
+                },
+                User {
+                    id: Some(2),
+                    name: "Jane Admin".to_string(),
+                    email: "jane@example.com".to_string(),
+                    permissions: vec!["admin".to_string()],
+                },
+            ],
+            total: 2,
+        }))
+    }
+
+    async fn post_users(&self, _user: &AuthenticatedUser, request: CreateUserRequest) -> ras_rest_core::RestResult<User> {
+        Ok(RestResponse::created(User {
+            id: Some(rand::thread_rng().gen_range(100..999)),
+            name: request.name,
+            email: request.email,
+            permissions: request.permissions,
+        }))
+    }
+
+    async fn get_users_by_id(&self, _user: &AuthenticatedUser, id: i32) -> ras_rest_core::RestResult<User> {
+        if id == 404 {
+            Err(RestError::not_found("User not found"))
+        } else {
+            Ok(RestResponse::ok(User {
+                id: Some(id),
+                name: "Found User".to_string(),
+                email: "found@example.com".to_string(),
+                permissions: vec!["user".to_string()],
+            }))
+        }
+    }
+
+    async fn put_users_by_id(&self, _user: &AuthenticatedUser, id: i32, request: UpdateUserRequest) -> ras_rest_core::RestResult<User> {
+        Ok(RestResponse::ok(User {
+            id: Some(id),
+            name: request.name,
+            email: request.email,
+            permissions: vec!["user".to_string()],
+        }))
+    }
+
+    async fn delete_users_by_id(&self, _user: &AuthenticatedUser, _id: i32) -> ras_rest_core::RestResult<()> {
+        Ok(RestResponse::no_content())
+    }
+
+    async fn get_users_by_user_id_posts(&self, user_id: i32) -> ras_rest_core::RestResult<PostsResponse> {
+        Ok(RestResponse::ok(PostsResponse {
+            posts: vec![Post {
+                id: Some(1),
+                user_id,
+                title: "Test Post".to_string(),
+                content: "This is a test post".to_string(),
+                tags: vec!["test".to_string()],
+                published: true,
+            }],
+            total: 1,
+        }))
+    }
+
+    async fn post_users_by_user_id_posts(&self, _user: &AuthenticatedUser, user_id: i32, request: PostRequest) -> ras_rest_core::RestResult<Post> {
+        Ok(RestResponse::created(Post {
+            id: Some(rand::thread_rng().gen_range(100..999)),
+            user_id,
+            title: request.title,
+            content: request.content,
+            tags: request.tags,
+            published: false,
+        }))
+    }
+
+    async fn get_users_by_user_id_posts_by_post_id(&self, _user: &AuthenticatedUser, user_id: i32, post_id: i32) -> ras_rest_core::RestResult<Post> {
+        Ok(RestResponse::ok(Post {
+            id: Some(post_id),
+            user_id,
+            title: "Protected Post".to_string(),
+            content: "This requires authentication".to_string(),
+            tags: vec!["protected".to_string()],
+            published: true,
+        }))
+    }
+
+    async fn put_users_by_user_id_posts_by_post_id(&self, _user: &AuthenticatedUser, user_id: i32, post_id: i32, request: PostRequest) -> ras_rest_core::RestResult<Post> {
+        Ok(RestResponse::ok(Post {
+            id: Some(post_id),
+            user_id,
+            title: request.title,
+            content: request.content,
+            tags: request.tags,
+            published: true,
+        }))
+    }
+
+    async fn delete_users_by_user_id_posts_by_post_id(&self, _user: &AuthenticatedUser, _user_id: i32, _post_id: i32) -> ras_rest_core::RestResult<()> {
+        Ok(RestResponse::no_content())
+    }
+
+    async fn get_health(&self) -> ras_rest_core::RestResult<String> {
+        Ok(RestResponse::ok("OK".to_string()))
+    }
+
+    async fn get_status(&self, user: &AuthenticatedUser) -> ras_rest_core::RestResult<Value> {
+        let value = json!({
+            "status": "authenticated",
+            "user_id": user.user_id,
+            "permissions": user.permissions.iter().collect::<Vec<_>>(),
+            "timestamp": chrono::Utc::now().to_rfc3339()
+        });
+        Ok(RestResponse::ok(value))
+    }
+
+    async fn post_admin_action(&self, _user: &AuthenticatedUser, _request: ()) -> ras_rest_core::RestResult<String> {
+        Ok(RestResponse::ok("Admin action completed".to_string()))
+    }
+}
+
 async fn create_rest_test_server() -> (String, tokio::task::JoinHandle<()>) {
     let tokio_listener = TokioTcpListener::bind("127.0.0.1:0")
         .await
@@ -155,124 +285,8 @@ async fn create_rest_test_server() -> (String, tokio::task::JoinHandle<()>) {
         .expect("Failed to get local addr");
     let base_url = format!("http://127.0.0.1:{}", addr.port());
 
-    let builder = TestRestServiceBuilder::new()
-        .auth_provider(TestRestAuthProvider::new())
-        // UNAUTHORIZED endpoints
-        .get_users_handler(|| async move {
-            Ok(RestResponse::ok(UsersResponse {
-                users: vec![
-                    User {
-                        id: Some(1),
-                        name: "John Doe".to_string(),
-                        email: "john@example.com".to_string(),
-                        permissions: vec!["user".to_string()],
-                    },
-                    User {
-                        id: Some(2),
-                        name: "Jane Admin".to_string(),
-                        email: "jane@example.com".to_string(),
-                        permissions: vec!["admin".to_string()],
-                    },
-                ],
-                total: 2,
-            }))
-        })
-        .get_users_by_user_id_posts_handler(|user_id| async move {
-            Ok(RestResponse::ok(PostsResponse {
-                posts: vec![Post {
-                    id: Some(1),
-                    user_id,
-                    title: "Test Post".to_string(),
-                    content: "This is a test post".to_string(),
-                    tags: vec!["test".to_string()],
-                    published: true,
-                }],
-                total: 1,
-            }))
-        })
-        .get_health_handler(|| async move { Ok(RestResponse::ok("OK".to_string())) })
-        // WITH_PERMISSIONS(["admin"]) endpoints
-        .post_users_handler(|_user, request| async move {
-            Ok(RestResponse::created(User {
-                id: Some(rand::thread_rng().gen_range(100..999)),
-                name: request.name,
-                email: request.email,
-                permissions: request.permissions,
-            }))
-        })
-        .put_users_by_id_handler(|_user, id, request| async move {
-            Ok(RestResponse::ok(User {
-                id: Some(id),
-                name: request.name,
-                email: request.email,
-                permissions: vec!["user".to_string()],
-            }))
-        })
-        .delete_users_by_id_handler(|_user, _id| async move { Ok(RestResponse::no_content()) })
-        // WITH_PERMISSIONS(["user"]) endpoints
-        .get_users_by_id_handler(|_user, id| async move {
-            if id == 404 {
-                Err(RestError::not_found("User not found"))
-            } else {
-                Ok(RestResponse::ok(User {
-                    id: Some(id),
-                    name: "Found User".to_string(),
-                    email: "found@example.com".to_string(),
-                    permissions: vec!["user".to_string()],
-                }))
-            }
-        })
-        .post_users_by_user_id_posts_handler(|_user, user_id, request| async move {
-            Ok(RestResponse::created(Post {
-                id: Some(rand::thread_rng().gen_range(100..999)),
-                user_id,
-                title: request.title,
-                content: request.content,
-                tags: request.tags,
-                published: false,
-            }))
-        })
-        // WITH_PERMISSIONS([]) endpoints
-        .get_users_by_user_id_posts_by_post_id_handler(|_user, user_id, post_id| async move {
-            Ok(RestResponse::ok(Post {
-                id: Some(post_id),
-                user_id,
-                title: "Protected Post".to_string(),
-                content: "This requires authentication".to_string(),
-                tags: vec!["protected".to_string()],
-                published: true,
-            }))
-        })
-        .get_status_handler(|user| {
-            let value = json!({
-                "status": "authenticated",
-                "user_id": user.user_id,
-                "permissions": user.permissions.iter().collect::<Vec<_>>(),
-                "timestamp": chrono::Utc::now().to_rfc3339()
-            });
-
-            async move { Ok(RestResponse::ok(value)) }
-        })
-        .post_admin_action_handler(|_user, _request| async move {
-            Ok(RestResponse::ok("Admin action completed".to_string()))
-        })
-        // WITH_PERMISSIONS(["user", "moderator"]) endpoints
-        .put_users_by_user_id_posts_by_post_id_handler(
-            |_user, user_id, post_id, request| async move {
-                Ok(RestResponse::ok(Post {
-                    id: Some(post_id),
-                    user_id,
-                    title: request.title,
-                    content: request.content,
-                    tags: request.tags,
-                    published: true,
-                }))
-            },
-        )
-        // WITH_PERMISSIONS(["admin", "moderator"]) endpoints
-        .delete_users_by_user_id_posts_by_post_id_handler(|_user, _user_id, _post_id| async move {
-            Ok(RestResponse::no_content())
-        });
+    let builder = TestRestServiceBuilder::new(TestRestServiceImpl)
+        .auth_provider(TestRestAuthProvider::new());
 
     let app = builder.build();
 
@@ -770,7 +784,7 @@ async fn test_openapi_generation() {
     // Test that OpenAPI document generation works
     // Note: This tests compilation and basic structure, actual OpenAPI document
     // generation would be tested separately
-    let _ = TestRestServiceBuilder::new();
+    let _ = TestRestServiceBuilder::new(TestRestServiceImpl);
 
     // The fact that this compiles means the REST service macro generated the builder correctly
     // with OpenAPI configuration enabled
@@ -875,8 +889,7 @@ async fn test_new_permission_logic() {
 #[tokio::test]
 async fn test_generated_rest_client() {
     let (base_url, _handle) = create_rest_test_server().await;
-    let mut client = TestRestServiceClientBuilder::new()
-        .server_url(base_url)
+    let mut client = TestRestServiceClientBuilder::new(base_url)
         .build()
         .unwrap();
 

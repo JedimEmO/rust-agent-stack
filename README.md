@@ -6,11 +6,12 @@ A comprehensive Rust framework for building type-safe, authenticated agent syste
 
 The Rust Agent Stack provides a complete toolkit for building distributed agent systems with:
 - 🔐 **Pluggable Authentication** - JWT, OAuth2, local auth with security best practices
-- 🚀 **Type-Safe RPC** - Procedural macros for JSON-RPC and REST APIs
+- 🚀 **Type-Safe APIs** - Trait-based procedural macros for JSON-RPC and REST
 - 🌐 **WebSocket Support** - Bidirectional real-time communication
 - 🎯 **WASM Support** - Build reactive web UIs with Dominator framework
 - 📊 **Observability** - Built-in OpenTelemetry and Prometheus metrics
 - 📝 **API Documentation** - Automatic OpenRPC and OpenAPI generation
+- ✅ **Compile-Time Safety** - All endpoints must be implemented
 
 ## Quick Start
 
@@ -37,19 +38,23 @@ RAS is organized as a Cargo workspace with the following structure:
 
 ```
 crates/
-├── libs/                  # Core libraries
-│   ├── ras-auth-core     # Authentication traits
-│   ├── ras-jsonrpc-*     # JSON-RPC implementation
-│   ├── ras-rest-macro    # REST API macro
-│   └── openrpc-types     # OpenRPC specifications
-├── identity/             # Identity providers
-│   ├── ras-identity-core # Core identity traits
-│   ├── ras-identity-local # Username/password auth
-│   ├── ras-identity-oauth2 # OAuth2 support
-│   └── ras-identity-session # JWT sessions
-└── tools/                # Development tools
-    └── openrpc-to-bruno  # API testing tools
-examples/                 # Example applications
+├── libs/                     # Core libraries
+│   ├── ras-auth-core        # Authentication traits and types
+│   ├── ras-jsonrpc-core     # JSON-RPC runtime support
+│   ├── ras-jsonrpc-macro    # JSON-RPC service macro
+│   ├── ras-jsonrpc-types    # JSON-RPC protocol types
+│   ├── ras-jsonrpc-bidirectional-* # WebSocket support
+│   ├── ras-rest-core        # REST types and utilities
+│   ├── ras-rest-macro       # REST service macro
+│   └── openrpc-types        # OpenRPC specifications
+├── identity/                # Identity providers
+│   ├── ras-identity-core    # Core identity traits
+│   ├── ras-identity-local   # Username/password auth
+│   ├── ras-identity-oauth2  # OAuth2 with PKCE support
+│   └── ras-identity-session # JWT session management
+└── tools/                   # Development tools
+    └── openrpc-to-bruno     # Convert OpenRPC to Bruno collections
+examples/                    # Example applications
 ```
 
 ## Key Features
@@ -63,7 +68,6 @@ use ras_jsonrpc_macro::jsonrpc_service;
 
 jsonrpc_service!({
     service_name: TaskService,
-    auth_provider: JwtAuthProvider,
     openrpc: true,  // Generate OpenRPC docs
     methods: [
         UNAUTHORIZED sign_in(SignInRequest) -> SignInResponse,
@@ -71,6 +75,59 @@ jsonrpc_service!({
         WITH_PERMISSIONS(["admin"]) delete_all_tasks(()) -> (),
     ]
 });
+
+// Implement the generated trait
+struct TaskServiceImpl { /* ... */ }
+
+#[async_trait::async_trait]
+impl TaskServiceHandler for TaskServiceImpl {
+    async fn sign_in(&self, request: SignInRequest) -> JsonRpcResult<SignInResponse> {
+        // Your implementation
+    }
+    // ... other methods
+}
+
+// Use with the builder
+let service = TaskService::builder()
+    .auth_provider(JwtAuthProvider::new())
+    .build(Arc::new(TaskServiceImpl { /* ... */ }));
+```
+
+### Type-Safe REST APIs
+
+Build RESTful services with automatic OpenAPI documentation:
+
+```rust
+use ras_rest_macro::rest_service;
+
+rest_service!({
+    service_name: UserService,
+    base_path: "/api/v1",
+    openapi: true,
+    serve_docs: true,  // Serve Swagger UI at /api/v1/docs
+    endpoints: [
+        GET UNAUTHORIZED users() -> UsersResponse,
+        POST WITH_PERMISSIONS(["admin"]) users(CreateUserRequest) -> UserResponse,
+        GET WITH_PERMISSIONS(["user"]) users/{id: i32}() -> UserResponse,
+        DELETE WITH_PERMISSIONS(["admin"]) users/{id: i32}() -> (),
+    ]
+});
+
+// Implement the generated trait
+struct UserServiceImpl { /* ... */ }
+
+#[async_trait::async_trait]
+impl UserServiceTrait for UserServiceImpl {
+    async fn get_users(&self) -> RestResult<UsersResponse> {
+        // Your implementation
+    }
+    // ... other methods
+}
+
+// Build the Axum router
+let app = UserServiceBuilder::new(UserServiceImpl { /* ... */ })
+    .auth_provider(jwt_auth_provider)
+    .build();
 ```
 
 ### Bidirectional WebSocket Communication
@@ -82,11 +139,11 @@ use ras_jsonrpc_bidirectional_macro::jsonrpc_bidirectional_service;
 
 jsonrpc_bidirectional_service!({
     service_name: ChatService,
-    
+
     client_to_server: [
         WITH_PERMISSIONS(["user"]) send_message(SendMessageRequest) -> SendMessageResponse,
     ],
-    
+
     server_to_client: [
         message_received(MessageReceivedNotification),
         user_joined(UserJoinedNotification),
@@ -188,4 +245,6 @@ Built with these excellent Rust crates:
 - [Axum](https://github.com/tokio-rs/axum) - Web framework
 - [Tokio](https://tokio.rs/) - Async runtime
 - [Dominator](https://github.com/Pauan/rust-dominator) - WASM UI framework
-- [jsonrpsee](https://github.com/paritytech/jsonrpsee) - JSON-RPC implementation
+- [Tungstenite](https://github.com/snapview/tungstenite-rs) - WebSocket implementation
+- [jsonwebtoken](https://github.com/Keats/jsonwebtoken) - JWT support
+- [async-trait](https://github.com/dtolnay/async-trait) - Async traits

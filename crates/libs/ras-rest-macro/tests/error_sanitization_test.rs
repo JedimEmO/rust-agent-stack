@@ -81,20 +81,37 @@ rest_service!({
     ]
 });
 
+// Test service implementation for error cases
+struct ErrorTestServiceImpl;
+
+#[async_trait::async_trait]
+impl ErrorTestServiceTrait for ErrorTestServiceImpl {
+    async fn post_error_test(&self, _user: &AuthenticatedUser, _req: TestRequest) -> ras_rest_core::RestResult<TestResponse> {
+        Err(RestError::with_internal(
+            500,
+            "Internal server error",
+            CustomError {
+                message: "This contains sensitive database schema information!".to_string(),
+            }
+        ))
+    }
+}
+
+// Success implementation for the second test
+struct SuccessTestServiceImpl;
+
+#[async_trait::async_trait]
+impl ErrorTestServiceTrait for SuccessTestServiceImpl {
+    async fn post_error_test(&self, _user: &AuthenticatedUser, _req: TestRequest) -> ras_rest_core::RestResult<TestResponse> {
+        Ok(RestResponse::ok(TestResponse {}))
+    }
+}
+
 #[tokio::test]
 async fn test_error_sanitization() {
     // Create a service that returns a sensitive error
-    let service = ErrorTestServiceBuilder::new()
+    let service = ErrorTestServiceBuilder::new(ErrorTestServiceImpl)
         .auth_provider(MockAuthProvider)
-        .post_error_test_handler(|_user, _req| async move {
-            Err(RestError::with_internal(
-                500,
-                "Internal server error",
-                CustomError {
-                    message: "This contains sensitive database schema information!".to_string(),
-                }
-            ))
-        })
         .build();
 
     let app = Router::new().merge(service);
@@ -130,9 +147,8 @@ async fn test_error_sanitization() {
 #[tokio::test]
 async fn test_unauthenticated_error_sanitization() {
     // Create a service with a handler that would succeed, but no auth token provided
-    let service = ErrorTestServiceBuilder::new()
+    let service = ErrorTestServiceBuilder::new(SuccessTestServiceImpl)
         .auth_provider(MockAuthProvider)
-        .post_error_test_handler(|_user, _req| async move { Ok(RestResponse::ok(TestResponse {})) })
         .build();
 
     let app = Router::new().merge(service);

@@ -12,6 +12,8 @@
 use anyhow::Result;
 use axum::{Router, routing::get};
 use bidirectional_chat_api::*;
+use bidirectional_chat_api::auth::{LoginRequest, LoginResponse, RegisterRequest, RegisterResponse, HealthResponse, ChatAuthServiceBuilder};
+use ras_rest_core::{RestResult, RestResponse, RestError};
 use chrono::Utc;
 use dashmap::DashMap;
 use ras_auth_core::AuthenticatedUser;
@@ -38,9 +40,7 @@ use uuid::Uuid;
 pub mod config;
 mod persistence;
 
-use bidirectional_chat_api::auth::*;
 use config::Config;
-use ras_rest_core::{RestResult, RestResponse, RestError};
 use persistence::{
     PersistedCatAvatar, PersistedMessage, PersistedRoom, PersistedUserProfile, PersistenceManager,
 };
@@ -1546,24 +1546,32 @@ async fn main() -> Result<()> {
     };
 
     // Build REST service using the macro-generated builder
-    let auth_handlers_clone1 = auth_handlers.clone();
-    let auth_handlers_clone2 = auth_handlers.clone();
-    let auth_handlers_clone3 = auth_handlers.clone();
+    // Create auth service implementation
+    struct AuthServiceImpl {
+        handlers: AuthHandlers,
+    }
 
-    let auth_router = ChatAuthServiceBuilder::new()
+    #[async_trait::async_trait]
+    impl bidirectional_chat_api::auth::ChatAuthServiceTrait for AuthServiceImpl {
+        async fn post_auth_login(&self, request: LoginRequest) -> RestResult<LoginResponse> {
+            self.handlers.handle_login(request).await
+        }
+
+        async fn post_auth_register(&self, request: RegisterRequest) -> RestResult<RegisterResponse> {
+            self.handlers.handle_register(request).await
+        }
+
+        async fn get_health(&self) -> RestResult<HealthResponse> {
+            self.handlers.handle_health().await
+        }
+    }
+
+    let auth_service_impl = AuthServiceImpl {
+        handlers: auth_handlers.clone(),
+    };
+
+    let auth_router = ChatAuthServiceBuilder::new(auth_service_impl)
         .auth_provider(auth_provider.as_ref().clone())
-        .post_auth_login_handler(move |req| {
-            let handlers = auth_handlers_clone1.clone();
-            async move { handlers.handle_login(req).await }
-        })
-        .post_auth_register_handler(move |req| {
-            let handlers = auth_handlers_clone2.clone();
-            async move { handlers.handle_register(req).await }
-        })
-        .get_health_handler(move || {
-            let handlers = auth_handlers_clone3.clone();
-            async move { handlers.handle_health().await }
-        })
         .build();
 
     // Create WebSocket endpoint

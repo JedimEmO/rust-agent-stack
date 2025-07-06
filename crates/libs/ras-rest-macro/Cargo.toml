@@ -12,7 +12,7 @@ proc-macro = true
 
 [features]
 default = ["server", "client"]  # Enable server by default for backward compatibility
-server = ["axum", "ras-auth-core", "ras-rest-core"]
+server = ["axum", "ras-auth-core", "ras-rest-core", "async-trait"]
 client = ["reqwest"]
 
 [dependencies]
@@ -26,6 +26,7 @@ schemars = { workspace = true }
 axum = { workspace = true, optional = true }
 ras-auth-core = { path = "../ras-auth-core", optional = true }
 ras-rest-core = { path = "../ras-rest-core", optional = true }
+async-trait = { workspace = true, optional = true }
 
 # Client dependencies
 reqwest = { workspace = true, optional = true }
@@ -43,6 +44,7 @@ futures = { workspace = true }
 chrono = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
+async-trait = { workspace = true }
 # Server dependencies for tests
 axum = { workspace = true }
 ras-auth-core = { path = "../ras-auth-core" }

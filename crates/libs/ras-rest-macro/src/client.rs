@@ -43,24 +43,18 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
         #[cfg(feature = "client")]
         /// Builder for the REST client
         pub struct #client_builder_name {
-            server_url: Option<String>,
+            server_url: String,
             timeout: Option<std::time::Duration>,
         }
 
         #[cfg(feature = "client")]
         impl #client_builder_name {
-            /// Create a new client builder
-            pub fn new() -> Self {
+            /// Create a new client builder with the required server URL
+            pub fn new(server_url: impl Into<String>) -> Self {
                 Self {
-                    server_url: None,
+                    server_url: server_url.into(),
                     timeout: None,
                 }
-            }
-
-            /// Set the server URL
-            pub fn server_url(mut self, url: impl Into<String>) -> Self {
-                self.server_url = Some(url.into());
-                self
             }
 
             /// Set the default timeout for requests
@@ -70,9 +64,11 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
             }
 
             /// Build the client
+            /// 
+            /// # Errors
+            /// 
+            /// Returns an error if the underlying HTTP client fails to build
             pub fn build(self) -> Result<#client_name, Box<dyn std::error::Error + Send + Sync>> {
-                let server_url = self.server_url.ok_or("Server URL is required")?;
-
                 let mut client_builder = reqwest::Client::builder();
                 
                 // Timeout is not supported in WASM builds
@@ -85,7 +81,7 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
 
                 Ok(#client_name {
                     client,
-                    server_url,
+                    server_url: self.server_url,
                     base_path: #base_path.to_string(),
                     bearer_token: None,
                     default_timeout: self.timeout,

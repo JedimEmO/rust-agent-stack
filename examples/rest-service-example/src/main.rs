@@ -5,6 +5,7 @@ use ras_identity_local::LocalUserProvider;
 use ras_identity_session::{JwtAuthProvider, SessionConfig, SessionService};
 use ras_rest_macro::rest_service;
 use ras_rest_core::{RestResult, RestResponse, RestError};
+use ras_auth_core::AuthenticatedUser;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -619,21 +620,63 @@ async fn main() -> Result<()> {
     let jwt_auth_provider = JwtAuthProvider::new(session_service);
 
     // Build the service router with authentication handlers
-    let user_handlers1 = user_handlers.clone();
-    let user_handlers2 = user_handlers.clone();
-    let user_handlers3 = user_handlers.clone();
-    let user_handlers4 = user_handlers.clone();
-    let user_handlers5 = user_handlers.clone();
 
-    let auth_handlers1 = auth_handlers.clone();
-    let auth_handlers2 = auth_handlers.clone();
-    let auth_handlers3 = auth_handlers.clone();
-    let auth_handlers4 = auth_handlers.clone();
+    // Create service implementation
+    struct UserServiceImpl {
+        auth_handlers: AuthHandlers,
+        user_handlers: UserHandlers,
+    }
+
+    #[async_trait::async_trait]
+    impl UserServiceTrait for UserServiceImpl {
+        // Authentication endpoints
+        async fn post_auth_register(&self, request: RegisterUserRequest) -> RestResult<AuthResponse> {
+            self.auth_handlers.register_user(request).await
+        }
+
+        async fn post_auth_login(&self, request: LoginRequest) -> RestResult<AuthResponse> {
+            self.auth_handlers.login_user(request).await
+        }
+
+        async fn post_auth_logout(&self, user: &AuthenticatedUser) -> RestResult<()> {
+            self.auth_handlers.logout_user(user).await
+        }
+
+        async fn get_auth_me(&self, user: &AuthenticatedUser) -> RestResult<UserInfoResponse> {
+            self.auth_handlers.get_user_info(user).await
+        }
+
+        // User management endpoints
+        async fn get_users(&self) -> RestResult<UsersResponse> {
+            self.user_handlers.get_users().await
+        }
+
+        async fn post_users(&self, user: &AuthenticatedUser, request: CreateUserRequest) -> RestResult<UserResponse> {
+            self.user_handlers.create_user(user, request).await
+        }
+
+        async fn get_users_by_id(&self, user: &AuthenticatedUser, id: i32) -> RestResult<UserResponse> {
+            self.user_handlers.get_user(user, id).await
+        }
+
+        async fn put_users_by_id(&self, user: &AuthenticatedUser, id: i32, request: UpdateUserRequest) -> RestResult<UserResponse> {
+            self.user_handlers.update_user(user, id, request).await
+        }
+
+        async fn delete_users_by_id(&self, user: &AuthenticatedUser, id: i32) -> RestResult<()> {
+            self.user_handlers.delete_user(user, id).await
+        }
+    }
+
+    let service_impl = UserServiceImpl {
+        auth_handlers: auth_handlers.clone(),
+        user_handlers: user_handlers.clone(),
+    };
 
     let metrics_for_usage = metrics.clone();
     let metrics_for_duration = metrics.clone();
 
-    let app = UserServiceBuilder::new()
+    let app = UserServiceBuilder::new(service_impl)
         .auth_provider(jwt_auth_provider)
         // Add usage tracker
         .with_usage_tracker(move |headers, user, method, path| {
@@ -718,50 +761,6 @@ async fn main() -> Result<()> {
                     ],
                 );
             }
-        })
-        // Authentication handlers
-        .post_auth_register_handler(move |request| {
-            let handlers = auth_handlers1.clone();
-            async move { handlers.register_user(request).await }
-        })
-        .post_auth_login_handler(move |request| {
-            let handlers = auth_handlers2.clone();
-            async move { handlers.login_user(request).await }
-        })
-        .post_auth_logout_handler(move |user| {
-            let handlers = auth_handlers3.clone();
-            let user = user.clone();
-            async move { handlers.logout_user(&user).await }
-        })
-        .get_auth_me_handler(move |user| {
-            let handlers = auth_handlers4.clone();
-            let user = user.clone();
-            async move { handlers.get_user_info(&user).await }
-        })
-        // User management handlers
-        .get_users_handler(move || {
-            let handlers = user_handlers1.clone();
-            async move { handlers.get_users().await }
-        })
-        .post_users_handler(move |user, request| {
-            let handlers = user_handlers2.clone();
-            let user = user.clone();
-            async move { handlers.create_user(&user, request).await }
-        })
-        .get_users_by_id_handler(move |user, id| {
-            let handlers = user_handlers3.clone();
-            let user = user.clone();
-            async move { handlers.get_user(&user, id).await }
-        })
-        .put_users_by_id_handler(move |user, id, request| {
-            let handlers = user_handlers4.clone();
-            let user = user.clone();
-            async move { handlers.update_user(&user, id, request).await }
-        })
-        .delete_users_by_id_handler(move |user, id| {
-            let handlers = user_handlers5.clone();
-            let user = user.clone();
-            async move { handlers.delete_user(&user, id).await }
         })
         .build();
 

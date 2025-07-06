@@ -456,96 +456,13 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         }
     });
 
-    // Generate builder fields - similar pattern to JSON-RPC macro
-    let builder_fields = service_def.endpoints.iter().map(|endpoint| {
-        let handler_name = &endpoint.handler_name;
-        let field_name = quote::format_ident!("{}_handler", handler_name);
-        let response_type = &endpoint.response_type;
-
-        // Build parameter list for handler closure
-        let mut handler_params = Vec::new();
-
-        // Add authenticated user parameter if needed
-        match &endpoint.auth {
-            AuthRequirement::Unauthorized => {}
-            AuthRequirement::WithPermissions(_) => {
-                handler_params.push(quote! { &ras_auth_core::AuthenticatedUser });
-            }
-        }
-
-        // Add path parameters
-        for path_param in &endpoint.path_params {
-            let param_type = &path_param.param_type;
-            handler_params.push(quote! { #param_type });
-        }
-
-        // Add request body parameter if present
-        if let Some(request_type) = &endpoint.request_type {
-            handler_params.push(quote! { #request_type });
-        }
-
-        quote! {
-            #field_name: Option<std::sync::Arc<dyn Fn(#(#handler_params),*) -> std::pin::Pin<Box<dyn std::future::Future<Output = ras_rest_core::RestResult<#response_type>> + Send>> + Send + Sync>>,
-        }
-    });
-
-    // Generate builder setters
-    let builder_setters = service_def.endpoints.iter().map(|endpoint| {
-        let handler_name = &endpoint.handler_name;
-        let setter_name = quote::format_ident!("{}_handler", handler_name);
-        let field_name = quote::format_ident!("{}_handler", handler_name);
-        let response_type = &endpoint.response_type;
-
-        // Build parameter list for handler closure
-        let mut handler_params = Vec::new();
-        let mut handler_args = Vec::new();
-
-        // Add authenticated user parameter if needed
-        match &endpoint.auth {
-            AuthRequirement::Unauthorized => {}
-            AuthRequirement::WithPermissions(_) => {
-                handler_params.push(quote! { &ras_auth_core::AuthenticatedUser });
-                handler_args.push(quote! { user });
-            }
-        }
-
-        // Add path parameters
-        for path_param in &endpoint.path_params {
-            let param_name = &path_param.name;
-            let param_type = &path_param.param_type;
-            handler_params.push(quote! { #param_type });
-            handler_args.push(quote! { #param_name });
-        }
-
-        // Add request body parameter if present
-        if let Some(request_type) = &endpoint.request_type {
-            handler_params.push(quote! { #request_type });
-            handler_args.push(quote! { body });
-        }
-
-        quote! {
-            pub fn #setter_name<F, Fut>(mut self, handler: F) -> Self
-            where
-                F: Fn(#(#handler_params),*) -> Fut + Send + Sync + 'static,
-                Fut: std::future::Future<Output = ras_rest_core::RestResult<#response_type>> + Send + 'static,
-            {
-                self.#field_name = Some(std::sync::Arc::new(move |#(#handler_args),*| Box::pin(handler(#(#handler_args),*))));
-                self
-            }
-        }
-    });
-
-    // Generate field initializations for the constructor
-    let field_inits = service_def.endpoints.iter().map(|endpoint| {
-        let field_name = quote::format_ident!("{}_handler", endpoint.handler_name);
-        quote! { #field_name: None }
-    });
+    // No more individual handler fields - we'll store the service implementation instead
 
     // Generate route registration
     let route_registrations = service_def.endpoints.iter().map(|endpoint| {
         let method_routing = endpoint.method.as_axum_method();
         let path = &endpoint.path;
-        let field_name = quote::format_ident!("{}_handler", endpoint.handler_name);
+        let handler_name = &endpoint.handler_name;
         let permission_groups = match &endpoint.auth {
             AuthRequirement::Unauthorized => Vec::new(),
             AuthRequirement::WithPermissions(groups) => groups.clone(),
@@ -554,7 +471,7 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
 
         // Generate the axum handler based on endpoint configuration
         let axum_handler = generate_axum_handler(endpoint);
-        let handler_body = generate_handler_body(endpoint, method_str, path);
+        let handler_body = generate_handler_body(endpoint, &handler_name, method_str, path);
 
         // Generate permission groups code for quote
         let permission_groups_code = if permission_groups.is_empty() {
@@ -568,8 +485,8 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         };
 
         quote! {
-            if let Some(handler) = &self.#field_name {
-                let handler = handler.clone();
+            {
+                let service = self.service.clone();
                 let auth_provider = self.auth_provider.clone();
                 let required_permission_groups: Vec<Vec<String>> = #permission_groups_code;
                 let with_usage_tracker = self.with_usage_tracker.clone();
@@ -577,7 +494,7 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
 
                 router = router.route(#path, #method_routing({
                     move |#axum_handler| {
-                        let handler = handler.clone();
+                        let service = service.clone();
                         let auth_provider = auth_provider.clone();
                         let required_permission_groups: Vec<Vec<String>> = required_permission_groups.clone();
                         let with_usage_tracker = with_usage_tracker.clone();
@@ -602,17 +519,18 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
     let output = quote! {
         #[cfg(feature = "server")]
         /// Generated service trait
-        pub trait #service_trait_name {
+        #[async_trait::async_trait]
+        pub trait #service_trait_name: Send + Sync + 'static {
             #(#trait_methods)*
         }
 
         #[cfg(feature = "server")]
         /// Generated builder for the REST service
-        pub struct #builder_name {
+        pub struct #builder_name<T: #service_trait_name> {
+            service: std::sync::Arc<T>,
             auth_provider: Option<std::sync::Arc<dyn ras_auth_core::AuthProvider>>,
             with_usage_tracker: Option<std::sync::Arc<dyn Fn(&axum::http::HeaderMap, Option<&ras_auth_core::AuthenticatedUser>, &str, &str) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> + Send + Sync>>,
             with_method_duration_tracker: Option<std::sync::Arc<dyn Fn(&str, &str, Option<&ras_auth_core::AuthenticatedUser>, std::time::Duration) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> + Send + Sync>>,
-            #(#builder_fields)*
         }
 
         #[cfg(feature = "server")]
@@ -627,24 +545,22 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         #static_hosting_code
 
         #[cfg(feature = "server")]
-        impl #builder_name {
-            /// Create a new builder
-            pub fn new() -> Self {
+        impl<T: #service_trait_name> #builder_name<T> {
+            /// Create a new builder with the service implementation
+            pub fn new(service: T) -> Self {
                 Self {
+                    service: std::sync::Arc::new(service),
                     auth_provider: None,
                     with_usage_tracker: None,
                     with_method_duration_tracker: None,
-                    #(#field_inits,)*
                 }
             }
 
             /// Set the auth provider
-            pub fn auth_provider<T: ras_auth_core::AuthProvider>(mut self, provider: T) -> Self {
+            pub fn auth_provider<A: ras_auth_core::AuthProvider>(mut self, provider: A) -> Self {
                 self.auth_provider = Some(std::sync::Arc::new(provider));
                 self
             }
-
-            #(#builder_setters)*
 
             /// Set the usage tracker - called before each request
             /// The tracker receives the headers, authenticated user (if any), HTTP method, and path
@@ -724,6 +640,7 @@ fn generate_axum_handler(endpoint: &EndpointDefinition) -> proc_macro2::TokenStr
 
 fn generate_handler_body(
     endpoint: &EndpointDefinition,
+    handler_name: &Ident,
     method: &str,
     path: &str,
 ) -> proc_macro2::TokenStream {
@@ -776,7 +693,7 @@ fn generate_handler_body(
                 // Track duration
                 let start_time = std::time::Instant::now();
 
-                let result = match handler(#(#args),*).await {
+                let result = match service.#handler_name(#(#args),*).await {
                     Ok(rest_response) => {
                         use axum::response::IntoResponse;
                         let status_code = axum::http::StatusCode::from_u16(rest_response.status)
@@ -939,7 +856,7 @@ fn generate_handler_body(
                 // Track duration
                 let start_time = std::time::Instant::now();
 
-                let result = match handler(#(#args),*).await {
+                let result = match service.#handler_name(#(#args),*).await {
                     Ok(rest_response) => {
                         use axum::response::IntoResponse;
                         let status_code = axum::http::StatusCode::from_u16(rest_response.status)
