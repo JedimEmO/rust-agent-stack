@@ -13,8 +13,14 @@ pub fn generate_server(definition: &FileServiceDefinition) -> TokenStream {
     let error_name = format_ident!("{}FileError", service_name);
 
     let trait_methods = generate_trait_methods(&definition.endpoints, &error_name);
-    let handler_functions = generate_handlers(&definition.endpoints, &trait_name, &error_name);
-    let router_construction = generate_router_construction(&definition.endpoints, base_path);
+    let handler_functions = generate_handlers(
+        &definition.endpoints,
+        &trait_name,
+        &error_name,
+        definition.body_limit,
+    );
+    let router_construction =
+        generate_router_construction(&definition.endpoints, base_path, definition.body_limit);
 
     quote! {
         #[async_trait::async_trait]
@@ -165,6 +171,7 @@ fn generate_handlers(
     endpoints: &[Endpoint],
     trait_name: &Ident,
     error_name: &Ident,
+    _body_limit: Option<u64>,
 ) -> TokenStream {
     endpoints.iter().map(|endpoint| {
         let handler_name = format_ident!("{}_handler", endpoint.name);
@@ -219,6 +226,18 @@ fn generate_handlers(
             }
         };
 
+        let multipart_extraction = if let Operation::Upload = &endpoint.operation {
+            // Always use the same extraction, body limit is applied at router level
+            quote! {
+                let multipart = match <::axum::extract::Multipart as ::axum::extract::FromRequest<_, _>>::from_request(req, &state).await {
+                    Ok(mp) => mp,
+                    Err(e) => return <(::axum::http::StatusCode, String) as ::axum::response::IntoResponse>::into_response((::axum::http::StatusCode::BAD_REQUEST, format!("Invalid multipart data: {}", e))),
+                };
+            }
+        } else {
+            quote! {}
+        };
+
         match &endpoint.operation {
             Operation::Upload => quote! {
                 async fn #handler_name<S, A>(
@@ -252,10 +271,7 @@ fn generate_handlers(
 
                     // Reconstruct request for multipart extraction
                     let req = ::axum::http::Request::from_parts(parts, body);
-                    let multipart = match <::axum::extract::Multipart as ::axum::extract::FromRequest<_, _>>::from_request(req, &state).await {
-                        Ok(mp) => mp,
-                        Err(e) => return <(::axum::http::StatusCode, String) as ::axum::response::IntoResponse>::into_response((::axum::http::StatusCode::BAD_REQUEST, format!("Invalid multipart data: {}", e))),
-                    };
+                    #multipart_extraction
 
                     let service = &state.0;
                     let result = #method_call;
@@ -378,7 +394,11 @@ fn generate_permission_check(auth: &AuthRequirement) -> TokenStream {
     }
 }
 
-fn generate_router_construction(endpoints: &[Endpoint], base_path: &LitStr) -> TokenStream {
+fn generate_router_construction(
+    endpoints: &[Endpoint],
+    base_path: &LitStr,
+    body_limit: Option<u64>,
+) -> TokenStream {
     let routes = endpoints.iter().map(|endpoint| {
         let handler_name = format_ident!("{}_handler", endpoint.name);
         let path = endpoint
@@ -404,13 +424,27 @@ fn generate_router_construction(endpoints: &[Endpoint], base_path: &LitStr) -> T
         }
     });
 
+    let router_with_limit = if let Some(limit) = body_limit {
+        let limit_usize = limit as usize;
+        quote! {
+            ::axum::Router::new()
+                #(#routes)*
+                .layer(::axum::extract::DefaultBodyLimit::max(#limit_usize))
+                .with_state((service, auth_provider, usage_tracker, duration_tracker))
+        }
+    } else {
+        quote! {
+            ::axum::Router::new()
+                #(#routes)*
+                .with_state((service, auth_provider, usage_tracker, duration_tracker))
+        }
+    };
+
     quote! {
         ::axum::Router::new()
             .nest(
                 #base_path,
-                ::axum::Router::new()
-                    #(#routes)*
-                    .with_state((service, auth_provider, usage_tracker, duration_tracker))
+                #router_with_limit
             )
     }
 }

@@ -34,6 +34,8 @@ members = [
     "examples/bidirectional-chat/server",
     "examples/bidirectional-chat/tui",
     "examples/file-service-example",
+    "examples/file-service-wasm/file-service-api",
+    "examples/file-service-wasm/file-service-backend",
 ]
 
 [workspace.dependencies]

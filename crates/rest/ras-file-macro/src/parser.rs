@@ -8,6 +8,7 @@ use syn::{
 pub struct FileServiceDefinition {
     pub service_name: Ident,
     pub base_path: LitStr,
+    pub body_limit: Option<u64>,
     pub endpoints: Vec<Endpoint>,
 }
 
@@ -46,6 +47,7 @@ impl Parse for FileServiceDefinition {
 
         let mut service_name = None;
         let mut base_path = None;
+        let mut body_limit = None;
         let mut endpoints = Vec::new();
 
         while !content.is_empty() {
@@ -58,6 +60,10 @@ impl Parse for FileServiceDefinition {
                 }
                 "base_path" => {
                     base_path = Some(content.parse()?);
+                }
+                "body_limit" => {
+                    let lit: syn::LitInt = content.parse()?;
+                    body_limit = Some(lit.base10_parse()?);
                 }
                 "endpoints" => {
                     let endpoints_content;
@@ -88,6 +94,7 @@ impl Parse for FileServiceDefinition {
             service_name: service_name
                 .ok_or_else(|| Error::new(input.span(), "Missing service_name"))?,
             base_path: base_path.ok_or_else(|| Error::new(input.span(), "Missing base_path"))?,
+            body_limit,
             endpoints,
         })
     }

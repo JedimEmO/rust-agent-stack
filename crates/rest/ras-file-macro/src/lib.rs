@@ -15,8 +15,17 @@ pub fn file_service(input: TokenStream) -> TokenStream {
     let server_code = server::generate_server(&definition);
     let client_code = client::generate_client(&definition);
 
+    // Only include server code when not targeting wasm32
     let expanded = quote! {
-        #server_code
+        #[cfg(not(target_arch = "wasm32"))]
+        mod server_impl {
+            use super::*;
+            #server_code
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        pub use server_impl::*;
+
         #client_code
     };
 
