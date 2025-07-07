@@ -17,10 +17,10 @@ fn test_protocol_serialization() {
     // Test serialization
     let json = serde_json::to_string(&Protocol::Rest).unwrap();
     assert_eq!(json, "\"Rest\"");
-    
+
     let json = serde_json::to_string(&Protocol::JsonRpc).unwrap();
     assert_eq!(json, "\"JsonRpc\"");
-    
+
     // Test deserialization
     let protocol: Protocol = serde_json::from_str("\"WebSocket\"").unwrap();
     assert_eq!(protocol, Protocol::WebSocket);
@@ -47,7 +47,7 @@ fn test_request_context_with_metadata() {
     let ctx = RequestContext::rest("POST", "/api/users")
         .with_metadata("request_id", "123")
         .with_metadata("version", "v1");
-    
+
     assert_eq!(ctx.metadata.get("request_id"), Some(&"123".to_string()));
     assert_eq!(ctx.metadata.get("version"), Some(&"v1".to_string()));
 }
@@ -55,11 +55,11 @@ fn test_request_context_with_metadata() {
 #[test]
 fn test_user_agent_extraction() {
     let mut headers = HeaderMap::new();
-    
+
     // Test with user agent
     headers.insert("user-agent", "Mozilla/5.0".parse().unwrap());
     assert_eq!(extractors::user_agent(&headers), "Mozilla/5.0");
-    
+
     // Test without user agent
     headers.clear();
     assert_eq!(extractors::user_agent(&headers), "unknown");
@@ -69,16 +69,18 @@ fn test_user_agent_extraction() {
 fn test_user_attributes_authenticated() {
     let user = AuthenticatedUser {
         user_id: "user123".to_string(),
-        permissions: vec!["read".to_string(), "write".to_string(), "admin".to_string()].into_iter().collect(),
+        permissions: vec!["read".to_string(), "write".to_string(), "admin".to_string()]
+            .into_iter()
+            .collect(),
         metadata: None,
     };
-    
+
     let attrs = extractors::user_attributes(Some(&user));
-    
+
     assert_eq!(attrs.get("user_id"), Some(&"user123".to_string()));
     assert_eq!(attrs.get("authenticated"), Some(&"true".to_string()));
     assert_eq!(attrs.get("has_admin"), Some(&"true".to_string()));
-    
+
     // Permissions order might vary, so check if both exist
     let perms = attrs.get("permissions").unwrap();
     assert!(perms.contains("read"));
@@ -89,7 +91,7 @@ fn test_user_attributes_authenticated() {
 #[test]
 fn test_user_attributes_anonymous() {
     let attrs = extractors::user_attributes(None);
-    
+
     assert_eq!(attrs.get("user_id"), Some(&"anonymous".to_string()));
     assert_eq!(attrs.get("authenticated"), Some(&"false".to_string()));
 }
@@ -115,7 +117,9 @@ impl UsageTracker for MockUsageTracker {
         user: Option<&AuthenticatedUser>,
         context: &RequestContext,
     ) {
-        let user_id = user.map(|u| u.user_id.clone()).unwrap_or("anonymous".to_string());
+        let user_id = user
+            .map(|u| u.user_id.clone())
+            .unwrap_or("anonymous".to_string());
         self.calls.lock().await.push((
             context.method.clone(),
             context.protocol.to_string(),
@@ -144,7 +148,10 @@ impl MethodDurationTracker for MockMethodDurationTracker {
         _user: Option<&AuthenticatedUser>,
         duration: Duration,
     ) {
-        self.durations.lock().await.push((context.method.clone(), duration));
+        self.durations
+            .lock()
+            .await
+            .push((context.method.clone(), duration));
     }
 }
 
@@ -166,12 +173,12 @@ impl MockServiceMetrics {
 
 impl ServiceMetrics for MockServiceMetrics {
     fn increment_requests_started(&self, context: &RequestContext) {
-        self.requests_started.try_lock().unwrap().push((
-            context.method.clone(),
-            context.protocol.to_string(),
-        ));
+        self.requests_started
+            .try_lock()
+            .unwrap()
+            .push((context.method.clone(), context.protocol.to_string()));
     }
-    
+
     fn increment_requests_completed(&self, context: &RequestContext, success: bool) {
         self.requests_completed.try_lock().unwrap().push((
             context.method.clone(),
@@ -179,12 +186,12 @@ impl ServiceMetrics for MockServiceMetrics {
             success,
         ));
     }
-    
+
     fn record_method_duration(&self, context: &RequestContext, duration: Duration) {
-        self.method_durations.try_lock().unwrap().push((
-            context.method.clone(),
-            duration,
-        ));
+        self.method_durations
+            .try_lock()
+            .unwrap()
+            .push((context.method.clone(), duration));
     }
 }
 
@@ -197,12 +204,21 @@ async fn test_usage_tracker_trait() {
         metadata: None,
     };
     let context = RequestContext::jsonrpc("testMethod".to_string());
-    
-    tracker.track_request(&HeaderMap::new(), Some(&user), &context).await;
-    
+
+    tracker
+        .track_request(&HeaderMap::new(), Some(&user), &context)
+        .await;
+
     let calls = tracker.calls.lock().await;
     assert_eq!(calls.len(), 1);
-    assert_eq!(calls[0], ("testMethod".to_string(), "JSON-RPC".to_string(), "test_user".to_string()));
+    assert_eq!(
+        calls[0],
+        (
+            "testMethod".to_string(),
+            "JSON-RPC".to_string(),
+            "test_user".to_string()
+        )
+    );
 }
 
 #[tokio::test]
@@ -210,9 +226,9 @@ async fn test_method_duration_tracker_trait() {
     let tracker = MockMethodDurationTracker::new();
     let context = RequestContext::rest("POST", "/api/data");
     let duration = Duration::from_millis(150);
-    
+
     tracker.track_duration(&context, None, duration).await;
-    
+
     let durations = tracker.durations.lock().await;
     assert_eq!(durations.len(), 1);
     assert_eq!(durations[0].0, "POST /api/data");
@@ -223,16 +239,16 @@ async fn test_method_duration_tracker_trait() {
 fn test_service_metrics_trait() {
     let metrics = MockServiceMetrics::new();
     let context = RequestContext::rest("GET", "/health");
-    
+
     // Test request started
     metrics.increment_requests_started(&context);
     assert_eq!(metrics.requests_started.try_lock().unwrap().len(), 1);
-    
+
     // Test request completed
     metrics.increment_requests_completed(&context, true);
     assert_eq!(metrics.requests_completed.try_lock().unwrap().len(), 1);
     assert_eq!(metrics.requests_completed.try_lock().unwrap()[0].2, true);
-    
+
     // Test method duration
     let duration = Duration::from_secs(1);
     metrics.record_method_duration(&context, duration);
@@ -243,18 +259,18 @@ fn test_service_metrics_trait() {
 async fn test_observability_builder_with_usage_tracker() {
     let call_count = Arc::new(Mutex::new(0));
     let call_count_clone = call_count.clone();
-    
-    let builder = ObservabilityBuilder::new()
-        .with_usage_tracker(move |_headers, _user, _context| {
+
+    let builder =
+        ObservabilityBuilder::new().with_usage_tracker(move |_headers, _user, _context| {
             let count = call_count_clone.clone();
             async move {
                 *count.lock().await += 1;
             }
         });
-    
+
     let config = builder.build();
     assert!(config.usage_tracker.is_some());
-    
+
     // Test that the tracker function works
     let tracker_fn = config.usage_tracker.unwrap();
     let fut = tracker_fn(
@@ -263,7 +279,7 @@ async fn test_observability_builder_with_usage_tracker() {
         RequestContext::jsonrpc("test".to_string()),
     );
     fut.await;
-    
+
     assert_eq!(*call_count.lock().await, 1);
 }
 
@@ -271,28 +287,25 @@ async fn test_observability_builder_with_usage_tracker() {
 async fn test_observability_builder_with_duration_tracker() {
     let duration_sum = Arc::new(Mutex::new(Duration::ZERO));
     let duration_sum_clone = duration_sum.clone();
-    
-    let builder = ObservabilityBuilder::new()
-        .with_method_duration_tracker(move |_context, _user, duration| {
+
+    let builder = ObservabilityBuilder::new().with_method_duration_tracker(
+        move |_context, _user, duration| {
             let sum = duration_sum_clone.clone();
             async move {
                 *sum.lock().await += duration;
             }
-        });
-    
+        },
+    );
+
     let config = builder.build();
     assert!(config.duration_tracker.is_some());
-    
+
     // Test that the tracker function works
     let tracker_fn = config.duration_tracker.unwrap();
     let test_duration = Duration::from_millis(100);
-    let fut = tracker_fn(
-        RequestContext::rest("GET", "/test"),
-        None,
-        test_duration,
-    );
+    let fut = tracker_fn(RequestContext::rest("GET", "/test"), None, test_duration);
     fut.await;
-    
+
     assert_eq!(*duration_sum.lock().await, test_duration);
 }
 
@@ -300,16 +313,15 @@ async fn test_observability_builder_with_duration_tracker() {
 fn test_observability_builder_default() {
     let builder = ObservabilityBuilder::default();
     let config = builder.build();
-    
+
     assert!(config.usage_tracker.is_none());
     assert!(config.duration_tracker.is_none());
 }
 
 #[test]
 fn test_request_context_cloning() {
-    let ctx = RequestContext::rest("PUT", "/api/resource")
-        .with_metadata("key", "value");
-    
+    let ctx = RequestContext::rest("PUT", "/api/resource").with_metadata("key", "value");
+
     let cloned = ctx.clone();
     assert_eq!(cloned.method, ctx.method);
     assert_eq!(cloned.protocol, ctx.protocol);

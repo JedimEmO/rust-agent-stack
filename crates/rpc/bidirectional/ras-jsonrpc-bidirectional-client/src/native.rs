@@ -101,7 +101,7 @@ impl WebSocketTransport for NativeWebSocketTransport {
         // Configure connection
         let mut config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default();
         config.max_message_size = Some(16 * 1024 * 1024); // 16MB
-        config.max_frame_size = Some(16 * 1024 * 1024);   // 16MB
+        config.max_frame_size = Some(16 * 1024 * 1024); // 16MB
         config.accept_unmasked_frames = false;
 
         // Connect with timeout

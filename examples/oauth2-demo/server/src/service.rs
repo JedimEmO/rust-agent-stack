@@ -1,5 +1,5 @@
-use oauth2_demo_api::*;
 use axum::Router;
+use oauth2_demo_api::*;
 use ras_jsonrpc_core::AuthProvider;
 use tracing::info;
 

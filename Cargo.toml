@@ -3,28 +3,28 @@ resolver = "3"
 members = [
     # Core
     "crates/core/*",
-    
+
     # RPC
     "crates/rpc/ras-jsonrpc-types",
     "crates/rpc/ras-jsonrpc-core",
     "crates/rpc/ras-jsonrpc-macro",
     "crates/rpc/bidirectional/*",
-    
+
     # REST
     "crates/rest/*",
-    
+
     # Identity
     "crates/identity/*",
-    
+
     # Observability
     "crates/observability/*",
-    
+
     # Specs
     "crates/specs/*",
-    
+
     # Tools
     "crates/tools/*",
-    
+
     # Examples
     "examples/basic-jsonrpc/*",
     "examples/oauth2-demo/*",
@@ -33,10 +33,11 @@ members = [
     "examples/bidirectional-chat/api",
     "examples/bidirectional-chat/server",
     "examples/bidirectional-chat/tui",
+    "examples/file-service-example",
 ]
 
 [workspace.dependencies]
-axum = "0.8"
+axum = { version = "0.8", features = ["multipart"] }
 axum-test = { version = "18.0.0-rc3" }
 clap = { version = "4.5.39", features = ["derive"] }
 dwind = "0.3.2"
@@ -46,6 +47,7 @@ futures-signals-component-macro = "0.4.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.0", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
 tracing = "0.1"
 thiserror = "2.0"
 anyhow = "1.0"
@@ -67,7 +69,7 @@ mime_guess = "2.0"
 rust-embed = "8.0"
 # Testing dependencies
 wiremock = "0.6"
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", features = ["json", "multipart", "stream"] }
 tower = { version = "0.5", features = ["util"] }
 hyper = { version = "1.0", features = ["full"] }
 rand = "0.8"
@@ -83,7 +85,7 @@ console = "0.15"
 axum-extra = "0.9"
 futures-util = "0.3"
 dotenvy = "0.15"
-# WASM dependencies  
+# WASM dependencies
 web-sys = "0.3"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
