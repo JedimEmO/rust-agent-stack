@@ -36,8 +36,6 @@ members = [
     "examples/file-service-example",
     "examples/file-service-wasm/file-service-api",
     "examples/file-service-wasm/file-service-backend",
-    "examples/rest-wasm-example/rest-api",
-    "examples/rest-wasm-example/rest-backend",
 ]
 
 [workspace.dependencies]
