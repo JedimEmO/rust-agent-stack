@@ -6,7 +6,7 @@ import { wasmPack } from './vite-plugin-wasm-pack';
 export default defineConfig({
   plugins: [
     wasmPack({
-      cratePath: '../file-service-api',
+      cratePath: '../rest-api',
       outDir: 'public/pkg',
       features: ['wasm-client'],
     }),
@@ -26,7 +26,7 @@ export default defineConfig({
       }
     },
     fs: {
-      // Allow serving files from one level up (for WASM files)
+      // Allow serving files from public directory
       allow: ['..'],
     },
   },
@@ -34,6 +34,6 @@ export default defineConfig({
     target: 'esnext',
   },
   optimizeDeps: {
-    exclude: ['@wasm/file_service_api.js'],
+    exclude: ['@wasm/rest_api.js'],
   },
 });

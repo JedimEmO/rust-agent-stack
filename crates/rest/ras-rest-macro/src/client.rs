@@ -16,8 +16,11 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
         .iter()
         .map(generate_client_method_with_timeout);
 
+    // Generate WASM client wrapper
+    let wasm_client = generate_wasm_client(service_def);
+
     let output = quote! {
-        #[cfg(feature = "client")]
+        #[cfg(any(feature = "client", all(target_arch = "wasm32", feature = "wasm-client")))]
         /// Helper function to join URL segments properly
         fn join_url_segments(base: &str, path: &str) -> String {
             let base = base.trim_end_matches('/');
@@ -29,7 +32,7 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
             }
         }
 
-        #[cfg(feature = "client")]
+        #[cfg(any(feature = "client", all(target_arch = "wasm32", feature = "wasm-client")))]
         /// Generated client for the REST service
         #[derive(Clone)]
         pub struct #client_name {
@@ -40,14 +43,14 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
             default_timeout: Option<std::time::Duration>,
         }
 
-        #[cfg(feature = "client")]
+        #[cfg(any(feature = "client", all(target_arch = "wasm32", feature = "wasm-client")))]
         /// Builder for the REST client
         pub struct #client_builder_name {
             server_url: String,
             timeout: Option<std::time::Duration>,
         }
 
-        #[cfg(feature = "client")]
+        #[cfg(any(feature = "client", all(target_arch = "wasm32", feature = "wasm-client")))]
         impl #client_builder_name {
             /// Create a new client builder with the required server URL
             pub fn new(server_url: impl Into<String>) -> Self {
@@ -89,7 +92,7 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
             }
         }
 
-        #[cfg(feature = "client")]
+        #[cfg(any(feature = "client", all(target_arch = "wasm32", feature = "wasm-client")))]
         impl #client_name {
             /// Set the bearer token for authentication
             pub fn set_bearer_token(&mut self, token: Option<impl Into<String>>) {
@@ -101,9 +104,16 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
                 self.bearer_token.as_deref()
             }
 
+            /// Create a new client builder
+            pub fn builder(server_url: impl Into<String>) -> #client_builder_name {
+                #client_builder_name::new(server_url)
+            }
+
             #(#client_methods)*
             #(#client_methods_with_timeout)*
         }
+
+        #wasm_client
     };
 
     output
@@ -256,4 +266,121 @@ fn generate_client_method_with_timeout(endpoint: &EndpointDefinition) -> proc_ma
             #response_handling
         }
     }
+}
+
+/// Generate WASM client wrapper for REST service
+fn generate_wasm_client(service_def: &ServiceDefinition) -> proc_macro2::TokenStream {
+    let service_name = &service_def.service_name;
+    let client_name = quote::format_ident!("{}Client", service_name);
+    let wasm_client_name = quote::format_ident!("Wasm{}Client", service_name);
+
+    let wasm_methods = generate_wasm_methods(&service_def.endpoints);
+
+    quote! {
+        #[cfg(all(target_arch = "wasm32", feature = "wasm-client"))]
+        pub mod wasm_client {
+            use super::*;
+            use wasm_bindgen::prelude::*;
+            use wasm_bindgen_futures::js_sys;
+
+            #[wasm_bindgen]
+            pub struct #wasm_client_name {
+                inner: #client_name,
+            }
+
+            #[wasm_bindgen]
+            impl #wasm_client_name {
+                #[wasm_bindgen(constructor)]
+                pub fn new(base_url: String) -> Result<#wasm_client_name, JsValue> {
+                    let builder = #client_name::builder(base_url);
+
+                    let client = builder
+                        .build()
+                        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+                    Ok(#wasm_client_name { inner: client })
+                }
+
+                #[wasm_bindgen]
+                pub fn set_bearer_token(&mut self, token: Option<String>) {
+                    self.inner.set_bearer_token(token);
+                }
+
+                #wasm_methods
+            }
+        }
+    }
+}
+
+/// Generate WASM methods for REST endpoints
+fn generate_wasm_methods(endpoints: &[EndpointDefinition]) -> proc_macro2::TokenStream {
+    let methods = endpoints.iter().map(|endpoint| {
+        let method_name = &endpoint.handler_name;
+        let response_type = &endpoint.response_type;
+
+        // Build path parameters for method signature
+        let path_params: Vec<_> = endpoint.path_params.iter().map(|param| {
+            let name = &param.name;
+            quote! { #name: String }
+        }).collect();
+
+        // Build path arguments for inner method call
+        let path_args: Vec<_> = endpoint.path_params.iter().map(|param| {
+            &param.name
+        }).collect();
+
+        // Build method signature and body based on whether there's a request body
+        if let Some(request_type) = &endpoint.request_type {
+            quote! {
+                #[wasm_bindgen]
+                pub async fn #method_name(&self, #(#path_params,)* body: JsValue) -> Result<JsValue, JsValue> {
+                    // Deserialize request body from JsValue
+                    let body: #request_type = serde_wasm_bindgen::from_value(body)
+                        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+                    let response = self.inner
+                        .#method_name(#(#path_args,)* body)
+                        .await
+                        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+                    // Convert response to JsValue
+                    serde_wasm_bindgen::to_value(&response)
+                        .map_err(|e| JsValue::from_str(&e.to_string()))
+                }
+            }
+        } else {
+            // No request body
+            let is_unit_type = quote!(#response_type).to_string() == "()";
+
+            if is_unit_type {
+                quote! {
+                    #[wasm_bindgen]
+                    pub async fn #method_name(&self, #(#path_params,)*) -> Result<(), JsValue> {
+                        self.inner
+                            .#method_name(#(#path_args,)*)
+                            .await
+                            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+                        Ok(())
+                    }
+                }
+            } else {
+                quote! {
+                    #[wasm_bindgen]
+                    pub async fn #method_name(&self, #(#path_params,)*) -> Result<JsValue, JsValue> {
+                        let response = self.inner
+                            .#method_name(#(#path_args,)*)
+                            .await
+                            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+                        // Convert response to JsValue
+                        serde_wasm_bindgen::to_value(&response)
+                            .map_err(|e| JsValue::from_str(&e.to_string()))
+                    }
+                }
+            }
+        }
+    });
+
+    quote! { #(#methods)* }
 }

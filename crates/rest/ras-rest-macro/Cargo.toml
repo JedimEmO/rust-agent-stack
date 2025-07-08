@@ -14,6 +14,7 @@ proc-macro = true
 default = ["server", "client"]  # Enable server by default for backward compatibility
 server = ["axum", "ras-auth-core", "ras-rest-core", "async-trait"]
 client = ["reqwest"]
+wasm-client = ["client", "wasm-bindgen", "wasm-bindgen-futures", "js-sys", "web-sys", "serde-wasm-bindgen"]
 
 [dependencies]
 syn = { workspace = true }
@@ -30,6 +31,13 @@ async-trait = { workspace = true, optional = true }
 
 # Client dependencies
 reqwest = { workspace = true, optional = true }
+
+# WASM client dependencies
+wasm-bindgen = { version = "0.2", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+js-sys = { version = "0.3", optional = true }
+web-sys = { version = "0.3", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

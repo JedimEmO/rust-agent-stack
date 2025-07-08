@@ -1,0 +1,20 @@
+{
+  "name": "rest-wasm-example",
+  "version": "1.0.0",
+  "description": "TypeScript example using WASM REST client",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "solid-js": "^1.8.11"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10",
+    "vite-plugin-solid": "^2.8.0"
+  }
+}
