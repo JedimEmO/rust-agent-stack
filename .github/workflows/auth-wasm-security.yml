@@ -1,0 +1,172 @@
+name: Auth & WASM Security
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'crates/identity/**'
+      - 'crates/core/ras-auth-core/**'
+      - 'examples/dominator-example/**'
+      - 'examples/google-oauth-example/**'
+      - '**/*.wasm'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'crates/identity/**'
+      - 'crates/core/ras-auth-core/**'
+      - 'examples/dominator-example/**'
+      - 'examples/google-oauth-example/**'
+      - '**/*.wasm'
+  workflow_dispatch:
+
+jobs:
+  auth-security-review:
+    name: Authentication Security Review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for hardcoded secrets in auth code
+        run: |
+          echo "Checking authentication code for hardcoded secrets..."
+          ! grep -rEn "(secret|password|token|key)\s*=\s*[\"'][^\"']{8,}[\"']" \
+            --include="*.rs" \
+            crates/identity/ \
+            crates/core/ras-auth-core/ \
+            examples/google-oauth-example/ || {
+              echo "::error::Found potential hardcoded secrets in authentication code"
+              exit 1
+            }
+
+      - name: Check for weak crypto usage
+        run: |
+          echo "Checking for weak cryptographic usage..."
+          ! grep -rEn "(md5|sha1|DES|RC4)" \
+            --include="*.rs" \
+            crates/identity/ \
+            crates/core/ras-auth-core/ || {
+              echo "::warning::Found potentially weak cryptographic functions"
+            }
+
+      - name: Verify secure random usage
+        run: |
+          echo "Checking for secure random number generation..."
+          grep -rn "rand::thread_rng\|OsRng\|SystemRandom" \
+            --include="*.rs" \
+            crates/identity/ || {
+              echo "::warning::Authentication code should use cryptographically secure random number generators"
+            }
+
+      - name: Check JWT security
+        run: |
+          echo "Checking JWT implementation security..."
+          # Check for algorithm verification
+          grep -rn "decode.*Validation" --include="*.rs" crates/identity/ras-identity-session/ || {
+            echo "::warning::JWT decoding should validate algorithm"
+          }
+          # Check for exp claim validation
+          grep -rn "validate_exp\|exp.*validation" --include="*.rs" crates/identity/ras-identity-session/ || {
+            echo "::warning::JWT should validate expiration claims"
+          }
+
+      - name: OAuth2 security checks
+        run: |
+          echo "Checking OAuth2 implementation..."
+          # Check for PKCE usage
+          grep -rn "code_challenge\|code_verifier" --include="*.rs" crates/identity/ras-identity-oauth2/ || {
+            echo "::warning::OAuth2 implementation should use PKCE"
+          }
+          # Check for state parameter
+          grep -rn "state.*generate\|csrf.*token" --include="*.rs" crates/identity/ras-identity-oauth2/ || {
+            echo "::warning::OAuth2 should use state parameter for CSRF protection"
+          }
+
+  wasm-security:
+    name: WASM Security Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain with WASM target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Install wabt (WebAssembly Binary Toolkit)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wabt
+
+      - name: Check WASM size and optimization
+        run: |
+          echo "Checking WASM bundle sizes..."
+          cd examples/dominator-example
+          wasm-pack build --release
+          ls -lah pkg/*.wasm
+          # Warn if WASM is too large (>1MB)
+          find pkg -name "*.wasm" -size +1M -exec echo "::warning::Large WASM file: {}" \;
+
+      - name: Analyze WASM for security issues
+        run: |
+          echo "Analyzing WASM modules..."
+          # Check for exported functions that shouldn't be public
+          for wasm in $(find . -name "*.wasm" -type f); do
+            echo "Checking $wasm..."
+            wasm-objdump -x "$wasm" | grep -E "Export|Import" || true
+          done
+
+      - name: Check for unsafe WASM patterns
+        run: |
+          echo "Checking for unsafe WASM patterns..."
+          # Check for direct DOM manipulation without sanitization
+          ! grep -rn "innerHTML\|outerHTML" --include="*.rs" examples/dominator-example/src/ || {
+            echo "::warning::Direct innerHTML usage detected - ensure content is sanitized"
+          }
+          # Check for eval usage
+          ! grep -rn "eval\|Function(" --include="*.rs" examples/dominator-example/src/ || {
+            echo "::error::eval or Function constructor usage detected"
+            exit 1
+          }
+
+  security-policy:
+    name: Security Policy Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for SECURITY.md
+        run: |
+          if [ ! -f "SECURITY.md" ]; then
+            echo "::warning::No SECURITY.md file found. Consider adding a security policy."
+            echo "Creating a template SECURITY.md..."
+            cat > SECURITY.md << 'EOF'
+# Security Policy
+
+## Supported Versions
+
+| Version | Supported          |
+| ------- | ------------------ |
+| 0.1.x   | :white_check_mark: |
+
+## Reporting a Vulnerability
+
+Please report security vulnerabilities to [SECURITY_EMAIL].
+
+Do not report security vulnerabilities through public GitHub issues.
+
+## Security Considerations
+
+This project implements various security-sensitive components:
+- Authentication providers (OAuth2, JWT, local auth)
+- WebSocket-based RPC communication
+- WASM client applications
+
+Please review the security implications before using in production.
+EOF
+          fi
