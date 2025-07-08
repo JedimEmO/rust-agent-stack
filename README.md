@@ -1,14 +1,16 @@
 # Rust Agent Stack (RAS)
 
-A comprehensive Rust framework for building type-safe, authenticated agent systems with JSON-RPC and REST APIs.
+A comprehensive Rust framework for building type-safe, authenticated agent systems with JSON-RPC, REST APIs, and file services.
 
 ## Overview
 
 The Rust Agent Stack provides a complete toolkit for building distributed agent systems with:
 - 🔐 **Pluggable Authentication** - JWT, OAuth2, local auth with security best practices
-- 🚀 **Type-Safe APIs** - Trait-based procedural macros for JSON-RPC and REST
+- 🚀 **Type-Safe APIs** - Procedural macros for JSON-RPC, REST, and file services
 - 🌐 **WebSocket Support** - Bidirectional real-time communication
-- 🎯 **WASM Support** - Build reactive web UIs with Dominator framework
+- 📁 **File Services** - Type-safe file upload/download with streaming support
+- 🎯 **Full-Stack TypeScript** - Automatic TypeScript client generation via WASM
+- 🎨 **Reactive WASM UIs** - Build modern web apps with Dominator framework
 - 📊 **Observability** - Built-in OpenTelemetry and Prometheus metrics
 - 📝 **API Documentation** - Automatic OpenRPC and OpenAPI generation
 - ✅ **Compile-Time Safety** - All endpoints must be implemented
@@ -38,25 +40,42 @@ RAS is organized as a Cargo workspace with the following structure:
 
 ```
 crates/
-├── libs/                     # Core libraries
+├── core/                     # Core libraries
 │   ├── ras-auth-core        # Authentication traits and types
+│   ├── ras-identity-core    # Core identity provider traits
+│   └── ras-observability-core # Unified observability traits
+├── rpc/                     # JSON-RPC libraries
+│   ├── ras-jsonrpc-types    # JSON-RPC 2.0 protocol types
 │   ├── ras-jsonrpc-core     # JSON-RPC runtime support
 │   ├── ras-jsonrpc-macro    # JSON-RPC service macro
-│   ├── ras-jsonrpc-types    # JSON-RPC protocol types
-│   ├── ras-jsonrpc-bidirectional-* # WebSocket support
+│   └── bidirectional/       # WebSocket support
+│       ├── ras-jsonrpc-bidirectional-types
+│       ├── ras-jsonrpc-bidirectional-server
+│       ├── ras-jsonrpc-bidirectional-client
+│       └── ras-jsonrpc-bidirectional-macro
+├── rest/                    # REST API libraries
 │   ├── ras-rest-core        # REST types and utilities
 │   ├── ras-rest-macro       # REST service macro
-│   ├── ras-observability-core # Unified observability traits
-│   ├── ras-observability-otel # OpenTelemetry implementation
-│   └── openrpc-types        # OpenRPC specifications
+│   └── ras-file-macro       # File upload/download macro
 ├── identity/                # Identity providers
-│   ├── ras-identity-core    # Core identity traits
 │   ├── ras-identity-local   # Username/password auth
 │   ├── ras-identity-oauth2  # OAuth2 with PKCE support
 │   └── ras-identity-session # JWT session management
+├── observability/           # Monitoring and metrics
+│   └── ras-observability-otel # OpenTelemetry implementation
+├── specs/                   # Specification types
+│   └── openrpc-types        # OpenRPC 1.3.2 spec types
 └── tools/                   # Development tools
-    └── openrpc-to-bruno     # Convert OpenRPC to Bruno collections
+    └── openrpc-to-bruno     # Convert OpenRPC to Bruno
 examples/                    # Example applications
+├── basic-jsonrpc/           # JSON-RPC service demo
+├── bidirectional-chat/      # Real-time chat system
+├── file-service-example/    # File upload/download demo
+├── file-service-wasm/       # File service with TypeScript
+├── oauth2-demo/             # OAuth2 authentication flow
+├── rest-api-demo/           # REST API example
+├── rest-wasm-example/       # REST with TypeScript client
+└── wasm-ui-demo/            # Dominator WASM UI
 ```
 
 ## Key Features
@@ -97,7 +116,7 @@ let service = TaskService::builder()
 
 ### Type-Safe REST APIs
 
-Build RESTful services with automatic OpenAPI documentation:
+Build RESTful services with automatic OpenAPI documentation and TypeScript client generation:
 
 ```rust
 use ras_rest_macro::rest_service;
@@ -110,8 +129,8 @@ rest_service!({
     endpoints: [
         GET UNAUTHORIZED users() -> UsersResponse,
         POST WITH_PERMISSIONS(["admin"]) users(CreateUserRequest) -> UserResponse,
-        GET WITH_PERMISSIONS(["user"]) users/{id: i32}() -> UserResponse,
-        DELETE WITH_PERMISSIONS(["admin"]) users/{id: i32}() -> (),
+        GET WITH_PERMISSIONS(["user"]) users/{id: String}() -> User,
+        DELETE WITH_PERMISSIONS(["admin"]) users/{id: String}() -> (),
     ]
 });
 
@@ -153,6 +172,39 @@ jsonrpc_bidirectional_service!({
 });
 ```
 
+### Type-Safe File Services
+
+Build file upload/download services with streaming support:
+
+```rust
+use ras_file_macro::file_service;
+
+file_service!({
+    service_name: DocumentService,
+    base_path: "/api/documents",
+    body_limit: 52428800,  // 50MB
+    endpoints: [
+        UPLOAD WITH_PERMISSIONS(["user"]) upload() -> FileMetadata,
+        DOWNLOAD UNAUTHORIZED download/{file_id: String}(),
+    ]
+});
+```
+
+### TypeScript Client Generation
+
+All service macros support automatic TypeScript client generation:
+
+```typescript
+// Auto-generated TypeScript client
+import { WasmUserServiceClient } from './pkg/user_api';
+
+const client = new WasmUserServiceClient('http://localhost:3000');
+client.set_bearer_token('your-jwt-token');
+
+const users = await client.get_users();
+const user = await client.create_user({ name: 'Alice', email: 'alice@example.com' });
+```
+
 ### Reactive WASM UIs
 
 Build modern web applications with Dominator:
@@ -172,33 +224,52 @@ fn create_task_list(tasks: MutableVec<Task>) -> Dom {
 
 ## Examples
 
-### [Basic JSON-RPC Service](examples/basic-jsonrpc-service/)
+### [Basic JSON-RPC](examples/basic-jsonrpc/)
 Simple task management API demonstrating authentication and OpenTelemetry metrics.
 
-### [Google OAuth Example](examples/google-oauth-example/)
+### [OAuth2 Demo](examples/oauth2-demo/)
 Full-stack OAuth2 implementation with PKCE flow and role-based permissions.
 
 ### [Bidirectional Chat](examples/bidirectional-chat/)
 Real-time chat system with WebSocket communication, TUI client, and persistence.
 
-### [Dominator WASM Example](examples/dominator-example/)
-Reactive web UI with glass morphism design, connecting to JSON-RPC backend.
+### [File Service Example](examples/file-service-example/)
+File upload/download service with streaming support and authentication.
 
-### [REST Service Example](examples/rest-service-example/)
-RESTful API with OpenAPI documentation and Prometheus metrics.
+### [File Service WASM](examples/file-service-wasm/)
+Full-stack file service with TypeScript client and React frontend.
 
-## Security Features
+### [REST API Demo](examples/rest-api-demo/)
+RESTful API with OpenAPI documentation, Swagger UI, and Prometheus metrics.
 
+### [REST WASM Example](examples/rest-wasm-example/)
+REST API with auto-generated TypeScript client and web UI.
+
+### [WASM UI Demo](examples/wasm-ui-demo/)
+Reactive web UI with Dominator framework, glass morphism design.
+
+## Documentation
+
+Detailed documentation is available in the `documentation/` directory:
+- [REST Macro Guide](documentation/ras-rest-macro.md) - Complete REST API documentation
+- [File Service Guide](documentation/ras-file-macro.md) - File upload/download services
+- [Identity Providers](documentation/ras-identity.md) - Authentication system guide
+- [Observability](documentation/ras-observability.md) - Metrics and monitoring
+
+## Built-in Features
+
+### Authentication & Security
 - **Timing Attack Resistance** - Constant-time operations for authentication
 - **Username Enumeration Prevention** - Uniform error responses
-- **Rate Limiting** - Built-in concurrent request limiting
+- **Rate Limiting** - Concurrent request limiting (5 attempts)
 - **Secure Password Storage** - Argon2 hashing with proper salts
 - **JWT Best Practices** - Configurable algorithms and secrets
 - **PKCE OAuth2** - Proof Key for Code Exchange by default
+- **Session Management** - JWT-based sessions with revocation support
 
-### Built-in Observability
+### Observability
 
-Add production-ready metrics with one line of code:
+Add production-ready metrics with minimal configuration:
 
 ```rust
 use ras_observability_otel::standard_setup;
@@ -207,19 +278,28 @@ use ras_observability_otel::standard_setup;
 let otel = standard_setup("my-service")?;
 
 // Use with service builders
-let service = MyServiceBuilder::new()
-    .with_usage_tracker(/* ... */)
-    .with_method_duration_tracker(/* ... */)
+let service = MyServiceBuilder::new(impl)
+    .with_usage_tracker(otel.usage_tracker())
+    .with_method_duration_tracker(otel.duration_tracker())
     .build();
 
 // Metrics available at /metrics endpoint
 ```
 
 Features:
-- Unified metrics for both REST and JSON-RPC
+- Unified metrics for JSON-RPC, REST, and file services
 - Request counting, duration tracking, user activity
 - Zero-config Prometheus integration
 - Extensible trait-based design
+
+### TypeScript/WASM Support
+
+All service macros support automatic TypeScript client generation:
+- Type-safe API calls with full IntelliSense
+- Automatic error handling and retries
+- Bearer token management
+- Works in browsers and Node.js
+- Zero runtime overhead with WASM
 
 ## Development
 
