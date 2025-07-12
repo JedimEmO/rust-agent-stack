@@ -3,6 +3,7 @@ use quote::quote;
 use syn::parse_macro_input;
 
 mod client;
+mod openapi;
 mod parser;
 mod server;
 
@@ -15,6 +16,17 @@ pub fn file_service(input: TokenStream) -> TokenStream {
     let server_code = server::generate_server(&definition);
     let client_code = client::generate_client(&definition);
 
+    // Generate OpenAPI code if enabled
+    let (openapi_code, schema_checks) = if definition.openapi.is_some() {
+        let openapi_config = definition.openapi.as_ref().unwrap();
+        (
+            openapi::generate_openapi_code(&definition, openapi_config),
+            openapi::generate_schema_impl_checks(&definition),
+        )
+    } else {
+        (quote! {}, quote! {})
+    };
+
     // Only include server code when not targeting wasm32
     let expanded = quote! {
         #[cfg(not(target_arch = "wasm32"))]
@@ -25,6 +37,15 @@ pub fn file_service(input: TokenStream) -> TokenStream {
 
         #[cfg(not(target_arch = "wasm32"))]
         pub use server_impl::*;
+
+        #[cfg(not(target_arch = "wasm32"))]
+        const _: () = {
+            #schema_checks
+        };
+
+        // Generate OpenAPI function at module level
+        #[cfg(not(target_arch = "wasm32"))]
+        #openapi_code
 
         #client_code
     };

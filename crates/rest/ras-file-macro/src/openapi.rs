@@ -1,19 +1,21 @@
-//! OpenAPI 3.0 document generation module
+//! OpenAPI 3.0 document generation for file services
 //!
 //! This module provides functionality to generate OpenAPI 3.0 specification documents
-//! from the rest_service macro definitions.
+//! from the file_service macro definitions, with proper support for multipart uploads
+//! and binary file downloads.
 
-use crate::{AuthRequirement, OpenApiConfig, ServiceDefinition};
+use crate::parser::{AuthRequirement, FileServiceDefinition, OpenApiConfig, Operation};
 use proc_macro2::TokenStream;
 use quote::quote;
 use std::collections::HashMap;
 
 /// Generates OpenAPI document creation code
 pub fn generate_openapi_code(
-    service_def: &ServiceDefinition,
+    service_def: &FileServiceDefinition,
     config: &OpenApiConfig,
 ) -> TokenStream {
     let service_name = &service_def.service_name;
+    let base_path_value = service_def.base_path.value();
     let openapi_fn_name = quote::format_ident!(
         "generate_{}_openapi",
         service_name.to_string().to_lowercase()
@@ -40,20 +42,17 @@ pub fn generate_openapi_code(
     };
 
     // Collect unique types for schema generation
-    let mut unique_types = std::collections::HashMap::new();
+    let mut unique_types = HashMap::new();
     for endpoint in &service_def.endpoints {
-        if let Some(request_type) = &endpoint.request_type {
-            let request_type_str = quote!(#request_type).to_string();
-            unique_types.insert(request_type_str, quote!(#request_type));
+        // For uploads, the response type is specified
+        if let Some(response_type) = &endpoint.response_type {
+            let response_type_str = quote!(#response_type).to_string();
+            unique_types.insert(response_type_str, quote!(#response_type));
         }
-
-        let response_type = &endpoint.response_type;
-        let response_type_str = quote!(#response_type).to_string();
-        unique_types.insert(response_type_str, quote!(#response_type));
 
         // Add path parameter types
         for path_param in &endpoint.path_params {
-            let param_type = &path_param.param_type;
+            let param_type = &path_param.ty;
             let param_type_str = quote!(#param_type).to_string();
             unique_types.insert(param_type_str, quote!(#param_type));
         }
@@ -62,21 +61,23 @@ pub fn generate_openapi_code(
     // Generate schema generation functions
     let schema_fns: Vec<TokenStream> = unique_types
         .iter()
-        .map(|(type_name, type_tokens)| {
+        .filter_map(|(type_name, type_tokens)| {
             if type_name == "()" {
-                quote! {} // Skip unit type, we'll handle it separately
+                None // Skip unit type
             } else {
+                let sanitized_name = type_name
+                    .replace("::", "_")
+                    .replace("<", "_")
+                    .replace(">", "_")
+                    .replace(" ", "_")
+                    .replace("(", "_")
+                    .replace(")", "_");
                 let fn_name = quote::format_ident!(
                     "_generate_schema_for_{}_{}",
                     service_name.to_string().to_lowercase(),
-                    type_name
-                        .replace("::", "_")
-                        .replace("<", "_")
-                        .replace(">", "_")
-                        .replace(" ", "_")
+                    sanitized_name
                 );
-                quote! {
-                    #[cfg(feature = "server")]
+                Some(quote! {
                     fn #fn_name() -> serde_json::Value {
                         let schema = schemars::schema_for!(#type_tokens);
                         let mut schema_value = serde_json::to_value(&schema).unwrap_or_else(|_| {
@@ -90,7 +91,7 @@ pub fn generate_openapi_code(
                         normalize_nullable_properties(&mut schema_value);
                         schema_value
                     }
-                }
+                })
             }
         })
         .collect();
@@ -98,27 +99,25 @@ pub fn generate_openapi_code(
     // Generate schema collection code
     let schema_insertions: Vec<TokenStream> = unique_types
         .keys()
-        .map(|type_name| {
+        .filter_map(|type_name| {
             if type_name == "()" {
-                quote! {
-                    schemas.insert("()".to_string(), serde_json::json!({
-                        "type": "null",
-                        "description": "Unit type (empty response)"
-                    }));
-                }
+                None // Skip unit type, handled separately
             } else {
+                let sanitized_name = type_name
+                    .replace("::", "_")
+                    .replace("<", "_")
+                    .replace(">", "_")
+                    .replace(" ", "_")
+                    .replace("(", "_")
+                    .replace(")", "_");
                 let fn_name = quote::format_ident!(
                     "_generate_schema_for_{}_{}",
                     service_name.to_string().to_lowercase(),
-                    type_name
-                        .replace("::", "_")
-                        .replace("<", "_")
-                        .replace(">", "_")
-                        .replace(" ", "_")
+                    sanitized_name
                 );
-                quote! {
+                Some(quote! {
                     schemas.insert(#type_name.to_string(), #fn_name());
-                }
+                })
             }
         })
         .collect();
@@ -128,31 +127,53 @@ pub fn generate_openapi_code(
         .endpoints
         .iter()
         .map(|endpoint| {
-            let method = endpoint.method.as_str();
-            let path = &endpoint.path;
+            let operation = match endpoint.operation {
+                Operation::Upload => "upload",
+                Operation::Download => "download",
+            };
+            let method = match endpoint.operation {
+                Operation::Upload => "POST",
+                Operation::Download => "GET",
+            };
+
+            // Build the full path
+            let path = if let Some(custom_path) = &endpoint.path {
+                let path_str = custom_path.value();
+                if path_str.starts_with('/') {
+                    path_str
+                } else {
+                    format!("/{}", path_str)
+                }
+            } else {
+                format!("/{}", endpoint.name)
+            };
+
             let auth_required = matches!(endpoint.auth, AuthRequirement::WithPermissions(_));
-            // Flatten permission groups for OpenAPI documentation
             let permissions = match &endpoint.auth {
                 AuthRequirement::Unauthorized => vec![],
                 AuthRequirement::WithPermissions(groups) => {
-                    // For OpenAPI docs, flatten all permission groups into a single list
                     groups.iter().flatten().cloned().collect()
                 }
             };
 
-            let request_type_name = if let Some(request_type) = &endpoint.request_type {
-                quote!(#request_type).to_string()
+            let response_type_name = if let Some(response_type) = &endpoint.response_type {
+                let type_str = quote!(#response_type).to_string();
+                if type_str == "()" {
+                    "BinaryFileResponse".to_string()
+                } else {
+                    type_str
+                }
             } else {
-                "()".to_string()
+                // For download endpoints without explicit response type
+                "BinaryFileResponse".to_string()
             };
 
-            let response_type = &endpoint.response_type;
             let path_param_infos: Vec<TokenStream> = endpoint
                 .path_params
                 .iter()
                 .map(|param| {
                     let param_name = param.name.to_string();
-                    let param_type = &param.param_type;
+                    let param_type = &param.ty;
                     let param_type_str = quote!(#param_type).to_string();
                     quote! {
                         (#param_name.to_string(), #param_type_str.to_string())
@@ -162,12 +183,12 @@ pub fn generate_openapi_code(
 
             quote! {
                 #endpoint_info_struct_name {
+                    operation: #operation.to_string(),
                     method: #method.to_string(),
                     path: #path.to_string(),
                     auth_required: #auth_required,
                     permissions: vec![#(#permissions.to_string()),*],
-                    request_type_name: #request_type_name.to_string(),
-                    response_type_name: stringify!(#response_type).to_string(),
+                    response_type_name: #response_type_name.to_string(),
                     path_params: vec![#(#path_param_infos),*] as Vec<(String, String)>,
                 }
             }
@@ -175,20 +196,18 @@ pub fn generate_openapi_code(
         .collect();
 
     quote! {
-        #[cfg(feature = "server")]
         #[derive(serde::Serialize)]
         struct #endpoint_info_struct_name {
+            operation: String,
             method: String,
             path: String,
             auth_required: bool,
             permissions: Vec<String>,
-            request_type_name: String,
             response_type_name: String,
             path_params: Vec<(String, String)>, // (name, type)
         }
 
         // Helper function to fix schema references and flatten nested definitions
-        #[cfg(feature = "server")]
         fn fix_schema_refs(value: &mut serde_json::Value, schemas: &mut serde_json::Map<String, serde_json::Value>) {
             match value {
                 serde_json::Value::Object(obj) => {
@@ -196,7 +215,6 @@ pub fn generate_openapi_code(
                     if let Some(defs) = obj.remove("definitions") {
                         if let serde_json::Value::Object(defs_obj) = defs {
                             for (name, schema) in defs_obj {
-                                // Recursively fix the definition before adding it
                                 let mut schema_copy = schema.clone();
                                 fix_schema_refs(&mut schema_copy, schemas);
                                 schemas.insert(name, schema_copy);
@@ -208,7 +226,6 @@ pub fn generate_openapi_code(
                     if let Some(defs) = obj.remove("$defs") {
                         if let serde_json::Value::Object(defs_obj) = defs {
                             for (name, schema) in defs_obj {
-                                // Recursively fix the definition before adding it
                                 let mut schema_copy = schema.clone();
                                 fix_schema_refs(&mut schema_copy, schemas);
                                 schemas.insert(name, schema_copy);
@@ -219,7 +236,6 @@ pub fn generate_openapi_code(
                     // Fix $ref strings to point to components/schemas
                     if let Some(ref_val) = obj.get_mut("$ref") {
                         if let serde_json::Value::String(ref_str) = ref_val {
-                            // Replace any reference to definitions or $defs with components/schemas
                             if ref_str.starts_with("#/definitions/") {
                                 let name = ref_str.trim_start_matches("#/definitions/");
                                 *ref_str = format!("#/components/schemas/{}", name);
@@ -247,8 +263,7 @@ pub fn generate_openapi_code(
             }
         }
 
-        // Helper function to normalize nullable properties for better Swagger UI compatibility
-        #[cfg(feature = "server")]
+        // Helper function to normalize nullable properties
         fn normalize_nullable_properties(value: &mut serde_json::Value) {
             match value {
                 serde_json::Value::Object(obj) => {
@@ -306,8 +321,7 @@ pub fn generate_openapi_code(
         // Generate schema functions for each type
         #(#schema_fns)*
 
-        /// Generate OpenAPI 3.0 document for this service
-        #[cfg(feature = "server")]
+        /// Generate OpenAPI 3.0 document for this file service
         pub fn #openapi_fn_name() -> serde_json::Value {
             use serde_json::json;
             use schemars::{schema_for, JsonSchema};
@@ -319,6 +333,25 @@ pub fn generate_openapi_code(
 
             // Generate schemas for all unique types
             let mut schemas = HashMap::new();
+
+            // Add special schemas for file operations
+            schemas.insert("FileUploadRequest".to_string(), json!({
+                "type": "object",
+                "properties": {
+                    "file": {
+                        "type": "string",
+                        "format": "binary",
+                        "description": "The file to upload"
+                    }
+                },
+                "required": ["file"]
+            }));
+
+            schemas.insert("BinaryFileResponse".to_string(), json!({
+                "type": "string",
+                "format": "binary",
+                "description": "Binary file content"
+            }));
 
             // Insert all the generated schemas
             #(#schema_insertions)*
@@ -338,33 +371,10 @@ pub fn generate_openapi_code(
 
                 let method_lower = endpoint.method.to_lowercase();
                 let mut operation = json!({
-                    "summary": format!("{} {}", endpoint.method, endpoint.path),
-                    "description": format!("Handles {} requests to {}", endpoint.method, endpoint.path),
-                    "operationId": format!("{}_{}", method_lower, endpoint.path.replace("/", "_").replace("{", "").replace("}", "").trim_start_matches('_')),
-                    "responses": {
-                        "200": {
-                            "description": "Successful response",
-                            "content": {
-                                "application/json": {
-                                    "schema": {
-                                        "$ref": format!("#/components/schemas/{}", endpoint.response_type_name)
-                                    }
-                                }
-                            }
-                        },
-                        "400": {
-                            "description": "Bad request"
-                        },
-                        "401": {
-                            "description": "Unauthorized"
-                        },
-                        "403": {
-                            "description": "Forbidden"
-                        },
-                        "500": {
-                            "description": "Internal server error"
-                        }
-                    }
+                    "summary": format!("{} {}", endpoint.operation, endpoint.path),
+                    "description": format!("File {} operation at {}", endpoint.operation, endpoint.path),
+                    "operationId": format!("{}_{}", endpoint.operation, endpoint.path.replace("/", "_").replace("{", "").replace("}", "").trim_start_matches('_')),
+                    "tags": ["File Operations"],
                 });
 
                 // Add parameters (path parameters)
@@ -384,17 +394,89 @@ pub fn generate_openapi_code(
                     operation["parameters"] = json!(parameters);
                 }
 
-                // Add request body for non-GET methods
-                if endpoint.method != "GET" && endpoint.request_type_name != "()" {
+                // Configure based on operation type
+                if endpoint.operation == "upload" {
+                    // Upload operation - multipart/form-data
                     operation["requestBody"] = json!({
-                        "description": "Request body",
+                        "description": "File to upload",
                         "required": true,
                         "content": {
-                            "application/json": {
+                            "multipart/form-data": {
                                 "schema": {
-                                    "$ref": format!("#/components/schemas/{}", endpoint.request_type_name)
+                                    "$ref": "#/components/schemas/FileUploadRequest"
                                 }
                             }
+                        }
+                    });
+
+                    operation["responses"] = json!({
+                        "200": {
+                            "description": "Successful upload",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": format!("#/components/schemas/{}", endpoint.response_type_name)
+                                    }
+                                }
+                            }
+                        },
+                        "400": {
+                            "description": "Bad request"
+                        },
+                        "401": {
+                            "description": "Unauthorized"
+                        },
+                        "403": {
+                            "description": "Forbidden"
+                        },
+                        "413": {
+                            "description": "File too large"
+                        },
+                        "500": {
+                            "description": "Internal server error"
+                        }
+                    });
+                } else {
+                    // Download operation - determine response type based on endpoint
+                    let (response_content, response_description) = if endpoint.response_type_name == "BinaryFileResponse" {
+                        // Binary file download
+                        (json!({
+                            "application/octet-stream": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BinaryFileResponse"
+                                }
+                            }
+                        }), "File download")
+                    } else {
+                        // JSON response (e.g., file metadata)
+                        (json!({
+                            "application/json": {
+                                "schema": {
+                                    "$ref": format!("#/components/schemas/{}", endpoint.response_type_name)
+                                }
+                            }
+                        }), "Successful response")
+                    };
+
+                    operation["responses"] = json!({
+                        "200": {
+                            "description": response_description,
+                            "content": response_content
+                        },
+                        "400": {
+                            "description": "Bad request"
+                        },
+                        "401": {
+                            "description": "Unauthorized"
+                        },
+                        "403": {
+                            "description": "Forbidden"
+                        },
+                        "404": {
+                            "description": "File not found"
+                        },
+                        "500": {
+                            "description": "Internal server error"
                         }
                     });
                 }
@@ -417,10 +499,14 @@ pub fn generate_openapi_code(
             json!({
                 "openapi": "3.0.3",
                 "info": {
-                    "title": format!("{} REST API", stringify!(#service_name)),
+                    "title": format!("{} File Service API", stringify!(#service_name)),
                     "version": "1.0.0",
-                    "description": format!("OpenAPI 3.0 specification for the {} service", stringify!(#service_name))
+                    "description": format!("OpenAPI 3.0 specification for the {} file service", stringify!(#service_name))
                 },
+                "servers": [{
+                    "url": #base_path_value,
+                    "description": "File service base path"
+                }],
                 "paths": paths,
                 "components": {
                     "schemas": final_schemas,
@@ -432,12 +518,15 @@ pub fn generate_openapi_code(
                             "description": "JWT token for authentication"
                         }
                     }
-                }
+                },
+                "tags": [{
+                    "name": "File Operations",
+                    "description": "File upload and download operations"
+                }]
             })
         }
 
         /// Write OpenAPI document to the target directory
-        #[cfg(feature = "server")]
         pub fn #openapi_to_file_fn_name() -> std::io::Result<()> {
             let doc = #openapi_fn_name();
             let output_path = #output_path_code;
@@ -454,26 +543,22 @@ pub fn generate_openapi_code(
 
             Ok(())
         }
-
     }
 }
 
-/// Generates code to include schema generation for types when schemars is available
-pub fn generate_schema_impl_checks(service_def: &ServiceDefinition) -> TokenStream {
+/// Generates code to check that types implement JsonSchema
+pub fn generate_schema_impl_checks(service_def: &FileServiceDefinition) -> TokenStream {
     let mut unique_types = HashMap::new();
 
-    // Collect unique request and response types
+    // Collect unique response types
     for endpoint in &service_def.endpoints {
-        if let Some(request_type) = &endpoint.request_type {
-            unique_types.insert(quote!(#request_type).to_string(), quote!(#request_type));
+        if let Some(response_type) = &endpoint.response_type {
+            unique_types.insert(quote!(#response_type).to_string(), quote!(#response_type));
         }
-
-        let response_type = &endpoint.response_type;
-        unique_types.insert(quote!(#response_type).to_string(), quote!(#response_type));
 
         // Add path parameter types
         for path_param in &endpoint.path_params {
-            let param_type = &path_param.param_type;
+            let param_type = &path_param.ty;
             unique_types.insert(quote!(#param_type).to_string(), quote!(#param_type));
         }
     }

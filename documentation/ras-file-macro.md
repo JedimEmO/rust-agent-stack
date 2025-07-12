@@ -21,8 +21,9 @@ The `file_service!` macro generates:
 - A trait for implementing file operations
 - Axum router with upload/download endpoints
 - Native Rust client with streaming support
-- WASM client for browser environments
-- TypeScript bindings for type-safe frontend usage
+- OpenAPI 3.0 specification for the file service
+- TypeScript client generation from OpenAPI (preferred approach)
+- WASM client for browser environments (legacy approach)
 - Built-in authentication and permission handling
 - Comprehensive error types
 
@@ -51,8 +52,9 @@ web-sys = { workspace = true, features = ["File", "FormData", "Blob"] }
 ```rust
 use ras_file_macro::file_service;
 use serde::{Deserialize, Serialize};
+use schemars::JsonSchema;  // Required for OpenAPI generation
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct FileMetadata {
     pub id: String,
     pub filename: String,
@@ -63,6 +65,7 @@ pub struct FileMetadata {
 file_service!({
     service_name: FileStorage,
     base_path: "/api/files",
+    openapi: true,  // Enable OpenAPI generation
     body_limit: 52428800,  // 50MB limit
     endpoints: [
         UPLOAD WITH_PERMISSIONS(["upload"]) upload() -> FileMetadata,
@@ -733,12 +736,14 @@ export function FileUpload() {
 
 1. **File Size Limits**: Always set appropriate `body_limit` values to prevent abuse
 2. **Content Type Validation**: Validate file types in your implementation
-3. **Virus Scanning**: Consider integrating virus scanning for uploaded files
-4. **Storage Strategy**: Use cloud storage (S3, etc.) for production deployments
-5. **Cleanup**: Implement file retention policies and cleanup routines
-6. **Monitoring**: Use the callback functions to track usage and performance
-7. **Security**: Always validate permissions and sanitize file names
-8. **CORS**: Configure CORS appropriately for your frontend domains
+3. **OpenAPI Generation**: Enable `openapi: true` for TypeScript client generation
+4. **Type Definitions**: Add `JsonSchema` derive to all types used in endpoints
+5. **Virus Scanning**: Consider integrating virus scanning for uploaded files
+6. **Storage Strategy**: Use cloud storage (S3, etc.) for production deployments
+7. **Cleanup**: Implement file retention policies and cleanup routines
+8. **Monitoring**: Use the callback functions to track usage and performance
+9. **Security**: Always validate permissions and sanitize file names
+10. **CORS**: Configure CORS appropriately for your frontend domains
 
 ## Troubleshooting
 
@@ -747,8 +752,10 @@ export function FileUpload() {
 1. **"File too large" errors**: Check `body_limit` configuration
 2. **CORS errors**: Ensure CORS is configured on the server
 3. **Authentication failures**: Verify token format and auth provider setup
-4. **WASM build errors**: Ensure `wasm-pack` is installed and features are enabled
-5. **TypeScript type errors**: Rebuild WASM module after API changes
+4. **OpenAPI generation errors**: Ensure `JsonSchema` is derived for all types
+5. **TypeScript generation errors**: Check OpenAPI spec is valid JSON
+6. **WASM build errors**: Ensure `wasm-pack` is installed and features are enabled
+7. **TypeScript type errors**: Regenerate client after API changes
 
 ### Debug Tips
 

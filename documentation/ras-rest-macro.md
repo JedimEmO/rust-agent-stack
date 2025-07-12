@@ -1,6 +1,6 @@
 # RAS REST Macro Documentation
 
-The `ras-rest-macro` crate provides a powerful procedural macro for building type-safe REST APIs in Rust with automatic client generation for both native Rust and TypeScript/WASM environments.
+The `ras-rest-macro` crate provides a powerful procedural macro for building type-safe REST APIs in Rust with automatic client generation for both native Rust and TypeScript environments.
 
 ## Table of Contents
 
@@ -10,7 +10,7 @@ The `ras-rest-macro` crate provides a powerful procedural macro for building typ
 4. [Macro Syntax](#macro-syntax)
 5. [Authentication & Authorization](#authentication--authorization)
 6. [Generated Code](#generated-code)
-7. [TypeScript/WASM Client Usage](#typescriptwasm-client-usage)
+7. [TypeScript Client Usage](#typescript-client-usage)
 8. [OpenAPI Documentation](#openapi-documentation)
 9. [Error Handling](#error-handling)
 10. [Advanced Features](#advanced-features)
@@ -22,8 +22,7 @@ The `rest_service!` macro generates:
 - A service trait for implementing your REST API
 - An Axum router builder with authentication support
 - Native Rust client with async/await support
-- TypeScript bindings via WASM when the `wasm-client` feature is enabled
-- OpenAPI 3.0 documentation (optional)
+- OpenAPI 3.0 specification for TypeScript client generation
 - Built-in Swagger UI hosting (optional)
 
 ## Installation
@@ -40,17 +39,9 @@ schemars = "0.8"  # Required for OpenAPI generation
 axum = "0.7"  # Web framework
 tokio = { version = "1", features = ["full"] }
 
-# For WASM client generation
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4"
-serde-wasm-bindgen = "0.6"
-reqwest = { version = "0.12", features = ["json"] }
-
 [features]
 server = []  # Enable server-side code generation
 client = []  # Enable native client generation
-wasm-client = []  # Enable WASM client generation
 ```
 
 ## Basic Usage
@@ -307,126 +298,130 @@ impl UserServiceClient {
 }
 ```
 
-### 4. WASM Client Wrapper
+### 4. OpenAPI Generation
+
+The macro generates an OpenAPI 3.0 specification that can be used to generate TypeScript clients:
 
 ```rust
-#[wasm_bindgen]
-pub struct WasmUserServiceClient {
-    // ...
+// Generated function to create OpenAPI spec
+pub fn generate_userservice_openapi() -> String {
+    // Returns OpenAPI 3.0 JSON specification
 }
 
-#[wasm_bindgen]
-impl WasmUserServiceClient {
-    #[wasm_bindgen(constructor)]
-    pub fn new(base_url: String) -> Result<WasmUserServiceClient, JsValue>;
-    
-    pub fn set_bearer_token(&mut self, token: Option<String>);
-    
-    // Async methods with JsValue for TypeScript
-    pub async fn get_users(&self) -> Result<JsValue, JsValue>;
-    pub async fn get_users_by_id(&self, id: String) -> Result<JsValue, JsValue>;
-    pub async fn post_users(&self, body: JsValue) -> Result<JsValue, JsValue>;
+// Generated function to write OpenAPI spec to file
+pub fn generate_userservice_openapi_to_file() -> std::io::Result<()> {
+    // Writes to target/openapi/userservice.json
 }
 ```
 
-## TypeScript/WASM Client Usage
+## TypeScript Client Usage
 
-### 1. Build WASM Package
+### 1. Generate OpenAPI Specification
 
-Create a `Cargo.toml` for your API crate:
+Add a `build.rs` file to your backend crate to generate the OpenAPI spec at compile time:
 
-```toml
-[package]
-name = "my-api"
-version = "0.1.0"
-edition = "2021"
-
-[lib]
-crate-type = ["cdylib", "rlib"]
-
-[dependencies]
-ras-rest-macro = "0.1.0"
-wasm-bindgen = "0.2"
-# ... other dependencies
-
-[features]
-default = []
-wasm-client = ["client"]
-client = []
+```rust
+// backend/build.rs
+fn main() {
+    // Import your API module
+    use rest_api;
+    
+    // Generate OpenAPI spec to target directory
+    rest_api::generate_userservice_openapi_to_file()
+        .expect("Failed to generate OpenAPI spec");
+}
 ```
 
-Build with wasm-pack:
+This creates `target/openapi/userservice.json` during compilation.
+
+### 2. Set Up TypeScript Client Generation
+
+Install dependencies:
 
 ```bash
-wasm-pack build --target web --features wasm-client
+cd typescript-example
+npm install @hey-api/openapi-ts @hey-api/client-fetch --save-dev
 ```
 
-### 2. TypeScript Usage
+Create `openapi-ts.config.ts`:
 
 ```typescript
-import init, { WasmUserServiceClient } from './pkg/my_api.js';
+import { defineConfig } from '@hey-api/openapi-ts';
 
-// Initialize WASM module
-await init();
+export default defineConfig({
+  client: '@hey-api/client-fetch',
+  input: '../backend/target/openapi/userservice.json',
+  output: {
+    path: './src/generated',
+    format: 'prettier',
+    lint: 'eslint',
+  },
+});
+```
 
-// Create client instance
-const client = new WasmUserServiceClient('http://localhost:3000');
+Update your `package.json`:
 
-// Set authentication token
-client.set_bearer_token('your-jwt-token');
-
-// Make API calls with full type safety
-try {
-    // GET request
-    const users = await client.get_users();
-    console.log(users);
-    
-    // GET with path parameter
-    const user = await client.get_users_by_id('123');
-    
-    // POST with body
-    const newUser = await client.post_users({
-        name: 'John Doe',
-        email: 'john@example.com'
-    });
-    
-    // DELETE request
-    await client.delete_users_by_id('123');
-} catch (error) {
-    console.error('API call failed:', error);
+```json
+{
+  "scripts": {
+    "generate": "openapi-ts",
+    "dev": "npm run generate && vite",
+    "build": "npm run generate && vite build"
+  }
 }
 ```
 
-### 3. TypeScript Types
-
-The generated WASM bindings include full TypeScript type definitions:
+### 3. TypeScript Usage
 
 ```typescript
-export class WasmUserServiceClient {
-    constructor(base_url: string);
-    set_bearer_token(token: string | null): void;
-    get_users(): Promise<UsersResponse>;
-    get_users_by_id(id: string): Promise<User>;
-    post_users(body: CreateUserRequest): Promise<User>;
-    delete_users_by_id(id: string): Promise<void>;
+import * as api from './generated/services.gen';
+import type { User, CreateUserRequest, UsersResponse } from './generated/types.gen';
+
+// Configuration object for all requests
+const config = {
+  baseUrl: 'http://localhost:3000/api/v1',
+  headers: {
+    Authorization: 'Bearer jwt-token'
+  }
+};
+
+// Make API calls with named methods
+const response = await api.getUsers(config);
+if (response.data) {
+  const users = response.data.users;
 }
 
-export interface User {
-    id: string;
-    name: string;
-    email: string;
-}
+// GET with path parameter
+const userResponse = await api.getUsersId({
+  ...config,
+  path: { id: '123' }
+});
 
-export interface CreateUserRequest {
-    name: string;
-    email: string;
-}
+// POST with typed body
+const newUser: CreateUserRequest = {
+  name: 'John Doe',
+  email: 'john@example.com'
+};
 
-export interface UsersResponse {
-    users: User[];
-    total: number;
-}
+const created = await api.postUsers({
+  ...config,
+  body: newUser
+});
+
+// DELETE request
+await api.deleteUsersId({
+  ...config,
+  path: { id: '123' }
+});
 ```
+
+### 4. Benefits Over WASM
+
+- **Smaller Bundle Size**: ~10KB vs ~200KB+ for WASM
+- **Better Developer Experience**: Standard TypeScript/JavaScript
+- **Universal Compatibility**: Works in Node.js, Deno, Bun, and browsers
+- **Better Tree-shaking**: Standard JavaScript optimization applies
+- **Easier Debugging**: Standard network requests in DevTools
 
 ## OpenAPI Documentation
 
@@ -612,22 +607,34 @@ rest_service!({
 
 // TypeScript usage
 /*
-const client = new WasmTaskServiceClient('http://localhost:3000');
-client.set_bearer_token(userToken);
+import * as api from './generated/services.gen';
+
+const config = {
+  baseUrl: 'http://localhost:3000/api/v1',
+  headers: { Authorization: `Bearer ${userToken}` }
+};
 
 // Create a task
-const newTask = await client.post_tasks({
+const newTask = await api.postTasks({
+  ...config,
+  body: {
     title: 'Complete documentation',
     description: 'Write comprehensive REST macro docs'
+  }
 });
 
 // Update task
-await client.put_tasks_by_id(newTask.id, {
-    completed: true
+await api.putTasksId({
+  ...config,
+  path: { id: newTask.data.id },
+  body: { completed: true }
 });
 
 // Get user's tasks
-const myTasks = await client.get_users_by_user_id_tasks(userId);
+const myTasks = await api.getUsersUserIdTasks({
+  ...config,
+  path: { user_id: userId }
+});
 */
 ```
 
@@ -638,18 +645,21 @@ const myTasks = await client.get_users_by_user_id_tasks(userId);
 3. **Authentication**: Implement proper JWT validation in your `AuthProvider`
 4. **Documentation**: Enable OpenAPI generation for API documentation
 5. **Monitoring**: Use usage and duration trackers for observability
-6. **CORS**: Configure CORS appropriately for WASM clients
+6. **CORS**: Configure CORS appropriately for frontend clients
 7. **Validation**: Validate request data in your service implementation
 8. **Logging**: Log internal errors while keeping client messages generic
+9. **Client Generation**: Use build.rs to generate OpenAPI spec at compile time
+10. **TypeScript Setup**: Configure openapi-ts to generate clients from OpenAPI spec
 
 ## Troubleshooting
 
 ### Common Issues
 
 1. **Missing `JsonSchema` implementation**: All types must implement `JsonSchema` for OpenAPI generation
-2. **WASM build fails**: Ensure `wasm-client` feature is enabled and dependencies are correct
-3. **Authentication fails**: Check that your `AuthProvider` is properly configured
-4. **CORS errors**: Add appropriate CORS middleware to your Axum router
+2. **OpenAPI generation fails**: Ensure `openapi: true` is set and all types implement `JsonSchema`
+3. **TypeScript generation issues**: Verify the OpenAPI spec exists at the configured path
+4. **Authentication fails**: Check that your `AuthProvider` is properly configured
+5. **CORS errors**: Add appropriate CORS middleware to your Axum router
 
 ### Feature Flags
 
@@ -660,7 +670,6 @@ Control code generation with feature flags:
 default = ["server"]
 server = []      # Generate server-side code
 client = []      # Generate native Rust client
-wasm-client = [] # Generate WASM client bindings
 ```
 
 ## Conclusion
@@ -669,9 +678,9 @@ The `ras-rest-macro` provides a comprehensive solution for building type-safe RE
 
 - Type-safe server implementation
 - Native Rust client
-- TypeScript/WASM client with full type definitions
-- OpenAPI documentation
+- OpenAPI specification for TypeScript client generation
+- Full type safety in TypeScript with standard JavaScript
 - Built-in authentication and authorization
 - Performance monitoring and usage tracking
 
-This approach eliminates the need for manual client maintenance and ensures your API clients are always in sync with your server implementation.
+This approach eliminates the need for manual client maintenance and ensures your API clients are always in sync with your server implementation. The shift from WASM to OpenAPI-based TypeScript generation provides significant benefits in bundle size (95% reduction), developer experience, and debugging capabilities.

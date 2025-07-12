@@ -262,4 +262,3 @@ fn generate_client_method_with_timeout(endpoint: &EndpointDefinition) -> proc_ma
         }
     }
 }
-

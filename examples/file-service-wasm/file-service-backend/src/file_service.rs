@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use axum::body::Body;
-use axum::extract::Multipart;
 use axum::http::{StatusCode, header};
 use axum::response::Response;
 use file_service_api::{DocumentServiceFileError, DocumentServiceTrait, UploadResponse};
@@ -22,7 +21,7 @@ impl FileServiceImpl {
 
     async fn handle_multipart_upload(
         &self,
-        mut multipart: Multipart,
+        mut multipart: axum::extract::Multipart,
     ) -> Result<UploadResponse, DocumentServiceFileError> {
         debug!("Starting multipart upload processing");
 
@@ -77,7 +76,7 @@ impl FileServiceImpl {
 impl DocumentServiceTrait for FileServiceImpl {
     async fn upload(
         &self,
-        multipart: Multipart,
+        multipart: axum::extract::Multipart,
     ) -> Result<UploadResponse, DocumentServiceFileError> {
         debug!("Handling public file upload");
         self.handle_multipart_upload(multipart).await
@@ -86,7 +85,7 @@ impl DocumentServiceTrait for FileServiceImpl {
     async fn upload_profile_picture(
         &self,
         user: &AuthenticatedUser,
-        multipart: Multipart,
+        multipart: axum::extract::Multipart,
     ) -> Result<UploadResponse, DocumentServiceFileError> {
         debug!("Handling secure file upload for user: {}", user.user_id);
 

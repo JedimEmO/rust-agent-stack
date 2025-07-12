@@ -41,12 +41,9 @@ async fn main() -> Result<()> {
     let service = FileServiceImpl::new(storage.clone());
 
     // Build the router using the macro-generated builder
-    let app = Router::new()
-        .merge(
-            file_service_api::DocumentServiceBuilder::new(service)
-                .auth_provider(auth_provider)
-                .build(),
-        )
+    let app = file_service_api::DocumentServiceBuilder::new(service)
+        .auth_provider(auth_provider)
+        .build()
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)

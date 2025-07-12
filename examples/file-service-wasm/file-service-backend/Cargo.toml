@@ -40,3 +40,6 @@ tracing-subscriber = { workspace = true }
 
 # Configuration
 dotenvy = { workspace = true }
+
+[build-dependencies]
+file-service-api = { path = "../file-service-api", features = ["server"] }

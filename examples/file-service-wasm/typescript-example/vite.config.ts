@@ -1,22 +1,10 @@
 import { defineConfig } from 'vite';
 import solid from 'vite-plugin-solid';
-import { resolve } from 'path';
-import { wasmPack } from './vite-plugin-wasm-pack';
 
 export default defineConfig({
   plugins: [
-    wasmPack({
-      cratePath: '../file-service-api',
-      outDir: 'public/pkg',
-      features: ['wasm-client'],
-    }),
     solid(),
   ],
-  resolve: {
-    alias: {
-      '@wasm': resolve(__dirname, './public/pkg'),
-    },
-  },
   server: {
     port: 3001,
     proxy: {
@@ -25,15 +13,8 @@ export default defineConfig({
         changeOrigin: true,
       }
     },
-    fs: {
-      // Allow serving files from one level up (for WASM files)
-      allow: ['..'],
-    },
   },
   build: {
     target: 'esnext',
-  },
-  optimizeDeps: {
-    exclude: ['@wasm/file_service_api.js'],
   },
 });

@@ -23,12 +23,11 @@ export default function FileList(props: FileListProps) {
 
     try {
       const client = await getClient();
-      const data = props.requireAuth
-        ? await client.download_secure(fileId)
-        : await client.download(fileId);
+      // For now, all downloads use the public endpoint
+      // In a real app, you'd need different endpoints for secure downloads
+      const blob = await client.download(fileId);
 
       // Create a download link
-      const blob = new Blob([data as Uint8Array], { type: 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

@@ -2,11 +2,11 @@ mod simple_auth;
 
 use anyhow::Result;
 use std::collections::HashMap;
+use std::future::IntoFuture;
 use std::sync::{Arc, Mutex};
 use tower_http::cors::{Any, CorsLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
-use std::future::IntoFuture;
 
 use ras_auth_core::AuthenticatedUser;
 use ras_rest_core::{RestError, RestResponse, RestResult};

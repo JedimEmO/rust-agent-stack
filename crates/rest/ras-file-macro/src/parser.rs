@@ -9,7 +9,14 @@ pub struct FileServiceDefinition {
     pub service_name: Ident,
     pub base_path: LitStr,
     pub body_limit: Option<u64>,
+    pub openapi: Option<OpenApiConfig>,
     pub endpoints: Vec<Endpoint>,
+}
+
+#[derive(Debug)]
+pub enum OpenApiConfig {
+    Enabled,
+    WithPath(String),
 }
 
 #[derive(Debug)]
@@ -48,6 +55,7 @@ impl Parse for FileServiceDefinition {
         let mut service_name = None;
         let mut base_path = None;
         let mut body_limit = None;
+        let mut openapi = None;
         let mut endpoints = Vec::new();
 
         while !content.is_empty() {
@@ -64,6 +72,24 @@ impl Parse for FileServiceDefinition {
                 "body_limit" => {
                     let lit: syn::LitInt = content.parse()?;
                     body_limit = Some(lit.base10_parse()?);
+                }
+                "openapi" => {
+                    // Parse openapi value - can be true/false or { output: "path" }
+                    if content.peek(syn::LitBool) {
+                        let enabled = content.parse::<syn::LitBool>()?;
+                        if enabled.value() {
+                            openapi = Some(OpenApiConfig::Enabled);
+                        }
+                    } else if content.peek(syn::token::Brace) {
+                        let openapi_content;
+                        syn::braced!(openapi_content in content);
+
+                        // Parse output: "path"
+                        let _ = openapi_content.parse::<Ident>()?; // "output"
+                        openapi_content.parse::<Token![:]>()?;
+                        let path = openapi_content.parse::<LitStr>()?;
+                        openapi = Some(OpenApiConfig::WithPath(path.value()));
+                    }
                 }
                 "endpoints" => {
                     let endpoints_content;
@@ -95,6 +121,7 @@ impl Parse for FileServiceDefinition {
                 .ok_or_else(|| Error::new(input.span(), "Missing service_name"))?,
             base_path: base_path.ok_or_else(|| Error::new(input.span(), "Missing base_path"))?,
             body_limit,
+            openapi,
             endpoints,
         })
     }

@@ -16,7 +16,9 @@ export function useAuth() {
     }
     
     const client = await getClient();
-    client.set_bearer_token(newToken || undefined);
+    if (newToken) {
+      client.setBearerToken(newToken);
+    }
   };
 
   const isAuthenticated = () => token() !== null;
