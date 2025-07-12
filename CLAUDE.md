@@ -17,9 +17,9 @@ cargo run -p oauth2-demo       # OAuth2 example
 cargo run -p rest-api-demo     # REST API example
 cargo run -p file-service-example  # File upload/download
 
-# Build WASM examples
+# Build examples
 cd examples/wasm-ui-demo && ./build.sh  # Dominator UI
-cd examples/rest-wasm-example && npm run build  # REST TypeScript client
+cd examples/rest-wasm-example/typescript-example && npm run dev  # REST TypeScript client
 ```
 
 ## Architecture Overview
@@ -63,7 +63,8 @@ crates/
    - `jsonrpc_bidirectional_service!` - WebSocket bidirectional RPC
 
 2. **TypeScript Client Generation**
-   - All macros support WASM compilation to TypeScript
+   - REST APIs: OpenAPI spec → TypeScript client via openapi-ts
+   - JSON-RPC: WASM compilation for TypeScript bindings
    - Type-safe API calls with full IntelliSense
    - Automatic bearer token management
    - Works in browsers and Node.js
@@ -216,9 +217,87 @@ WITH_PERMISSIONS([["admin"], ["user", "verified"]])
 // Requires: admin OR (user AND verified)
 ```
 
-## 📦 TypeScript/WASM Client Generation
+## 📦 TypeScript Client Generation
 
-### Setup
+### REST API TypeScript Clients (Recommended)
+
+The preferred approach for REST APIs is to generate TypeScript clients from OpenAPI specifications:
+
+1. **Enable OpenAPI Generation**
+```rust
+rest_service!({
+    service_name: UserService,
+    base_path: "/api/v1",
+    openapi: true,  // Enables OpenAPI generation
+    serve_docs: true,
+    // ... endpoints
+});
+```
+
+2. **Generate OpenAPI at Compile Time**
+```rust
+// In backend's build.rs
+fn main() {
+    // This generates the OpenAPI spec during compilation
+    rest_api::generate_userservice_openapi_to_file()
+        .expect("Failed to generate OpenAPI spec");
+}
+```
+
+3. **Configure TypeScript Generation**
+```typescript
+// openapi-ts.config.ts
+import { defineConfig } from '@hey-api/openapi-ts';
+
+export default defineConfig({
+  client: '@hey-api/client-fetch',
+  input: '../backend/target/openapi/userservice.json',
+  output: {
+    path: './src/generated',
+    format: 'prettier',
+  },
+});
+```
+
+4. **Use Generated Client**
+```typescript
+import * as api from './generated/services.gen';
+import type { User, CreateUserRequest } from './generated/types.gen';
+
+// Make type-safe API calls with named methods
+const response = await api.getUsers({
+  baseUrl: 'http://localhost:3000/api/v1',
+});
+
+if (response.data) {
+  const users = response.data.users;
+}
+
+// Get specific user
+const userResponse = await api.getUsersId({
+  baseUrl: 'http://localhost:3000/api/v1',
+  path: { id: '123' }
+});
+
+// POST with typed body and auth
+const newUser: CreateUserRequest = {
+  name: 'Alice',
+  email: 'alice@example.com'
+};
+
+const created = await api.postUsers({
+  baseUrl: 'http://localhost:3000/api/v1',
+  headers: {
+    Authorization: 'Bearer your-token'
+  },
+  body: newUser
+});
+```
+
+### JSON-RPC WASM Clients
+
+For JSON-RPC services, WASM client generation is still supported:
+
 ```toml
 # Cargo.toml
 [lib]
@@ -231,29 +310,23 @@ wasm-client = ["wasm-bindgen"]
 wasm-bindgen = "0.2"
 ```
 
-### Build Process
 ```bash
-# Install wasm-pack
-cargo install wasm-pack
-
-# Build TypeScript bindings
+# Build WASM client
 wasm-pack build --target web --features wasm-client
 ```
 
-### Usage in TypeScript
 ```typescript
-import init, { WasmUserServiceClient } from './pkg/my_api';
+import init, { WasmTaskServiceClient } from './pkg/my_api';
 
 // Initialize WASM
 await init();
 
 // Create client
-const client = new WasmUserServiceClient('http://localhost:3000');
+const client = new WasmTaskServiceClient('http://localhost:3000');
 client.set_bearer_token('jwt-token');
 
-// Make type-safe API calls
-const users = await client.get_users();
-const user = await client.create_user({ name: 'Alice' });
+// Make RPC calls
+const tasks = await client.list_tasks();
 ```
 
 ## 🚀 Production Deployment
@@ -279,11 +352,20 @@ let otel = standard_setup("my-service")?;
 // Metrics available at /metrics
 ```
 
-### WASM Deployment
+### Frontend Deployment
+
+#### REST API TypeScript Clients
+- Pure JavaScript, no special deployment considerations
+- Bundle size ~10KB (vs ~200KB+ for WASM)
+- Works in all environments (browsers, Node.js, Deno, etc.)
+- Standard JavaScript bundler optimization applies
+
+#### WASM Clients (JSON-RPC)
 - Build with `--release` flag
-- Use CDN for static assets
-- Configure WebSocket proxy
+- Use CDN for static WASM assets
+- Configure WebSocket proxy for bidirectional services
 - Enable gzip/brotli compression
+- Consider lazy loading for large WASM modules
 
 ## 📖 Additional Resources
 

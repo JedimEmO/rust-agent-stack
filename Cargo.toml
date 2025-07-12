@@ -28,8 +28,9 @@ members = [
     # Examples
     "examples/basic-jsonrpc/*",
     "examples/oauth2-demo/*",
-    "examples/rest-api-demo",
     "examples/wasm-ui-demo",
+    "examples/rest-wasm-example/rest-api",
+    "examples/rest-wasm-example/rest-backend",
     "examples/bidirectional-chat/api",
     "examples/bidirectional-chat/server",
     "examples/bidirectional-chat/tui",

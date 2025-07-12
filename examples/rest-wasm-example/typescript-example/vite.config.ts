@@ -1,39 +1,30 @@
-import { defineConfig } from 'vite';
-import solid from 'vite-plugin-solid';
-import { resolve } from 'path';
-import { wasmPack } from './vite-plugin-wasm-pack';
+import { defineConfig } from "vite";
+import solid from "vite-plugin-solid";
+import { resolve } from "path";
+import { heyApiPlugin } from "@hey-api/vite-plugin";
 
 export default defineConfig({
-  plugins: [
-    wasmPack({
-      cratePath: '../rest-api',
-      outDir: 'public/pkg',
-      features: ['wasm-client'],
-    }),
-    solid(),
-  ],
+  plugins: [heyApiPlugin({}), solid()],
   resolve: {
-    alias: {
-      '@wasm': resolve(__dirname, './public/pkg'),
-    },
+    alias: {},
   },
   server: {
     port: 3001,
     proxy: {
-      '/api': {
-        target: 'http://localhost:3000',
+      "/api": {
+        target: "http://localhost:3000",
         changeOrigin: true,
-      }
+      },
     },
     fs: {
       // Allow serving files from public directory
-      allow: ['..'],
+      allow: [".."],
     },
   },
   build: {
-    target: 'esnext',
+    target: "esnext",
   },
   optimizeDeps: {
-    exclude: ['@wasm/rest_api.js'],
+    exclude: [],
   },
 });

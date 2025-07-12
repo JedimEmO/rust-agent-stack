@@ -1,166 +1,261 @@
 import { render } from 'solid-js/web';
-import { createSignal, onMount, Show } from 'solid-js';
-// @ts-ignore
-import init, { WasmUserServiceClient } from '@wasm/rest_api.js';
+import { createSignal, Show, For } from 'solid-js';
+import * as api from './generated/services.gen';
+import type { User, UsersResponse, CreateUserRequest, Task, TasksResponse, CreateTaskRequest } from './generated/types.gen';
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-}
+// API configuration
+const API_BASE_URL = window.location.origin + '/api/v1';
 
 function App() {
-  const [client, setClient] = createSignal<WasmUserServiceClient | null>(null);
-  const [loading, setLoading] = createSignal(true);
+  const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
-  const [response, setResponse] = createSignal<any>(null);
+  const [users, setUsers] = createSignal<User[]>([]);
+  const [selectedUser, setSelectedUser] = createSignal<User | null>(null);
+  const [tasks, setTasks] = createSignal<Task[]>([]);
   const [token, setToken] = createSignal<string>('');
 
-  onMount(async () => {
-    try {
-      // Initialize WASM module
-      await init();
-      
-      // Create client instance
-      const wasmClient = new WasmUserServiceClient(window.location.origin);
-      setClient(wasmClient);
-      setLoading(false);
-    } catch (err) {
-      setError(`Failed to initialize WASM client: ${err}`);
-      setLoading(false);
+  // Get auth headers
+  const getAuthHeaders = () => {
+    const tokenValue = token();
+    if (tokenValue) {
+      return { Authorization: `Bearer ${tokenValue}` };
     }
-  });
+    return {};
+  };
 
+  // Get all users (public endpoint)
   const handleGetUsers = async () => {
-    const c = client();
-    if (!c) return;
-
     try {
+      setLoading(true);
       setError(null);
-      const result = await c.get_users();
-      setResponse(result);
+      
+      const response = await api.getUsers({
+        baseUrl: API_BASE_URL,
+      });
+      
+      if (response.data) {
+        setUsers(response.data.users);
+      } else if (response.error) {
+        setError(`Error: ${response.error.error || 'Unknown error'}`);
+      }
     } catch (err) {
       setError(`Error: ${err}`);
-      setResponse(null);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleGetUser = async () => {
-    const c = client();
-    if (!c) return;
-
+  // Get specific user (public endpoint)
+  const handleGetUser = async (userId: string) => {
     try {
+      setLoading(true);
       setError(null);
-      const result = await c.get_users_by_id('1');
-      setResponse(result);
+      
+      const response = await api.getUsersId({
+        baseUrl: API_BASE_URL,
+        path: { id: userId },
+      });
+      
+      if (response.data) {
+        setSelectedUser(response.data);
+      } else if (response.error) {
+        setError(`Error: ${response.error.error || 'Unknown error'}`);
+      }
     } catch (err) {
       setError(`Error: ${err}`);
-      setResponse(null);
+    } finally {
+      setLoading(false);
     }
   };
 
+  // Create user (admin endpoint)
   const handleCreateUser = async () => {
-    const c = client();
-    if (!c) return;
-
     try {
+      setLoading(true);
       setError(null);
-      const newUser = {
+      
+      const newUser: CreateUserRequest = {
         name: 'New User',
-        email: 'newuser@example.com'
+        email: 'newuser@example.com',
       };
-      const result = await c.post_users(newUser);
-      setResponse(result);
+      
+      const response = await api.postUsers({
+        baseUrl: API_BASE_URL,
+        headers: getAuthHeaders(),
+        body: newUser,
+      });
+      
+      if (response.data) {
+        // Refresh users list
+        await handleGetUsers();
+      } else if (response.error) {
+        setError(`Error: ${response.error.error || 'Unauthorized'}`);
+      }
     } catch (err) {
       setError(`Error: ${err}`);
-      setResponse(null);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleSetToken = () => {
-    const c = client();
-    if (!c) return;
-
-    c.set_bearer_token(token() || null);
-    setResponse({ message: 'Token set successfully' });
-  };
-
-  const setUserToken = () => {
-    setToken('validtoken');
-    const c = client();
-    if (c) {
-      c.set_bearer_token('validtoken');
-      setResponse({ message: 'User token set successfully' });
-    }
-  };
-
-  const setAdminToken = () => {
-    setToken('admintoken');
-    const c = client();
-    if (c) {
-      c.set_bearer_token('admintoken');
-      setResponse({ message: 'Admin token set successfully' });
+  // Get user tasks (user endpoint)
+  const handleGetUserTasks = async (userId: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await api.getUsersUserIdTasks({
+        baseUrl: API_BASE_URL,
+        headers: getAuthHeaders(),
+        path: { user_id: userId },
+      });
+      
+      if (response.data) {
+        setTasks(response.data.tasks);
+      } else if (response.error) {
+        setError(`Error: ${response.error.error || 'Unauthorized'}`);
+      }
+    } catch (err) {
+      setError(`Error: ${err}`);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div class="container">
-      <h1>REST WASM Client Example</h1>
+    <div style={{ padding: '20px', "font-family": 'Arial, sans-serif' }}>
+      <h1>REST API TypeScript Client Demo</h1>
+      <p>This demo uses a TypeScript client generated from the OpenAPI specification.</p>
+      
+      <div style={{ "margin-bottom": '20px' }}>
+        <h3>Authentication</h3>
+        <div style={{ "margin-bottom": '10px' }}>
+          <button onClick={() => setToken('validtoken')} style={{ "margin-right": '10px' }}>
+            Use User Token
+          </button>
+          <button onClick={() => setToken('admintoken')} style={{ "margin-right": '10px' }}>
+            Use Admin Token
+          </button>
+          <button onClick={() => setToken('')}>
+            Clear Token
+          </button>
+        </div>
+        <div style={{ "font-size": '14px', color: '#666' }}>
+          Current token: {token() ? `"${token()}"` : 'None'}
+        </div>
+      </div>
 
-      <Show when={loading()}>
-        <p class="loading">Loading WASM client...</p>
-      </Show>
+      <div style={{ "margin-bottom": '20px' }}>
+        <h3>Public Endpoints</h3>
+        <button onClick={handleGetUsers} disabled={loading()}>
+          Get All Users
+        </button>
+      </div>
+
+      <div style={{ "margin-bottom": '20px' }}>
+        <h3>Admin Endpoints</h3>
+        <button onClick={handleCreateUser} disabled={loading()}>
+          Create User (requires admin token)
+        </button>
+      </div>
 
       <Show when={error()}>
-        <div class="response error">{error()}</div>
+        <div style={{ color: 'red', "margin-bottom": '20px' }}>
+          {error()}
+        </div>
       </Show>
 
-      <Show when={!loading() && client()}>
-        <div class="section">
-          <h2>Authentication</h2>
-          <input
-            type="text"
-            placeholder="Bearer token"
-            value={token()}
-            onInput={(e) => setToken(e.currentTarget.value)}
-            style="padding: 8px; margin-right: 10px; border: 1px solid #ddd; border-radius: 4px;"
-          />
-          <button onClick={handleSetToken}>Set Token</button>
-          <div style="margin-top: 10px;">
-            <button onClick={setUserToken} style="background: #28a745;">Set User Token</button>
-            <button onClick={setAdminToken} style="background: #dc3545;">Set Admin Token</button>
-          </div>
-          <p style="color: #666; font-size: 14px; margin-top: 10px;">
-            Use "validtoken" for user access or "admintoken" for admin access
-          </p>
-        </div>
-
-        <div class="section">
-          <h2>Public Endpoints</h2>
-          <button onClick={handleGetUsers}>Get All Users</button>
-          <button onClick={handleGetUser}>Get User by ID</button>
-        </div>
-
-        <div class="section">
-          <h2>Protected Endpoints (Requires Auth)</h2>
-          <button onClick={handleCreateUser}>Create User (Admin Only)</button>
-        </div>
-
-        <Show when={response()}>
-          <div class="section">
-            <h3>Response:</h3>
-            <div class="response">
-              {JSON.stringify(response(), null, 2)}
-            </div>
-          </div>
-        </Show>
+      <Show when={loading()}>
+        <div>Loading...</div>
       </Show>
+
+      <Show when={users().length > 0}>
+        <div style={{ "margin-bottom": '20px' }}>
+          <h3>Users</h3>
+          <table style={{ "border-collapse": 'collapse', width: '100%' }}>
+            <thead>
+              <tr>
+                <th style={{ border: '1px solid #ddd', padding: '8px' }}>ID</th>
+                <th style={{ border: '1px solid #ddd', padding: '8px' }}>Name</th>
+                <th style={{ border: '1px solid #ddd', padding: '8px' }}>Email</th>
+                <th style={{ border: '1px solid #ddd', padding: '8px' }}>Role</th>
+                <th style={{ border: '1px solid #ddd', padding: '8px' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <For each={users()}>
+                {(user) => (
+                  <tr>
+                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>{user.id}</td>
+                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>{user.name}</td>
+                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>{user.email}</td>
+                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>{user.role}</td>
+                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                      <button onClick={() => handleGetUser(user.id)} style={{ "margin-right": '5px' }}>
+                        View
+                      </button>
+                      <button onClick={() => handleGetUserTasks(user.id)}>
+                        View Tasks
+                      </button>
+                    </td>
+                  </tr>
+                )}
+              </For>
+            </tbody>
+          </table>
+        </div>
+      </Show>
+
+      <Show when={selectedUser()}>
+        <div style={{ "margin-bottom": '20px' }}>
+          <h3>Selected User</h3>
+          <pre>{JSON.stringify(selectedUser(), null, 2)}</pre>
+        </div>
+      </Show>
+
+      <Show when={tasks().length > 0}>
+        <div>
+          <h3>Tasks</h3>
+          <table style={{ "border-collapse": 'collapse', width: '100%' }}>
+            <thead>
+              <tr>
+                <th style={{ border: '1px solid #ddd', padding: '8px' }}>ID</th>
+                <th style={{ border: '1px solid #ddd', padding: '8px' }}>Title</th>
+                <th style={{ border: '1px solid #ddd', padding: '8px' }}>Description</th>
+                <th style={{ border: '1px solid #ddd', padding: '8px' }}>Completed</th>
+              </tr>
+            </thead>
+            <tbody>
+              <For each={tasks()}>
+                {(task) => (
+                  <tr>
+                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>{task.id}</td>
+                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>{task.title}</td>
+                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>{task.description}</td>
+                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                      {task.completed ? '✓' : '✗'}
+                    </td>
+                  </tr>
+                )}
+              </For>
+            </tbody>
+          </table>
+        </div>
+      </Show>
+
+      <div style={{ "margin-top": '40px', "font-size": '14px', color: '#666' }}>
+        <h4>Features:</h4>
+        <ul>
+          <li>✅ Fully type-safe client generated from OpenAPI spec</li>
+          <li>✅ Automatic type inference for requests and responses</li>
+          <li>✅ Built-in error handling with typed error responses</li>
+          <li>✅ Auto-completion and IntelliSense support</li>
+          <li>✅ No manual type definitions needed</li>
+          <li>✅ Automatic client regeneration via Vite plugin</li>
+        </ul>
+      </div>
     </div>
   );
 }
 
-const root = document.getElementById('app');
-if (root) {
-  render(() => <App />, root);
-}
+render(() => <App />, document.getElementById('app')!);

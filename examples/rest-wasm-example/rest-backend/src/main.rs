@@ -1,12 +1,12 @@
 mod simple_auth;
 
 use anyhow::Result;
-use axum::Router;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tower_http::cors::{Any, CorsLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
+use std::future::IntoFuture;
 
 use ras_auth_core::AuthenticatedUser;
 use ras_rest_core::{RestError, RestResponse, RestResult};
@@ -244,14 +244,15 @@ async fn main() -> Result<()> {
         .allow_methods(Any)
         .allow_headers(Any);
 
-    let app = Router::new().merge(api_router).layer(cors);
+    let app = api_router.layer(cors);
 
     let addr = "127.0.0.1:3000";
     tracing::info!("Server running at http://{}", addr);
     tracing::info!("API docs at http://{}/api/v1/docs", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+    let server = axum::serve(listener, app.into_make_service());
+    server.into_future().await?;
 
     Ok(())
 }

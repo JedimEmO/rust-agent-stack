@@ -3,6 +3,9 @@ name = "rest-backend"
 version = "0.1.0"
 edition = "2024"
 
+[build-dependencies]
+rest-api = { path = "../rest-api", features = ["server"] }
+
 [dependencies]
 rest-api = { path = "../rest-api", features = ["server"] }
 ras-auth-core = { path = "../../../crates/core/ras-auth-core" }

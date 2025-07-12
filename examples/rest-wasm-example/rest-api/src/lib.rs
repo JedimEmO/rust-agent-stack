@@ -79,6 +79,5 @@ rest_service!({
     ]
 });
 
-// Re-export the macro-generated WASM client when the feature is enabled
-#[cfg(all(target_arch = "wasm32", feature = "wasm-client"))]
-pub use wasm_client::*;
+// Note: WASM client generation has been removed from ras-rest-macro
+// You'll need to implement your own WASM bindings if needed

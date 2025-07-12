@@ -40,7 +40,6 @@ wasm-client = [
     "js-sys",
     "web-sys",
     "serde-wasm-bindgen",
-    "ras-rest-macro/wasm-client",
     "ras-rest-macro/client",
 ]
 server = ["ras-rest-macro/server"]

@@ -187,6 +187,66 @@ pub fn generate_openapi_code(
             path_params: Vec<(String, String)>, // (name, type)
         }
 
+        // Helper function to fix schema references and flatten nested definitions
+        #[cfg(feature = "server")]
+        fn fix_schema_refs(value: &mut serde_json::Value, schemas: &mut serde_json::Map<String, serde_json::Value>) {
+            match value {
+                serde_json::Value::Object(obj) => {
+                    // Extract nested definitions and move them to top-level schemas
+                    if let Some(defs) = obj.remove("definitions") {
+                        if let serde_json::Value::Object(defs_obj) = defs {
+                            for (name, schema) in defs_obj {
+                                // Recursively fix the definition before adding it
+                                let mut schema_copy = schema.clone();
+                                fix_schema_refs(&mut schema_copy, schemas);
+                                schemas.insert(name, schema_copy);
+                            }
+                        }
+                    }
+                    
+                    // Extract $defs and move them to top-level schemas
+                    if let Some(defs) = obj.remove("$defs") {
+                        if let serde_json::Value::Object(defs_obj) = defs {
+                            for (name, schema) in defs_obj {
+                                // Recursively fix the definition before adding it
+                                let mut schema_copy = schema.clone();
+                                fix_schema_refs(&mut schema_copy, schemas);
+                                schemas.insert(name, schema_copy);
+                            }
+                        }
+                    }
+                    
+                    // Fix $ref strings to point to components/schemas
+                    if let Some(ref_val) = obj.get_mut("$ref") {
+                        if let serde_json::Value::String(ref_str) = ref_val {
+                            // Replace any reference to definitions or $defs with components/schemas
+                            if ref_str.starts_with("#/definitions/") {
+                                let name = ref_str.trim_start_matches("#/definitions/");
+                                *ref_str = format!("#/components/schemas/{}", name);
+                            } else if ref_str.starts_with("#/$defs/") {
+                                let name = ref_str.trim_start_matches("#/$defs/");
+                                *ref_str = format!("#/components/schemas/{}", name);
+                            }
+                        }
+                    }
+                    
+                    // Remove $schema field as it's not needed in OpenAPI
+                    obj.remove("$schema");
+                    
+                    // Recursively process all values
+                    for (_, v) in obj.iter_mut() {
+                        fix_schema_refs(v, schemas);
+                    }
+                }
+                serde_json::Value::Array(arr) => {
+                    for item in arr.iter_mut() {
+                        fix_schema_refs(item, schemas);
+                    }
+                }
+                _ => {}
+            }
+        }
+        
         // Helper function to normalize nullable properties for better Swagger UI compatibility
         #[cfg(feature = "server")]
         fn normalize_nullable_properties(value: &mut serde_json::Value) {
@@ -262,6 +322,13 @@ pub fn generate_openapi_code(
 
             // Insert all the generated schemas
             #(#schema_insertions)*
+
+            // Fix all schema references and flatten nested definitions
+            let mut final_schemas = serde_json::Map::new();
+            for (name, mut schema) in schemas {
+                fix_schema_refs(&mut schema, &mut final_schemas);
+                final_schemas.insert(name, schema);
+            }
 
             // Group endpoints by path to create OpenAPI paths
             let mut paths = serde_json::Map::new();
@@ -356,7 +423,7 @@ pub fn generate_openapi_code(
                 },
                 "paths": paths,
                 "components": {
-                    "schemas": schemas,
+                    "schemas": final_schemas,
                     "securitySchemes": {
                         "bearerAuth": {
                             "type": "http",
@@ -387,6 +454,7 @@ pub fn generate_openapi_code(
 
             Ok(())
         }
+        
     }
 }
 
