@@ -54,3 +54,6 @@ mod tests {
         generate_documentservice_openapi_to_file().expect("Failed to write OpenAPI to file");
     }
 }
+
+#[cfg(test)]
+mod test_openapi;

@@ -238,6 +238,8 @@ mod tests {
     #[cfg(feature = "timing-tests")]
     #[tokio::test]
     async fn test_timing_attack_resistance() {
+        use std::time::{Duration, Instant};
+
         let provider = setup_test_provider().await;
 
         const NUM_ATTEMPTS: usize = 10;

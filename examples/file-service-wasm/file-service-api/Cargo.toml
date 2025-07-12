@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+# Default to rlib only to avoid conflicts with build dependencies
+# cdylib will be added when building for wasm32 target via wasm-pack
+crate-type = ["rlib"]
 
 [dependencies]
 ras-file-macro = { path = "../../../crates/rest/ras-file-macro" }
