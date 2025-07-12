@@ -242,6 +242,12 @@ impl OtelSetup {
         OtelMethodDurationTracker::new(self.metrics.clone())
     }
 
+    /// Force flush all pending metrics
+    pub fn force_flush(&self) -> Result<(), Box<dyn std::error::Error>> {
+        self.meter_provider.force_flush()?;
+        Ok(())
+    }
+
     /// Create an Axum router for the metrics endpoint
     pub fn metrics_router(&self) -> Router {
         Router::new()

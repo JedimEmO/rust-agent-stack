@@ -52,9 +52,6 @@ async fn create_user(
         .await;
     state.metrics.increment_requests_started(&context);
 
-    // Simulate some work
-    sleep(Duration::from_millis(50)).await;
-
     // Create response
     let response = UserResponse {
         id: "user-123".to_string(),
@@ -118,9 +115,6 @@ async fn get_profile(
         .track_request(&headers, Some(&user), &context)
         .await;
     state.metrics.increment_requests_started(&context);
-
-    // Simulate work
-    sleep(Duration::from_millis(30)).await;
 
     let response = UserResponse {
         id: user.user_id.clone(),
@@ -200,8 +194,10 @@ async fn test_full_service_integration() {
         }
     }
 
-    // Give metrics time to be recorded
-    sleep(Duration::from_millis(200)).await;
+    // Force flush metrics to ensure they're recorded
+    setup.force_flush().expect("Failed to flush metrics");
+    // Small delay to allow Prometheus registry to update
+    sleep(Duration::from_millis(10)).await;
 
     // Test metrics endpoint
     let response = server.get("/metrics").await;
@@ -243,9 +239,6 @@ async fn test_jsonrpc_protocol_tracking() {
         usage_tracker.track_request(&headers, None, &context).await;
         metrics.increment_requests_started(&context);
 
-        // Simulate some processing time
-        sleep(Duration::from_millis(10)).await;
-
         // Track completion
         duration_tracker
             .track_duration(&context, None, Duration::from_millis(10))
@@ -253,8 +246,10 @@ async fn test_jsonrpc_protocol_tracking() {
         metrics.increment_requests_completed(&context, true);
     }
 
-    // Give metrics time to be recorded
-    sleep(Duration::from_millis(200)).await;
+    // Force flush metrics to ensure they're recorded
+    setup.force_flush().expect("Failed to flush metrics");
+    // Small delay to allow Prometheus registry to update
+    sleep(Duration::from_millis(10)).await;
 
     // Create metrics endpoint to verify
     let app = setup.metrics_router();
@@ -296,8 +291,10 @@ async fn test_websocket_protocol_tracking() {
         metrics.increment_requests_completed(&context, true);
     }
 
-    // Give metrics time to be recorded
-    sleep(Duration::from_millis(200)).await;
+    // Force flush metrics to ensure they're recorded
+    setup.force_flush().expect("Failed to flush metrics");
+    // Small delay to allow Prometheus registry to update
+    sleep(Duration::from_millis(10)).await;
 
     // Verify metrics
     let app = setup.metrics_router();
@@ -342,8 +339,10 @@ async fn test_error_scenarios() {
         metrics.increment_requests_completed(&context, false); // Mark as failed
     }
 
-    // Give metrics time to be recorded
-    sleep(Duration::from_millis(200)).await;
+    // Force flush metrics to ensure they're recorded
+    setup.force_flush().expect("Failed to flush metrics");
+    // Small delay to allow Prometheus registry to update
+    sleep(Duration::from_millis(10)).await;
 
     // Verify failure metrics
     let app = setup.metrics_router();
