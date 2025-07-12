@@ -201,7 +201,7 @@ async fn test_full_service_integration() {
     }
 
     // Give metrics time to be recorded
-    sleep(Duration::from_millis(100)).await;
+    sleep(Duration::from_millis(200)).await;
 
     // Test metrics endpoint
     let response = server.get("/metrics").await;
@@ -253,6 +253,9 @@ async fn test_jsonrpc_protocol_tracking() {
         metrics.increment_requests_completed(&context, true);
     }
 
+    // Give metrics time to be recorded
+    sleep(Duration::from_millis(200)).await;
+
     // Create metrics endpoint to verify
     let app = setup.metrics_router();
     let server = TestServer::new(app).unwrap();
@@ -292,6 +295,9 @@ async fn test_websocket_protocol_tracking() {
         metrics.record_method_duration(&context, Duration::from_millis(5));
         metrics.increment_requests_completed(&context, true);
     }
+
+    // Give metrics time to be recorded
+    sleep(Duration::from_millis(200)).await;
 
     // Verify metrics
     let app = setup.metrics_router();
@@ -335,6 +341,9 @@ async fn test_error_scenarios() {
         metrics.record_method_duration(&context, duration);
         metrics.increment_requests_completed(&context, false); // Mark as failed
     }
+
+    // Give metrics time to be recorded
+    sleep(Duration::from_millis(200)).await;
 
     // Verify failure metrics
     let app = setup.metrics_router();

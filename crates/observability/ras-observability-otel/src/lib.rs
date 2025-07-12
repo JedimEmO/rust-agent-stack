@@ -33,12 +33,12 @@ impl OtelMetrics {
     pub fn new(meter: &Meter) -> Self {
         Self {
             requests_started: meter
-                .u64_counter("requests_started_total")
+                .u64_counter("requests_started")
                 .with_description("Total number of requests started")
                 .with_unit("requests")
                 .build(),
             requests_completed: meter
-                .u64_counter("requests_completed_total")
+                .u64_counter("requests_completed")
                 .with_description("Total number of requests completed")
                 .with_unit("requests")
                 .build(),
