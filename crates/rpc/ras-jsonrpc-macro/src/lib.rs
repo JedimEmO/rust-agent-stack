@@ -681,8 +681,23 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                         let service = service.clone();
                         async move {
                             let response = service.handle_request(headers, body).await;
+
+                            // Determine HTTP status code based on JSON-RPC error code
+                            // Map authentication/authorization errors to appropriate HTTP status codes
+                            // while maintaining JSON-RPC protocol compatibility
+                            let status_code = if let Some(ref error) = response.error {
+                                match error.code {
+                                    ras_jsonrpc_types::error_codes::AUTHENTICATION_REQUIRED => axum::http::StatusCode::UNAUTHORIZED,
+                                    ras_jsonrpc_types::error_codes::INSUFFICIENT_PERMISSIONS => axum::http::StatusCode::FORBIDDEN,
+                                    ras_jsonrpc_types::error_codes::TOKEN_EXPIRED => axum::http::StatusCode::UNAUTHORIZED,
+                                    _ => axum::http::StatusCode::OK, // Other JSON-RPC errors still return 200 OK
+                                }
+                            } else {
+                                axum::http::StatusCode::OK
+                            };
+
                             (
-                                axum::http::StatusCode::OK,
+                                status_code,
                                 [("Content-Type", "application/json")],
                                 serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string())
                             )
@@ -710,17 +725,28 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                 }
 
                 // Try to authenticate user if auth provider is available
-                let authenticated_user = if let Some(auth_provider) = &self.auth_provider {
+                let auth_result = if let Some(auth_provider) = &self.auth_provider {
                     if let Some(token) = headers
                         .get("Authorization")
                         .and_then(|h| h.to_str().ok())
                         .and_then(|s| s.strip_prefix("Bearer ")) {
-                        auth_provider.authenticate(token.to_string()).await.ok()
+                        Some(auth_provider.authenticate(token.to_string()).await)
                     } else {
                         None
                     }
                 } else {
                     None
+                };
+
+                let authenticated_user = match auth_result {
+                    Some(Ok(user)) => Some(user),
+                    Some(Err(ras_jsonrpc_core::AuthError::TokenExpired)) => {
+                        return ras_jsonrpc_types::JsonRpcResponse::error(
+                            ras_jsonrpc_types::JsonRpcError::token_expired(),
+                            request_id
+                        );
+                    }
+                    _ => None,
                 };
 
                 // Call usage tracker if configured
