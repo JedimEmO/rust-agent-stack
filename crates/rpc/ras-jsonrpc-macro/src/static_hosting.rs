@@ -32,8 +32,7 @@ pub fn generate_static_hosting_code(
     // Load the template content at macro compile time
     const TEMPLATE_CONTENT: &str = include_str!("jsonrpc_explorer_template.html");
 
-    let explorer_path = &config.explorer_path;
-    let openrpc_path = format!("{}/openrpc.json", explorer_path);
+    let explorer_path_suffix = &config.explorer_path;
     // Use path relative to explorer directory
     let openrpc_path_js = "explorer/openrpc.json".to_string();
     let service_name_str = service_name.to_string();
@@ -48,20 +47,27 @@ pub fn generate_static_hosting_code(
 
     quote! {
         /// Routes for the JSON-RPC explorer
-        pub fn #explorer_routes_fn() -> ::axum::Router {
+        pub fn #explorer_routes_fn(base_path: &str) -> ::axum::Router {
             use ::axum::{response::Html, routing::get, Json};
 
-            async fn serve_explorer() -> Html<String> {
-                // Template is embedded at macro expansion time
-                const TEMPLATE: &str = #template_lit;
+            let explorer_path = format!("{}{}", base_path, #explorer_path_suffix);
+            let openrpc_path = format!("{}/openrpc.json", &explorer_path);
 
-                // Replace placeholders
-                let html = TEMPLATE
-                    .replace("{SERVICE_NAME}", #service_name_str)
-                    .replace("{OPENRPC_PATH}", &#openrpc_path_js);
+            let serve_explorer = {
+                let base_path = base_path.to_string();
+                move || async move {
+                    // Template is embedded at macro expansion time
+                    const TEMPLATE: &str = #template_lit;
 
-                Html(html)
-            }
+                    // Replace placeholders
+                    let html = TEMPLATE
+                        .replace("{SERVICE_NAME}", #service_name_str)
+                        .replace("{OPENRPC_PATH}", &#openrpc_path_js)
+                        .replace("{RPC_BASE_PATH}", &base_path);
+
+                    Html(html)
+                }
+            };
 
             async fn serve_openrpc() -> Json<::serde_json::Value> {
                 let doc = #openrpc_fn_name();
@@ -69,8 +75,8 @@ pub fn generate_static_hosting_code(
             }
 
             ::axum::Router::new()
-                .route(#explorer_path, get(serve_explorer))
-                .route(&#openrpc_path, get(serve_openrpc))
+                .route(&explorer_path, get(serve_explorer))
+                .route(&openrpc_path, get(serve_openrpc))
         }
     }
 }

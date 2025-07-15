@@ -157,7 +157,7 @@ async fn main() {
     // Initialize task storage
     let task_storage = Arc::new(TaskStorage::new());
 
-    let rpc_router = MyServiceBuilder::new("/rpc")
+    let rpc_router = MyServiceBuilder::new("/rpc/foo/bar")
         .with_usage_tracker({
             let usage_tracker = otel.usage_tracker();
             move |headers, user, payload| {
@@ -312,7 +312,9 @@ async fn main() {
     println!("Basic JSON-RPC Service");
     println!("===================");
     println!();
-    println!("Available at: http://localhost:3000/rpc");
+    println!("JSON-RPC endpoint: http://localhost:3000/rpc");
+    println!("API Explorer: http://localhost:3000/rpc/explorer");
+    println!("OpenRPC spec: http://localhost:3000/rpc/explorer/openrpc.json");
     println!();
     println!("Test credentials:");
     println!("  Admin: username='admin', password='secret'");

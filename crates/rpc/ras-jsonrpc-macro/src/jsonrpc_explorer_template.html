@@ -1044,11 +1044,8 @@
                     options.headers['Authorization'] = `Bearer ${jwtToken}`;
                 }
                 
-                // Determine the RPC endpoint - use the same base path as the explorer
-                // If explorer is at /api/explorer, then RPC is at /api/rpc
-                const currentPath = window.location.pathname;
-                const basePath = currentPath.substring(0, currentPath.lastIndexOf('/explorer'));
-                const rpcEndpoint = (basePath || '') + '/rpc';
+                // Use the configured RPC base path
+                const rpcEndpoint = '{RPC_BASE_PATH}';
                 
                 // Make request to the JSON-RPC endpoint
                 const response = await fetch(rpcEndpoint, options);

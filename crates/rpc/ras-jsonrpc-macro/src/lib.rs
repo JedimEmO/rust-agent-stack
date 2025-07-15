@@ -333,7 +333,7 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
             let service_name_lower = service_name_str.to_lowercase();
             let explorer_routes_fn_str = [&service_name_lower, "_explorer_routes"].concat();
             let explorer_routes_fn = syn::Ident::new(&explorer_routes_fn_str, service_name.span());
-            quote! { router = router.merge(#explorer_routes_fn()); }
+            quote! { router = router.merge(#explorer_routes_fn(&base_url)); }
         } else {
             quote! {}
         };
@@ -676,33 +676,37 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                 let base_url = self.base_url.clone();
                 let service = std::sync::Arc::new(self);
 
-                let mut router = axum::Router::new()
-                    .route(&base_url, axum::routing::post(move |headers: axum::http::HeaderMap, body: String| {
-                        let service = service.clone();
-                        async move {
-                            let response = service.handle_request(headers, body).await;
+                let rpc_handler = axum::routing::post(move |headers: axum::http::HeaderMap, body: String| {
+                    let service = service.clone();
+                    async move {
+                        let response = service.handle_request(headers, body).await;
 
-                            // Determine HTTP status code based on JSON-RPC error code
-                            // Map authentication/authorization errors to appropriate HTTP status codes
-                            // while maintaining JSON-RPC protocol compatibility
-                            let status_code = if let Some(ref error) = response.error {
-                                match error.code {
-                                    ras_jsonrpc_types::error_codes::AUTHENTICATION_REQUIRED => axum::http::StatusCode::UNAUTHORIZED,
-                                    ras_jsonrpc_types::error_codes::INSUFFICIENT_PERMISSIONS => axum::http::StatusCode::FORBIDDEN,
-                                    ras_jsonrpc_types::error_codes::TOKEN_EXPIRED => axum::http::StatusCode::UNAUTHORIZED,
-                                    _ => axum::http::StatusCode::OK, // Other JSON-RPC errors still return 200 OK
-                                }
-                            } else {
-                                axum::http::StatusCode::OK
-                            };
+                        // Determine HTTP status code based on JSON-RPC error code
+                        // Map authentication/authorization errors to appropriate HTTP status codes
+                        // while maintaining JSON-RPC protocol compatibility
+                        let status_code = if let Some(ref error) = response.error {
+                            match error.code {
+                                ras_jsonrpc_types::error_codes::AUTHENTICATION_REQUIRED => axum::http::StatusCode::UNAUTHORIZED,
+                                ras_jsonrpc_types::error_codes::INSUFFICIENT_PERMISSIONS => axum::http::StatusCode::FORBIDDEN,
+                                ras_jsonrpc_types::error_codes::TOKEN_EXPIRED => axum::http::StatusCode::UNAUTHORIZED,
+                                _ => axum::http::StatusCode::OK, // Other JSON-RPC errors still return 200 OK
+                            }
+                        } else {
+                            axum::http::StatusCode::OK
+                        };
 
-                            (
-                                status_code,
-                                [("Content-Type", "application/json")],
-                                serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string())
-                            )
-                        }
-                    }));
+                        (
+                            status_code,
+                            [("Content-Type", "application/json")],
+                            serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string())
+                        )
+                    }
+                });
+
+                let mut router = axum::Router::new();
+
+                // Add the JSON-RPC endpoint
+                router = router.route(&base_url, rpc_handler);
 
                 // Include explorer routes if explorer is enabled
                 #explorer_route_integration
