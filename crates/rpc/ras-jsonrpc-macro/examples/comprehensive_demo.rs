@@ -7,8 +7,10 @@
 //! - Various authentication requirements
 //! - Multiple permission combinations
 
+use ras_jsonrpc_core::{AuthError, AuthFuture, AuthProvider, AuthenticatedUser};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 // Common types used across all services
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -81,20 +83,106 @@ mod documented_service {
     });
 }
 
+// Simple auth provider for demo
+struct DemoAuthProvider;
+
+impl AuthProvider for DemoAuthProvider {
+    fn authenticate(&self, token: String) -> AuthFuture<'_> {
+        Box::pin(async move {
+            match token.as_str() {
+                "admin-token" => {
+                    let mut permissions = HashSet::new();
+                    permissions.insert("admin.read".to_string());
+                    permissions.insert("admin.write".to_string());
+                    Ok(AuthenticatedUser {
+                        user_id: "admin-user".to_string(),
+                        permissions,
+                        metadata: None,
+                    })
+                }
+                "user-token" => {
+                    let mut permissions = HashSet::new();
+                    permissions.insert("user.read".to_string());
+                    permissions.insert("user.write".to_string());
+                    Ok(AuthenticatedUser {
+                        user_id: "regular-user".to_string(),
+                        permissions,
+                        metadata: None,
+                    })
+                }
+                "service-token" => {
+                    let mut permissions = HashSet::new();
+                    permissions.insert("service.use".to_string());
+                    Ok(AuthenticatedUser {
+                        user_id: "service-user".to_string(),
+                        permissions,
+                        metadata: None,
+                    })
+                }
+                _ => Err(AuthError::InvalidToken),
+            }
+        })
+    }
+}
+
 fn main() {
     println!("=== Comprehensive JSON-RPC Service Demo ===\n");
 
     // Test basic service (no OpenRPC)
     println!("1. Basic Service (no OpenRPC):");
-    let basic_builder = basic_service::BasicServiceBuilder::new("/basic");
-    let _basic_router = basic_builder.build();
+    let basic_builder = basic_service::BasicServiceBuilder::new("/basic")
+        .auth_provider(DemoAuthProvider)
+        .health_check_handler(|_| async move {
+            Ok(StatusResponse {
+                success: true,
+                message: "Service is healthy".to_string(),
+            })
+        })
+        .get_user_handler(|_user, request| async move {
+            Ok(UserResponse {
+                id: "user-123".to_string(),
+                username: request.username,
+            })
+        });
+    let _basic_router = basic_builder.build().expect("Failed to build BasicService");
     println!("   ✓ BasicService compiled successfully");
     println!("   ✓ No OpenRPC functions generated\n");
 
     // Test API service with default OpenRPC
     println!("2. API Service (OpenRPC enabled, default path):");
-    let api_builder = api_service::ApiServiceBuilder::new("/api/v1");
-    let _api_router = api_builder.build();
+    let api_builder = api_service::ApiServiceBuilder::new("/api/v1")
+        .auth_provider(DemoAuthProvider)
+        .register_handler(|request| async move {
+            Ok(UserResponse {
+                id: "new-user-456".to_string(),
+                username: request.username,
+            })
+        })
+        .authenticated_ping_handler(|_user, _| async move {
+            Ok(StatusResponse {
+                success: true,
+                message: "Pong!".to_string(),
+            })
+        })
+        .get_profile_handler(|user, _| async move {
+            Ok(UserResponse {
+                id: user.user_id.clone(),
+                username: "profile_user".to_string(),
+            })
+        })
+        .update_profile_handler(|_user, request| async move {
+            Ok(UserResponse {
+                id: "updated-user".to_string(),
+                username: request.username,
+            })
+        })
+        .admin_action_handler(|_user, action| async move {
+            Ok(StatusResponse {
+                success: true,
+                message: format!("Admin action {} on {} executed", action.action, action.target),
+            })
+        });
+    let _api_router = api_builder.build().expect("Failed to build ApiService");
 
     // Generate OpenRPC document
     let openrpc_doc = api_service::generate_apiservice_openrpc();
@@ -116,8 +204,21 @@ fn main() {
 
     // Test documented service with custom OpenRPC path
     println!("3. Documented Service (OpenRPC enabled, custom path):");
-    let doc_builder = documented_service::DocumentedServiceBuilder::new("/docs/api");
-    let _doc_router = doc_builder.build();
+    let doc_builder = documented_service::DocumentedServiceBuilder::new("/docs/api")
+        .auth_provider(DemoAuthProvider)
+        .status_handler(|_| async move {
+            Ok(StatusResponse {
+                success: true,
+                message: "Service is operational".to_string(),
+            })
+        })
+        .process_request_handler(|_user, request| async move {
+            Ok(UserResponse {
+                id: "processed-789".to_string(),
+                username: request.username,
+            })
+        });
+    let _doc_router = doc_builder.build().expect("Failed to build DocumentedService");
 
     // Generate OpenRPC document
     let doc_openrpc = documented_service::generate_documentedservice_openrpc();

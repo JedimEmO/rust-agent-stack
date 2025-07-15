@@ -62,7 +62,8 @@ mod tests {
                 let service = service_clone.clone();
                 async move { service.test_auth_error(&user, req).await }
             })
-            .build();
+            .build()
+            .expect("Failed to build router");
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();

@@ -63,7 +63,8 @@ async fn main() {
             println!("User {} deleting everything (admin action)", user.user_id);
             Ok(())
         })
-        .build();
+        .build()
+        .expect("Failed to build router");
 
     println!("JSON-RPC service router created successfully!");
     println!("The router can be used with axum to serve HTTP requests.");

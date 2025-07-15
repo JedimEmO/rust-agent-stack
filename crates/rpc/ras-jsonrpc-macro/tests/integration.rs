@@ -90,7 +90,7 @@ async fn test_macro_generates_code() {
         });
 
     // Build the router (this ensures all generated code compiles)
-    let _router = builder.build();
+    let _router = builder.build().expect("Failed to build router");
 
     println!("Macro generated code successfully!");
 }
@@ -149,7 +149,7 @@ async fn test_openrpc_generation() {
         .sign_out_handler(|_user, _request| async move { Ok(()) });
 
     // Build the router
-    let _router = builder.build();
+    let _router = builder.build().expect("Failed to build router");
 
     // Generate and write OpenRPC document
     let openrpc_doc = generate_openrpcservice_openrpc();
@@ -191,7 +191,7 @@ async fn test_custom_openrpc_path() {
         .delete_everything_handler(|_user, _request| async move { Ok(()) });
 
     // Build the router
-    let _router = builder.build();
+    let _router = builder.build().expect("Failed to build router");
 
     // Generate OpenRPC document
     let openrpc_doc = generate_custompathservice_openrpc();

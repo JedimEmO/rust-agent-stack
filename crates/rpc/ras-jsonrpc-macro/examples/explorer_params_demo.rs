@@ -227,7 +227,7 @@ async fn main() {
         });
 
     // Create router with explorer
-    let app = builder.build();
+    let app = builder.build().expect("Failed to build app");
 
     // Start server
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")

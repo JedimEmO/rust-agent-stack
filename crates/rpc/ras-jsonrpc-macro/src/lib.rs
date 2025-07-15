@@ -420,6 +420,19 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
         quote! { #field_name: None }
     });
 
+    // Generate handler validation checks for the build method
+    let handler_validations = service_def.methods.iter().map(|method| {
+        let method_name = &method.name;
+        let field_name = quote::format_ident!("{}_handler", method_name);
+        let method_str = method_name.to_string();
+        
+        quote! {
+            if self.#field_name.is_none() {
+                missing_handlers.push(#method_str);
+            }
+        }
+    });
+
     // Generate method dispatch logic for the JSON-RPC handler
     let method_dispatch = service_def.methods.iter().map(|method| {
         let method_name = &method.name;
@@ -672,7 +685,18 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
             #(#builder_setters)*
 
             /// Build the axum router for the JSON-RPC service
-            pub fn build(self) -> axum::Router {
+            pub fn build(self) -> Result<axum::Router, String> {
+                // Validate that all handlers are configured
+                let mut missing_handlers = Vec::new();
+                #(#handler_validations)*
+
+                if !missing_handlers.is_empty() {
+                    return Err(format!(
+                        "Cannot build service: the following handlers are not configured: {}",
+                        missing_handlers.join(", ")
+                    ));
+                }
+
                 let base_url = self.base_url.clone();
                 let service = std::sync::Arc::new(self);
 
@@ -711,7 +735,7 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                 // Include explorer routes if explorer is enabled
                 #explorer_route_integration
 
-                router
+                Ok(router)
             }
 
             async fn handle_request(&self, headers: axum::http::HeaderMap, body: String) -> ras_jsonrpc_types::JsonRpcResponse {

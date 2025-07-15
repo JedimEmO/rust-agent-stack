@@ -127,6 +127,7 @@ pub fn create_api_router<A: AuthProvider + Clone + Send + Sync + 'static>(
             Ok(GetBetaFeaturesResponse { features })
         })
         .build()
+        .expect("Failed to build GoogleOAuth2Service")
 }
 
 #[cfg(test)]

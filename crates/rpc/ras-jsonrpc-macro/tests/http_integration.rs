@@ -210,7 +210,7 @@ async fn create_test_server() -> (String, tokio::task::JoinHandle<()>) {
             }
         });
 
-    let app = builder.build();
+    let app = builder.build().expect("Failed to build app");
 
     let handle = tokio::spawn(async move {
         axum::serve(tokio_listener, app)

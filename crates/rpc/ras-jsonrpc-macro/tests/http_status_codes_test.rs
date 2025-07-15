@@ -130,7 +130,8 @@ async fn test_authentication_required_returns_401() {
         .admin_method_handler(
             |user, req| async move { TestServiceImpl.admin_method(&user, req).await },
         )
-        .build();
+        .build()
+        .expect("Failed to build router");
 
     // Test: No auth header for protected method should return 401
     let response = make_jsonrpc_request(
@@ -163,7 +164,8 @@ async fn test_insufficient_permissions_returns_403() {
         .admin_method_handler(
             |user, req| async move { TestServiceImpl.admin_method(&user, req).await },
         )
-        .build();
+        .build()
+        .expect("Failed to build router");
 
     // Test: User token trying to access admin method should return 403
     let response = make_jsonrpc_request(
@@ -196,7 +198,8 @@ async fn test_invalid_token_returns_401() {
         .admin_method_handler(
             |user, req| async move { TestServiceImpl.admin_method(&user, req).await },
         )
-        .build();
+        .build()
+        .expect("Failed to build router");
 
     // Test: Invalid token should return 401
     let response = make_jsonrpc_request(
@@ -229,7 +232,8 @@ async fn test_successful_auth_returns_200() {
         .admin_method_handler(
             |user, req| async move { TestServiceImpl.admin_method(&user, req).await },
         )
-        .build();
+        .build()
+        .expect("Failed to build router");
 
     // Test: Valid user token accessing user method should return 200
     let response = make_jsonrpc_request(
@@ -262,7 +266,8 @@ async fn test_token_expired_returns_401() {
         .admin_method_handler(
             |user, req| async move { TestServiceImpl.admin_method(&user, req).await },
         )
-        .build();
+        .build()
+        .expect("Failed to build router");
 
     // Test: Expired token should return 401
     let response = make_jsonrpc_request(

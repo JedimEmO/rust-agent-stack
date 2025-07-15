@@ -304,7 +304,8 @@ async fn main() {
                 async move { Ok(storage.get_stats()) }
             }
         })
-        .build();
+        .build()
+        .expect("Failed to build JSON-RPC router");
 
     // Create the main app with metrics endpoint
     let app = Router::new().merge(rpc_router).merge(otel.metrics_router());
