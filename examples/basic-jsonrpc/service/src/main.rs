@@ -1,7 +1,7 @@
 use axum::Router;
 use basic_jsonrpc_api::{
     CreateTaskRequest, DashboardStats, MyServiceBuilder, SignInRequest, SignInResponse, Task,
-    TaskListResponse, TaskPriority, UpdateTaskRequest, UserProfile,
+    TaskListResponse, TaskPriority, UpdateTaskRequest, UpdateProfileRequest, UserProfile,
 };
 use chrono::Utc;
 use ras_jsonrpc_core::{AuthFuture, AuthProvider, AuthenticatedUser};
@@ -292,6 +292,21 @@ async fn main() {
                     }
                     .to_string(),
                     email: format!("{}@example.com", user.user_id),
+                    permissions: user.permissions.iter().cloned().collect(),
+                    created_at: "2024-01-01T00:00:00Z".to_string(),
+                })
+            }
+        })
+        .update_profile_handler({
+            move |user, request| async move {
+                Ok(UserProfile {
+                    username: if user.user_id == "admin123" {
+                        "admin"
+                    } else {
+                        "user"
+                    }
+                    .to_string(),
+                    email: request.email.unwrap_or_else(|| format!("{}@example.com", user.user_id)),
                     permissions: user.permissions.iter().cloned().collect(),
                     created_at: "2024-01-01T00:00:00Z".to_string(),
                 })
