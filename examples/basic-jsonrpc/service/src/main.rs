@@ -157,7 +157,7 @@ async fn main() {
     // Initialize task storage
     let task_storage = Arc::new(TaskStorage::new());
 
-    let rpc_router = MyServiceBuilder::new("/rpc/foo/bar")
+    let rpc_router = MyServiceBuilder::new("/rpc")
         .with_usage_tracker({
             let usage_tracker = otel.usage_tracker();
             move |headers, user, payload| {
