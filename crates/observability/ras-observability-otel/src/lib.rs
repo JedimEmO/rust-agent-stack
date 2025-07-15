@@ -43,9 +43,9 @@ impl OtelMetrics {
                 .with_unit("requests")
                 .build(),
             method_duration: meter
-                .f64_histogram("method_duration_seconds")
-                .with_description("Duration of method execution in seconds")
-                .with_unit("seconds")
+                .f64_histogram("method_duration_milliseconds")
+                .with_description("Duration of method execution in milliseconds")
+                .with_unit("milliseconds")
                 .build(),
         }
     }
@@ -79,7 +79,7 @@ impl ServiceMetrics for OtelMetrics {
         ];
 
         self.method_duration
-            .record(duration.as_secs_f64(), &attributes);
+            .record(duration.as_secs_f64() * 1000.0, &attributes);
     }
 }
 

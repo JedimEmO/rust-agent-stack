@@ -40,7 +40,7 @@ mod tests {
     #[tokio::test]
     async fn test_explorer_routes_generated() {
         // Test that the explorer routes function is generated
-        let explorer_routes = userservice_explorer_routes();
+        let explorer_routes = userservice_explorer_routes("");
 
         // The router should have routes for /explorer and /explorer/openrpc.json
         let app = Router::new().merge(explorer_routes);
@@ -79,7 +79,6 @@ mod tests {
     fn test_explorer_with_custom_path() {
         mod custom_path_service {
             use ras_jsonrpc_macro::jsonrpc_service;
-            use serde::{Deserialize, Serialize};
 
             jsonrpc_service!({
                 service_name: TestService,
@@ -92,7 +91,7 @@ mod tests {
 
             pub fn test_routes() {
                 // Test that the explorer routes function is generated
-                let _explorer_routes = testservice_explorer_routes();
+                let _explorer_routes = testservice_explorer_routes("/api/docs");
             }
         }
 
@@ -103,7 +102,6 @@ mod tests {
     fn test_explorer_requires_openrpc() {
         mod no_openrpc_service {
             use ras_jsonrpc_macro::jsonrpc_service;
-            use serde::{Deserialize, Serialize};
 
             jsonrpc_service!({
                 service_name: NoOpenRpcService,
