@@ -732,7 +732,7 @@ pub fn generate_static_hosting_code(
         function initializeAuth() {{
             const tokenInput = document.getElementById('jwt-token');
             const authStatus = document.getElementById('auth-status');
-            
+
             if (jwtToken) {{
                 tokenInput.value = jwtToken;
                 authStatus.classList.add('authenticated');
@@ -753,18 +753,18 @@ pub fn generate_static_hosting_code(
             // Authentication
             document.getElementById('save-token').addEventListener('click', saveToken);
             document.getElementById('clear-token').addEventListener('click', clearToken);
-            
+
             // Theme toggle
             document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
-            
+
             // Search
             document.getElementById('endpoint-search').addEventListener('input', filterEndpoints);
-            
+
             // Response tabs
             document.querySelectorAll('.response-tab').forEach(tab => {{
                 tab.addEventListener('click', (e) => switchResponseTab(e.target.dataset.tab));
             }});
-            
+
             // Copy response
             document.getElementById('copy-response').addEventListener('click', copyResponse);
         }}
@@ -773,10 +773,10 @@ pub fn generate_static_hosting_code(
         function saveToken() {{
             const tokenInput = document.getElementById('jwt-token');
             const authStatus = document.getElementById('auth-status');
-            
+
             jwtToken = tokenInput.value.trim();
             localStorage.setItem('jwt-token', jwtToken);
-            
+
             if (jwtToken) {{
                 authStatus.classList.add('authenticated');
                 showSuccess('Token saved successfully');
@@ -798,10 +798,10 @@ pub fn generate_static_hosting_code(
         function toggleTheme() {{
             const currentTheme = document.documentElement.getAttribute('data-theme');
             const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            
+
             document.documentElement.setAttribute('data-theme', newTheme);
             localStorage.setItem('theme', newTheme);
-            
+
             const toggle = document.getElementById('theme-toggle');
             toggle.textContent = newTheme === 'dark' ? '☀️' : '🌙';
         }}
@@ -809,10 +809,10 @@ pub fn generate_static_hosting_code(
         // Render endpoints list
         function renderEndpoints() {{
             if (!apiSpec || !apiSpec.paths) return;
-            
+
             const container = document.getElementById('endpoints-list');
             container.innerHTML = '';
-            
+
             Object.entries(apiSpec.paths).forEach(([path, pathItem]) => {{
                 Object.entries(pathItem).forEach(([method, operationItem]) => {{
                     if (['get', 'post', 'put', 'patch', 'delete'].includes(method)) {{
@@ -829,9 +829,9 @@ pub fn generate_static_hosting_code(
             div.className = 'endpoint-item';
             div.dataset.path = path;
             div.dataset.method = method;
-            
+
             const isProtected = operation['x-authentication'] || (operation.security && operation.security.length > 0);
-            
+
             div.innerHTML = `
                 <div class="endpoint-header">
                     <span class="method-badge method-${{escapeHtml(method)}}">${{escapeHtml(method.toUpperCase())}}</span>
@@ -842,9 +842,9 @@ pub fn generate_static_hosting_code(
                 </div>
                 ${{operation.summary ? `<div class="endpoint-description">${{escapeHtml(operation.summary)}}</div>` : ''}}
             `;
-            
+
             div.addEventListener('click', () => selectEndpoint(path, method, operation));
-            
+
             return div;
         }}
 
@@ -856,9 +856,9 @@ pub fn generate_static_hosting_code(
             const safePathSelector = CSS.escape ? CSS.escape(path) : path.replace(/[\\"]/g, '\\$&');
             const safeMethodSelector = CSS.escape ? CSS.escape(method) : method.replace(/[\\"]/g, '\\$&');
             document.querySelector(`[data-path="${{safePathSelector}}"][data-method="${{safeMethodSelector}}"]`).classList.add('active');
-            
+
             currentEndpoint = {{ path, method, operation }};
-            
+
             // Update request panel
             updateRequestPanel(path, method, operation);
         }}
@@ -869,11 +869,11 @@ pub fn generate_static_hosting_code(
             document.getElementById('current-method').className = `method-badge method-${{escapeHtml(method)}}`;
             document.getElementById('current-endpoint').textContent = path;
             document.getElementById('current-description').textContent = operation.summary || operation.description || '';
-            
+
             // Generate request form
             const formContainer = document.getElementById('request-form');
             formContainer.innerHTML = generateRequestForm(path, method, operation);
-            
+
             // Add form event listeners
             const sendButton = document.getElementById('send-request');
             if (sendButton) {{
@@ -884,7 +884,7 @@ pub fn generate_static_hosting_code(
         // Generate request form
         function generateRequestForm(path, method, operation) {{
             let html = '';
-            
+
             // Path parameters
             const pathParams = operation.parameters?.filter(p => p.in === 'path') || [];
             if (pathParams.length > 0) {{
@@ -894,7 +894,7 @@ pub fn generate_static_hosting_code(
                         ${{pathParams.map(param => `
                             <div class="param-row">
                                 <label class="param-label">${{escapeHtml(param.name)}}</label>
-                                <input type="text" class="input-field" data-param="path" data-name="${{escapeHtml(param.name)}}" 
+                                <input type="text" class="input-field" data-param="path" data-name="${{escapeHtml(param.name)}}"
                                        placeholder="${{escapeHtml(param.description || param.name)}}" ${{param.required ? 'required' : ''}}>
                                 <span class="param-type">${{escapeHtml(param.schema?.type || 'string')}}</span>
                             </div>
@@ -902,7 +902,7 @@ pub fn generate_static_hosting_code(
                     </div>
                 `;
             }}
-            
+
             // Query parameters
             const queryParams = operation.parameters?.filter(p => p.in === 'query') || [];
             if (queryParams.length > 0) {{
@@ -912,7 +912,7 @@ pub fn generate_static_hosting_code(
                         ${{queryParams.map(param => `
                             <div class="param-row">
                                 <label class="param-label">${{escapeHtml(param.name)}}</label>
-                                <input type="text" class="input-field" data-param="query" data-name="${{escapeHtml(param.name)}}" 
+                                <input type="text" class="input-field" data-param="query" data-name="${{escapeHtml(param.name)}}"
                                        placeholder="${{escapeHtml(param.description || param.name)}}" ${{param.required ? 'required' : ''}}>
                                 <span class="param-type">${{escapeHtml(param.schema?.type || 'string')}}</span>
                             </div>
@@ -920,12 +920,12 @@ pub fn generate_static_hosting_code(
                     </div>
                 `;
             }}
-            
+
             // Request body
             if (operation.requestBody) {{
                 const content = operation.requestBody.content;
                 const jsonSchema = content['application/json']?.schema;
-                
+
                 html += `
                     <div class="form-section">
                         <h3>Request Body</h3>
@@ -935,7 +935,7 @@ pub fn generate_static_hosting_code(
                     </div>
                 `;
             }}
-            
+
             // Send button
             html += `
                 <div class="form-section">
@@ -944,14 +944,14 @@ pub fn generate_static_hosting_code(
                     </button>
                 </div>
             `;
-            
+
             return html;
         }}
 
         // Resolve schema reference
         function resolveSchemaRef(schemaOrRef) {{
             if (!schemaOrRef) return null;
-            
+
             // If it's a reference, resolve it
             if (schemaOrRef['$ref']) {{
                 const refPath = schemaOrRef['$ref'];
@@ -960,7 +960,7 @@ pub fn generate_static_hosting_code(
                     return apiSpec?.components?.schemas?.[schemaName] || null;
                 }}
             }}
-            
+
             // Otherwise return as-is
             return schemaOrRef;
         }}
@@ -969,7 +969,7 @@ pub fn generate_static_hosting_code(
         function generateExampleFromSchema(schemaOrRef) {{
             const schema = resolveSchemaRef(schemaOrRef);
             if (!schema) return {{}};
-            
+
             if (schema.example) return schema.example;
             if (schema.properties) {{
                 const example = {{}};
@@ -980,7 +980,7 @@ pub fn generate_static_hosting_code(
                         // For nullable types, use the non-null type for the example
                         propType = propType.find(t => t !== 'null') || propType[0];
                     }}
-                    
+
                     if (propType === 'string') {{
                         example[key] = prop.example || `example_${{key}}`;
                     }} else if (propType === 'number' || propType === 'integer') {{
@@ -1006,7 +1006,7 @@ pub fn generate_static_hosting_code(
                 }});
                 return example;
             }}
-            
+
             return {{}};
         }}
 
@@ -1016,11 +1016,11 @@ pub fn generate_static_hosting_code(
             const originalText = sendButton.innerHTML;
             sendButton.innerHTML = '<span class="spinner"></span> Sending...';
             sendButton.disabled = true;
-            
+
             try {{
                 // Build URL
                 let url = window.location.origin + '{}' + path;
-                
+
                 // Replace path parameters
                 const pathParams = document.querySelectorAll('[data-param="path"]');
                 pathParams.forEach(input => {{
@@ -1028,7 +1028,7 @@ pub fn generate_static_hosting_code(
                         url = url.replace(`{{${{input.dataset.name}}}}`, encodeURIComponent(input.value));
                     }}
                 }});
-                
+
                 // Add query parameters
                 const queryParams = new URLSearchParams();
                 document.querySelectorAll('[data-param="query"]').forEach(input => {{
@@ -1036,11 +1036,11 @@ pub fn generate_static_hosting_code(
                         queryParams.append(input.dataset.name, input.value);
                     }}
                 }});
-                
+
                 if (queryParams.toString()) {{
                     url += '?' + queryParams.toString();
                 }}
-                
+
                 // Build request options
                 const options = {{
                     method: method.toUpperCase(),
@@ -1048,12 +1048,12 @@ pub fn generate_static_hosting_code(
                         'Content-Type': 'application/json',
                     }}
                 }};
-                
+
                 // Add authorization header if token exists
                 if (jwtToken) {{
                     options.headers['Authorization'] = `Bearer ${{jwtToken}}`;
                 }}
-                
+
                 // Add request body
                 const bodyEditor = document.getElementById('request-body');
                 if (bodyEditor && bodyEditor.value.trim()) {{
@@ -1063,11 +1063,11 @@ pub fn generate_static_hosting_code(
                         throw new Error('Invalid JSON in request body');
                     }}
                 }}
-                
+
                 // Make request
                 const response = await fetch(url, options);
                 const responseData = await response.text();
-                
+
                 // Parse response
                 let parsedData;
                 try {{
@@ -1075,10 +1075,10 @@ pub fn generate_static_hosting_code(
                 }} catch (e) {{
                     parsedData = responseData;
                 }}
-                
+
                 // Show response
                 showResponse(response, parsedData, response.headers);
-                
+
             }} catch (error) {{
                 console.error('Request failed:', error);
                 showError(error.message);
@@ -1093,18 +1093,18 @@ pub fn generate_static_hosting_code(
             const panel = document.getElementById('response-panel');
             const statusEl = document.getElementById('response-status');
             const bodyEl = document.getElementById('response-body');
-            
+
             panel.style.display = 'block';
-            
+
             // Update status
-            const statusClass = response.status < 300 ? 'status-2xx' : 
+            const statusClass = response.status < 300 ? 'status-2xx' :
                                response.status < 500 ? 'status-4xx' : 'status-5xx';
             statusEl.className = `response-status ${{statusClass}}`;
             statusEl.textContent = `${{response.status}} ${{response.statusText}}`;
-            
+
             // Update body
             bodyEl.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-            
+
             // Store response data for copying
             window.lastResponse = {{ body: data, headers: Object.fromEntries(headers.entries()) }};
         }}
@@ -1115,9 +1115,9 @@ pub fn generate_static_hosting_code(
             // Use CSS.escape to safely escape selector values
             const safeTabSelector = CSS.escape ? CSS.escape(tab) : tab.replace(/[\\"]/g, '\\$&');
             document.querySelector(`[data-tab="${{safeTabSelector}}"]`).classList.add('active');
-            
+
             const bodyEl = document.getElementById('response-body');
-            
+
             if (tab === 'headers' && window.lastResponse) {{
                 bodyEl.textContent = JSON.stringify(window.lastResponse.headers, null, 2);
             }} else if (tab === 'body' && window.lastResponse) {{
@@ -1141,12 +1141,12 @@ pub fn generate_static_hosting_code(
         function filterEndpoints() {{
             const query = document.getElementById('endpoint-search').value.toLowerCase();
             const endpoints = document.querySelectorAll('.endpoint-item');
-            
+
             endpoints.forEach(endpoint => {{
                 const path = endpoint.dataset.path.toLowerCase();
                 const method = endpoint.dataset.method.toLowerCase();
                 const text = endpoint.textContent.toLowerCase();
-                
+
                 if (path.includes(query) || method.includes(query) || text.includes(query)) {{
                     endpoint.style.display = 'block';
                 }} else {{
@@ -1171,7 +1171,7 @@ pub fn generate_static_hosting_code(
 </html>"#,
                 stringify!(#service_name),
                 stringify!(#service_name),
-                format!("{}{}/openapi.json", #base_path, #docs_path),
+                "./docs/openapi.json",
                 #base_path
             )
         }
