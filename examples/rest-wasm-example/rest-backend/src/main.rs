@@ -2,7 +2,6 @@ mod simple_auth;
 
 use anyhow::Result;
 use std::collections::HashMap;
-use std::future::IntoFuture;
 use std::sync::{Arc, Mutex};
 use tower_http::cors::{Any, CorsLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -234,7 +233,7 @@ async fn main() -> Result<()> {
     let service = UserServiceImpl { state };
 
     // Build router
-    let api_router = UserServiceBuilder::new(service)
+    let app = UserServiceBuilder::new(service)
         .auth_provider(auth_provider)
         .build();
 
@@ -244,15 +243,14 @@ async fn main() -> Result<()> {
         .allow_methods(Any)
         .allow_headers(Any);
 
-    let app = api_router.layer(cors);
+    let app = app.layer(cors);
 
     let addr = "127.0.0.1:3000";
     tracing::info!("Server running at http://{}", addr);
     tracing::info!("API docs at http://{}/api/v1/docs", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    let server = axum::serve(listener, app.into_make_service());
-    server.into_future().await?;
+    axum::serve(listener, app).await?;
 
     Ok(())
 }

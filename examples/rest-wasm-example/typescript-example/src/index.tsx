@@ -1,7 +1,7 @@
 import { render } from 'solid-js/web';
 import { createSignal, Show, For } from 'solid-js';
-import * as api from './generated/services.gen';
-import type { User, UsersResponse, CreateUserRequest, Task, TasksResponse, CreateTaskRequest } from './generated/types.gen';
+import * as api from './generated';
+import type { User, UsersResponse, CreateUserRequest, Task, TasksResponse, CreateTaskRequest } from './generated';
 
 // API configuration
 const API_BASE_URL = window.location.origin + '/api/v1';

@@ -51,8 +51,8 @@ The app will be available at http://localhost:3001.
 The generated client provides named methods with full type safety:
 
 ```typescript
-import * as api from './generated/services.gen';
-import type { User, CreateUserRequest } from './generated/types.gen';
+import * as api from './generated';
+import type { User, CreateUserRequest } from './generated';
 
 // Make type-safe API calls with named methods
 const response = await api.getUsers({
@@ -87,8 +87,7 @@ const createResponse = await api.postUsers({
 
 ## Generated Files
 
-- `src/generated/types.gen.ts` - All TypeScript types from OpenAPI schemas
-- `src/generated/services.gen.ts` - The API client with all endpoints
+- `src/generated/` - Generated TypeScript client with types and API methods
 
 ## Authentication
 
