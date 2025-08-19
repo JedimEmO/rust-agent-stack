@@ -125,10 +125,14 @@ pub fn generate_openrpc_code(
                 );
                 quote! {
                     let (schema, defs) = #fn_name();
-                    schemas.insert(#type_name.to_string(), schema);
+                    // Sanitize the type name by removing spaces
+                    let sanitized_name = #type_name.to_string().replace(" ", "");
+                    schemas.insert(sanitized_name, schema);
                     // Merge extracted defs into the main schemas collection
                     for (def_name, def_schema) in defs {
-                        schemas.insert(def_name, def_schema);
+                        // Also sanitize def names
+                        let sanitized_def_name = def_name.replace(" ", "");
+                        schemas.insert(sanitized_def_name, def_schema);
                     }
                 }
             }
@@ -316,8 +320,10 @@ pub fn generate_openrpc_code(
 
                 // Add request parameter only if not unit type
                 if method.request_type_name != "()" {
+                    // Sanitize the type name for schema reference
+                    let sanitized_request_type = method.request_type_name.replace(" ", "");
                     // Get the schema for the request type to generate an example
-                    let example = if let Some(schema) = schemas.get(&method.request_type_name) {
+                    let example = if let Some(schema) = schemas.get(&sanitized_request_type) {
                         #generate_example_fn_name(schema, &schemas)
                     } else {
                         json!({"example": "value"})
@@ -325,12 +331,11 @@ pub fn generate_openrpc_code(
 
                     params.push(json!({
                         "name": "params",
-                        "description": format!("Request parameters of type {}", method.request_type_name),
+                        "summary": format!("Request parameters of type {}", method.request_type_name),
                         "required": true,
                         "schema": {
-                            "$ref": format!("#/components/schemas/{}", method.request_type_name)
-                        },
-                        "example": example
+                            "$ref": format!("#/components/schemas/{}", sanitized_request_type)
+                        }
                     }));
                 }
 
@@ -350,15 +355,19 @@ pub fn generate_openrpc_code(
                 // Generate example pairing for the method
                 let mut examples = vec![];
                 if method.request_type_name != "()" {
+                    // Sanitize type names for schema lookups
+                    let sanitized_request_type = method.request_type_name.replace(" ", "");
+                    let sanitized_response_type = method.response_type_name.replace(" ", "");
+                    
                     // Get the schema for the request type to generate an example
-                    let request_example = if let Some(schema) = schemas.get(&method.request_type_name) {
+                    let request_example = if let Some(schema) = schemas.get(&sanitized_request_type) {
                         #generate_example_fn_name(schema, &schemas)
                     } else {
                         json!({"example": "value"})
                     };
 
                     let response_example = if method.response_type_name != "()" {
-                        if let Some(schema) = schemas.get(&method.response_type_name) {
+                        if let Some(schema) = schemas.get(&sanitized_response_type) {
                             #generate_example_fn_name(schema, &schemas)
                         } else {
                             json!({"example": "response"})
@@ -375,25 +384,24 @@ pub fn generate_openrpc_code(
                     }));
                 }
 
+                // Sanitize the response type name for schema reference
+                let sanitized_response_type = method.response_type_name.replace(" ", "");
+                
                 let mut method_obj = json!({
                     "name": method.name,
-                    "description": format!("Calls the {} method", method.name),
+                    "summary": format!("Calls the {} method", method.name),
                     "params": params,
                     "result": {
                         "name": "result",
                         "description": format!("Response of type {}", method.response_type_name),
                         "schema": {
-                            "$ref": format!("#/components/schemas/{}", method.response_type_name)
+                            "$ref": format!("#/components/schemas/{}", sanitized_response_type)
                         }
                     }
                 });
 
-                // Add examples if available
-                if !examples.is_empty() {
-                    if let Some(obj) = method_obj.as_object_mut() {
-                        obj.insert("examples".to_string(), json!(examples));
-                    }
-                }
+                // Note: Examples are intentionally omitted as they're optional in OpenRPC
+                // and can cause validation issues with some validators
 
                 // Add extensions to the method object
                 if let Some(obj) = method_obj.as_object_mut() {
