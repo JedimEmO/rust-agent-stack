@@ -639,12 +639,71 @@
     <script>
         // HTML escape function to prevent XSS
         function escapeHtml(unsafe) {
+            // Convert to string if not already
+            if (typeof unsafe !== 'string') {
+                unsafe = String(unsafe || '');
+            }
             return unsafe
                 .replace(/&/g, "&amp;")
                 .replace(/</g, "&lt;")
                 .replace(/>/g, "&gt;")
                 .replace(/"/g, "&quot;")
                 .replace(/'/g, "&#039;");
+        }
+        
+        // Get type string from a property schema
+        function getTypeString(prop) {
+            if (!prop) return 'any';
+            
+            // Direct type
+            if (prop.type) {
+                if (typeof prop.type === 'string') {
+                    return prop.type;
+                }
+                if (Array.isArray(prop.type)) {
+                    return prop.type.join(' | ');
+                }
+            }
+            
+            // Handle anyOf (typically used for Option<T>)
+            if (prop.anyOf && Array.isArray(prop.anyOf)) {
+                const types = prop.anyOf.map(schema => {
+                    if (schema.type === 'null') return 'null';
+                    if (schema.type) return schema.type;
+                    if (schema.$ref) {
+                        const refName = schema.$ref.split('/').pop();
+                        return refName;
+                    }
+                    return 'object';
+                });
+                // For Option<T>, show as "T | null" or "T?"
+                if (types.includes('null') && types.length === 2) {
+                    const nonNullType = types.find(t => t !== 'null');
+                    return `${nonNullType}?`;
+                }
+                return types.join(' | ');
+            }
+            
+            // Handle oneOf
+            if (prop.oneOf && Array.isArray(prop.oneOf)) {
+                const types = prop.oneOf.map(schema => {
+                    if (schema.type) return schema.type;
+                    if (schema.$ref) {
+                        const refName = schema.$ref.split('/').pop();
+                        return refName;
+                    }
+                    return 'object';
+                });
+                return types.join(' | ');
+            }
+            
+            // Handle reference
+            if (prop.$ref) {
+                const refName = prop.$ref.split('/').pop();
+                return refName;
+            }
+            
+            return 'any';
         }
 
         // Global state
@@ -865,7 +924,7 @@
                             </div>
                             ${Object.entries(resolvedSchema.properties).map(([key, prop]) => {
                                 const required = resolvedSchema.required && resolvedSchema.required.includes(key);
-                                const propType = prop.type || 'any';
+                                const propType = getTypeString(prop);
                                 const description = prop.description || '';
                                 return `
                                     <div style="margin-bottom: 0.5rem; padding-left: 1rem;">
@@ -966,12 +1025,19 @@
             
             if (schema.example) return schema.example;
             
-            // Handle oneOf/anyOf schemas - pick first variant
+            // Handle oneOf/anyOf schemas
             if (schema.oneOf && schema.oneOf.length > 0) {
-                return generateExampleFromSchema(schema.oneOf[0]);
+                // Pick first non-null variant for better examples
+                const nonNullSchema = schema.oneOf.find(s => s.type !== 'null');
+                return generateExampleFromSchema(nonNullSchema || schema.oneOf[0]);
             }
             
             if (schema.anyOf && schema.anyOf.length > 0) {
+                // For Option<T> (anyOf with null), generate example of T rather than null
+                const nonNullSchema = schema.anyOf.find(s => s.type !== 'null');
+                if (nonNullSchema) {
+                    return generateExampleFromSchema(nonNullSchema);
+                }
                 return generateExampleFromSchema(schema.anyOf[0]);
             }
             
