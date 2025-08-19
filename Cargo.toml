@@ -111,10 +111,7 @@ features = ["full"]
 
 [workspace.dependencies.opentelemetry_sdk]
 version = "0.28"
-features = [
-    "rt-tokio",
-    "metrics",
-]
+features = ["rt-tokio", "metrics"]
 
 [workspace.dependencies.rand_core]
 version = "0.6"
@@ -122,11 +119,7 @@ features = ["std"]
 
 [workspace.dependencies.reqwest]
 version = "0.12"
-features = [
-    "json",
-    "multipart",
-    "stream",
-]
+features = ["json", "multipart", "stream", "default-tls"]
 
 [workspace.dependencies.serde]
 version = "1.0"
@@ -134,10 +127,7 @@ features = ["derive"]
 
 [workspace.dependencies.syn]
 version = "2.0"
-features = [
-    "full",
-    "extra-traits",
-]
+features = ["full", "extra-traits"]
 
 [workspace.dependencies.tokio]
 version = "1.0"
@@ -157,7 +147,4 @@ features = ["env-filter"]
 
 [workspace.dependencies.uuid]
 version = "1.11"
-features = [
-    "v4",
-    "serde",
-]
+features = ["v4", "serde"]
