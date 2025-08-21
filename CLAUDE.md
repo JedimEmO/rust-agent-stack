@@ -139,9 +139,22 @@ rest_service!({
         POST WITH_PERMISSIONS(["admin"]) users(CreateUserRequest) -> User,
         GET WITH_PERMISSIONS(["user"]) users/{id: String}() -> User,
         DELETE WITH_PERMISSIONS(["admin"]) users/{id: String}() -> (),
+        
+        // Query parameters support (NEW!)
+        GET UNAUTHORIZED search/users ? q: String & limit: Option<u32> & offset: Option<u32> () -> UsersResponse,
+        GET WITH_PERMISSIONS(["user"]) posts ? tag: Option<String> & published: Option<bool> () -> PostsResponse,
+        POST WITH_PERMISSIONS(["admin"]) users ? notify: bool (CreateUserRequest) -> User,
+        GET UNAUTHORIZED users/{id: String}/posts ? page: u32 & per_page: Option<u32> () -> PostsResponse,
     ]
 });
 ```
+
+#### Query Parameters Syntax
+- Place query params after path: `path/{param} ? query1: Type & query2: Type`
+- Separate multiple params with `&` (matching URL query string syntax)
+- Required params: `param: Type`
+- Optional params: `param: Option<Type>`
+- Works with auth, path params, and request bodies
 
 ### File Service
 ```rust

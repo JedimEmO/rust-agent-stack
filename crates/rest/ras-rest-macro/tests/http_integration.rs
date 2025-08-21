@@ -143,6 +143,12 @@ rest_service!({
 
         // OR syntax demonstration endpoint
         POST WITH_PERMISSIONS(["admin", "moderator"] | ["super_user"]) admin_action(()) -> String,
+
+        // Query parameter test endpoints
+        GET UNAUTHORIZED search/users ? q: String & limit: Option<u32> & offset: Option<u32> () -> UsersResponse,
+        GET WITH_PERMISSIONS(["user"]) search/posts ? tag: Option<String> & published: Option<bool> () -> PostsResponse,
+        POST WITH_PERMISSIONS(["admin"]) users/batch ? notify: bool (CreateUserRequest) -> User,
+        GET UNAUTHORIZED posts/paginated ? page: u32 & per_page: Option<u32> () -> PostsResponse,
     ]
 });
 
@@ -318,6 +324,107 @@ impl TestRestServiceTrait for TestRestServiceImpl {
         _request: (),
     ) -> ras_rest_core::RestResult<String> {
         Ok(RestResponse::ok("Admin action completed".to_string()))
+    }
+
+    // Query parameter test implementations
+    async fn get_search_users(
+        &self,
+        q: String,
+        limit: Option<u32>,
+        offset: Option<u32>,
+    ) -> ras_rest_core::RestResult<UsersResponse> {
+        let limit = limit.unwrap_or(10);
+        let offset = offset.unwrap_or(0);
+
+        // Filter users based on search query
+        let users = vec![User {
+            id: Some(1),
+            name: format!("User matching '{}' at offset {}", q, offset),
+            email: "search@example.com".to_string(),
+            permissions: vec!["user".to_string()],
+        }];
+
+        Ok(RestResponse::ok(UsersResponse {
+            users: users.into_iter().take(limit as usize).collect(),
+            total: 1,
+        }))
+    }
+
+    async fn get_search_posts(
+        &self,
+        _user: &AuthenticatedUser,
+        tag: Option<String>,
+        published: Option<bool>,
+    ) -> ras_rest_core::RestResult<PostsResponse> {
+        let mut posts = vec![Post {
+            id: Some(1),
+            user_id: 1,
+            title: "Test Post".to_string(),
+            content: "Content".to_string(),
+            tags: vec!["test".to_string()],
+            published: true,
+        }];
+
+        // Filter by tag if provided
+        if let Some(tag) = tag {
+            posts.retain(|p| p.tags.contains(&tag));
+        }
+
+        // Filter by published status if provided
+        if let Some(published) = published {
+            posts.retain(|p| p.published == published);
+        }
+
+        Ok(RestResponse::ok(PostsResponse {
+            total: posts.len(),
+            posts,
+        }))
+    }
+
+    async fn post_users_batch(
+        &self,
+        _user: &AuthenticatedUser,
+        notify: bool,
+        request: CreateUserRequest,
+    ) -> ras_rest_core::RestResult<User> {
+        // The notify parameter could trigger notifications
+        if notify {
+            // In a real implementation, send notification
+            tracing::info!("Notification would be sent for new user: {}", request.name);
+        }
+
+        Ok(RestResponse::created(User {
+            id: Some(rand::thread_rng().gen_range(100..999)),
+            name: request.name,
+            email: request.email,
+            permissions: request.permissions,
+        }))
+    }
+
+    async fn get_posts_paginated(
+        &self,
+        page: u32,
+        per_page: Option<u32>,
+    ) -> ras_rest_core::RestResult<PostsResponse> {
+        let per_page = per_page.unwrap_or(20);
+        let start = (page - 1) * per_page;
+
+        // Generate paginated posts
+        let posts: Vec<Post> = (start..start + per_page)
+            .map(|i| Post {
+                id: Some(i as i32),
+                user_id: 1,
+                title: format!("Post {}", i),
+                content: format!("Content for post {}", i),
+                tags: vec!["paginated".to_string()],
+                published: true,
+            })
+            .collect();
+
+        Ok(RestResponse::ok(PostsResponse {
+            total: 100, // Mock total
+            posts,
+        }))
     }
 }
 
@@ -946,4 +1053,139 @@ async fn test_generated_rest_client() {
         .delete_users_by_id_with_timeout(resp.users[0].id.unwrap(), None)
         .await
         .expect("failed to get users");
+}
+
+#[tokio::test]
+async fn test_query_parameters() {
+    let (base_url, _handle) = create_rest_test_server().await;
+
+    // Test search with required and optional query parameters
+    let response = make_rest_request(
+        reqwest::Method::GET,
+        &format!("{}/api/v1/search/users?q=john&limit=5&offset=10", base_url),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), 200);
+    let users_response: UsersResponse = response.json().await.unwrap();
+    assert!(users_response.users[0].name.contains("john"));
+    assert!(users_response.users[0].name.contains("offset 10"));
+
+    // Test with only required parameter
+    let response = make_rest_request(
+        reqwest::Method::GET,
+        &format!("{}/api/v1/search/users?q=jane", base_url),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), 200);
+    let users_response: UsersResponse = response.json().await.unwrap();
+    assert!(users_response.users[0].name.contains("jane"));
+
+    // Test missing required parameter - should fail
+    let response = make_rest_request(
+        reqwest::Method::GET,
+        &format!("{}/api/v1/search/users?limit=5", base_url),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), 400); // Bad Request
+}
+
+#[tokio::test]
+async fn test_query_parameters_with_auth() {
+    let (base_url, _handle) = create_rest_test_server().await;
+
+    // Test search posts with optional query parameters and authentication
+    let response = make_rest_request(
+        reqwest::Method::GET,
+        &format!("{}/api/v1/search/posts?tag=test&published=true", base_url),
+        None,
+        Some("user-token"),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), 200);
+    let posts_response: PostsResponse = response.json().await.unwrap();
+    assert!(posts_response.posts[0].tags.contains(&"test".to_string()));
+    assert_eq!(posts_response.posts[0].published, true);
+
+    // Test with no query parameters - all optional
+    let response = make_rest_request(
+        reqwest::Method::GET,
+        &format!("{}/api/v1/search/posts", base_url),
+        None,
+        Some("user-token"),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), 200);
+}
+
+#[tokio::test]
+async fn test_query_parameters_with_body() {
+    let (base_url, _handle) = create_rest_test_server().await;
+
+    // Test POST with query parameter and request body
+    let response = make_rest_request(
+        reqwest::Method::POST,
+        &format!("{}/api/v1/users/batch?notify=true", base_url),
+        Some(json!({
+            "name": "New User",
+            "email": "new@example.com",
+            "permissions": ["user"]
+        })),
+        Some("admin-token"),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), 201);
+    let user: User = response.json().await.unwrap();
+    assert_eq!(user.name, "New User");
+}
+
+#[tokio::test]
+async fn test_query_parameters_with_path_params() {
+    let (base_url, _handle) = create_rest_test_server().await;
+
+    // Test endpoint with query parameters
+    let response = make_rest_request(
+        reqwest::Method::GET,
+        &format!("{}/api/v1/posts/paginated?page=2&per_page=5", base_url),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), 200);
+    let posts_response: PostsResponse = response.json().await.unwrap();
+    assert_eq!(posts_response.posts.len(), 5);
+    assert_eq!(posts_response.posts[0].user_id, 1);
+
+    // Test with only required query parameter
+    let response = make_rest_request(
+        reqwest::Method::GET,
+        &format!("{}/api/v1/posts/paginated?page=1", base_url),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), 200);
+    let posts_response: PostsResponse = response.json().await.unwrap();
+    assert_eq!(posts_response.posts.len(), 20); // Default per_page
 }

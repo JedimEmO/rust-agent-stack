@@ -76,6 +76,10 @@ rest_service!({
         POST WITH_PERMISSIONS(["user"]) users/{user_id: String}/tasks(CreateTaskRequest) -> Task,
         PUT WITH_PERMISSIONS(["user"]) users/{user_id: String}/tasks/{task_id: String}(UpdateTaskRequest) -> Task,
         DELETE WITH_PERMISSIONS(["user"]) users/{user_id: String}/tasks/{task_id: String}() -> (),
+
+        // New endpoints with query parameters for pagination and search
+        GET UNAUTHORIZED search/users ? q: String & limit: Option<u32> & offset: Option<u32> () -> UsersResponse,
+        GET WITH_PERMISSIONS(["user"]) users/{user_id: String}/tasks/search ? completed: Option<bool> & page: Option<u32> & per_page: Option<u32> () -> TasksResponse,
     ]
 });
 

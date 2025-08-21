@@ -91,6 +91,7 @@ struct EndpointDefinition {
     auth: AuthRequirement,
     path: String,
     path_params: Vec<PathParam>,
+    query_params: Vec<QueryParam>,
     request_type: Option<Type>,
     response_type: Type,
     handler_name: Ident,
@@ -129,6 +130,12 @@ impl HttpMethod {
 
 #[derive(Debug)]
 struct PathParam {
+    name: Ident,
+    param_type: Type,
+}
+
+#[derive(Debug)]
+struct QueryParam {
     name: Ident,
     param_type: Type,
 }
@@ -363,6 +370,33 @@ impl Parse for EndpointDefinition {
 
         let path = format!("/{}", path_segments.join("/"));
 
+        // Parse query parameters if present (? param1:Type & param2:Type)
+        let mut query_params = Vec::new();
+        if input.peek(Token![?]) {
+            let _ = input.parse::<Token![?]>()?;
+            
+            // Parse first query parameter
+            let param_name = input.parse::<Ident>()?;
+            let _ = input.parse::<Token![:]>()?;
+            let param_type = input.parse::<Type>()?;
+            query_params.push(QueryParam {
+                name: param_name,
+                param_type,
+            });
+            
+            // Parse additional query parameters separated by &
+            while input.peek(Token![&]) && !input.peek2(syn::token::Paren) && !input.peek2(Token![->]) {
+                let _ = input.parse::<Token![&]>()?;
+                let param_name = input.parse::<Ident>()?;
+                let _ = input.parse::<Token![:]>()?;
+                let param_type = input.parse::<Type>()?;
+                query_params.push(QueryParam {
+                    name: param_name,
+                    param_type,
+                });
+            }
+        }
+
         // Generate handler name based on method and path
         let method_str = method.as_str().to_lowercase();
         let path_str = handler_name_parts.join("_");
@@ -390,6 +424,7 @@ impl Parse for EndpointDefinition {
             auth,
             path,
             path_params,
+            query_params,
             request_type,
             response_type,
             handler_name,
@@ -446,6 +481,13 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
             params.push(quote! { #param_name: #param_type });
         }
 
+        // Add query parameters
+        for query_param in &endpoint.query_params {
+            let param_name = &query_param.name;
+            let param_type = &query_param.param_type;
+            params.push(quote! { #param_name: #param_type });
+        }
+
         // Add request body parameter if present
         if let Some(request_type) = &endpoint.request_type {
             params.push(quote! { request: #request_type });
@@ -458,8 +500,29 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
 
     // No more individual handler fields - we'll store the service implementation instead
 
+    // Generate query parameter structs at module level
+    let query_structs: Vec<proc_macro2::TokenStream> = service_def.endpoints.iter().enumerate().map(|(idx, endpoint)| {
+        if !endpoint.query_params.is_empty() {
+            let struct_name = quote::format_ident!("QueryParams{}", idx);
+            let fields = endpoint.query_params.iter().map(|param| {
+                let name = &param.name;
+                let param_type = &param.param_type;
+                quote! { pub #name: #param_type }
+            });
+            quote! {
+                #[derive(serde::Deserialize)]
+                #[allow(dead_code)]
+                pub(super) struct #struct_name {
+                    #(#fields),*
+                }
+            }
+        } else {
+            quote! {}
+        }
+    }).collect();
+
     // Generate route registration
-    let route_registrations = service_def.endpoints.iter().map(|endpoint| {
+    let route_registrations = service_def.endpoints.iter().enumerate().map(|(idx, endpoint)| {
         let method_routing = endpoint.method.as_axum_method();
         let path = &endpoint.path;
         let handler_name = &endpoint.handler_name;
@@ -469,9 +532,9 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         };
         let method_str = endpoint.method.as_str();
 
-        // Generate the axum handler based on endpoint configuration
-        let axum_handler = generate_axum_handler(endpoint);
-        let handler_body = generate_handler_body(endpoint, &handler_name, method_str, path);
+        // Generate the axum handler based on endpoint configuration using the idx for the QueryParams struct
+        let axum_handler = generate_axum_handler(endpoint, idx);
+        let handler_body = generate_handler_body(endpoint, &handler_name, method_str, path, idx);
 
         // Generate permission groups code for quote
         let permission_groups_code = if permission_groups.is_empty() {
@@ -544,6 +607,16 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
 
         #static_hosting_code
 
+        // Define query parameter structs
+        #[cfg(feature = "server")]
+        use self::query_params::*;
+        
+        #[cfg(feature = "server")]
+        mod query_params {
+            use serde::Deserialize;
+            #(#query_structs)*
+        }
+
         #[cfg(feature = "server")]
         impl<T: #service_trait_name> #builder_name<T> {
             /// Create a new builder with the service implementation
@@ -612,7 +685,7 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
     Ok(output)
 }
 
-fn generate_axum_handler(endpoint: &EndpointDefinition) -> proc_macro2::TokenStream {
+fn generate_axum_handler(endpoint: &EndpointDefinition, idx: usize) -> proc_macro2::TokenStream {
     let mut extractors = Vec::new();
 
     // Always add headers extraction for tracking purposes
@@ -626,6 +699,14 @@ fn generate_axum_handler(endpoint: &EndpointDefinition) -> proc_macro2::TokenStr
         } else {
             extractors.push(quote! { axum::extract::Path(path_params): axum::extract::Path<(#(#path_param_types),*)> });
         }
+    }
+
+    // Add query parameter extractors
+    if !endpoint.query_params.is_empty() {
+        let struct_name = quote::format_ident!("QueryParams{}", idx);
+        extractors.push(quote! { 
+            axum::extract::Query(query_params): axum::extract::Query<query_params::#struct_name>
+        });
     }
 
     // Add request body extractor if present - use Result to handle JSON parsing errors
@@ -643,6 +724,7 @@ fn generate_handler_body(
     handler_name: &Ident,
     method: &str,
     path: &str,
+    _idx: usize,
 ) -> proc_macro2::TokenStream {
     // Handle authentication if required
     match &endpoint.auth {
@@ -658,6 +740,12 @@ fn generate_handler_body(
                     let idx = syn::Index::from(i);
                     args.push(quote! { path_params.#idx });
                 }
+            }
+
+            // Add query parameters
+            for query_param in &endpoint.query_params {
+                let param_name = &query_param.name;
+                args.push(quote! { query_params.#param_name });
             }
 
             // Handle JSON body extraction with error handling
@@ -744,6 +832,12 @@ fn generate_handler_body(
                     let idx = syn::Index::from(i);
                     args.push(quote! { path_params.#idx });
                 }
+            }
+
+            // Add query parameters
+            for query_param in &endpoint.query_params {
+                let param_name = &query_param.name;
+                args.push(quote! { query_params.#param_name });
             }
 
             // Handle JSON body extraction with error handling

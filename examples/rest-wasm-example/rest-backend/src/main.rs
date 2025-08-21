@@ -185,6 +185,62 @@ impl UserServiceTrait for UserServiceImpl {
 
         Ok(RestResponse::ok(()))
     }
+
+    async fn get_search_users(
+        &self,
+        q: String,
+        limit: Option<u32>,
+        offset: Option<u32>,
+    ) -> RestResult<UsersResponse> {
+        let users = self.state.users.lock().unwrap();
+        let limit = limit.unwrap_or(10) as usize;
+        let offset = offset.unwrap_or(0) as usize;
+        
+        // Filter users by search query
+        let filtered: Vec<User> = users
+            .values()
+            .filter(|u| {
+                u.name.to_lowercase().contains(&q.to_lowercase()) ||
+                u.email.to_lowercase().contains(&q.to_lowercase())
+            })
+            .skip(offset)
+            .take(limit)
+            .cloned()
+            .collect();
+        
+        Ok(RestResponse::ok(UsersResponse {
+            users: filtered,
+            total: users.len(),
+        }))
+    }
+
+    async fn get_users_by_user_id_tasks_search(
+        &self,
+        _user: &AuthenticatedUser,
+        user_id: String,
+        completed: Option<bool>,
+        page: Option<u32>,
+        per_page: Option<u32>,
+    ) -> RestResult<TasksResponse> {
+        let tasks = self.state.tasks.lock().unwrap();
+        let page = page.unwrap_or(1);
+        let per_page = per_page.unwrap_or(10) as usize;
+        let skip = ((page - 1) * per_page as u32) as usize;
+        
+        let user_tasks = tasks.get(&user_id).cloned().unwrap_or_default();
+        
+        // Filter by completed status if provided
+        let filtered: Vec<Task> = user_tasks
+            .into_iter()
+            .filter(|task| {
+                completed.map_or(true, |c| task.completed == c)
+            })
+            .skip(skip)
+            .take(per_page)
+            .collect();
+        
+        Ok(RestResponse::ok(TasksResponse { tasks: filtered }))
+    }
 }
 
 #[tokio::main]

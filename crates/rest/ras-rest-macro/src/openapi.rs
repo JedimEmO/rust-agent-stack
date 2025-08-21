@@ -57,6 +57,13 @@ pub fn generate_openapi_code(
             let param_type_str = quote!(#param_type).to_string();
             unique_types.insert(param_type_str, quote!(#param_type));
         }
+
+        // Add query parameter types
+        for query_param in &endpoint.query_params {
+            let param_type = &query_param.param_type;
+            let param_type_str = quote!(#param_type).to_string();
+            unique_types.insert(param_type_str, quote!(#param_type));
+        }
     }
 
     // Generate schema generation functions
@@ -101,7 +108,7 @@ pub fn generate_openapi_code(
         .map(|type_name| {
             if type_name == "()" {
                 quote! {
-                    schemas.insert("()".to_string(), serde_json::json!({
+                    schemas.insert("Unit".to_string(), serde_json::json!({
                         "type": "null",
                         "description": "Unit type (empty response)"
                     }));
@@ -143,12 +150,30 @@ pub fn generate_openapi_code(
             let request_type_name = if let Some(request_type) = &endpoint.request_type {
                 quote!(#request_type).to_string()
             } else {
-                "()".to_string()
+                "Unit".to_string()
             };
 
             let response_type = &endpoint.response_type;
+            let response_type_name = if quote!(#response_type).to_string() == "()" {
+                "Unit".to_string()
+            } else {
+                quote!(#response_type).to_string()
+            };
             let path_param_infos: Vec<TokenStream> = endpoint
                 .path_params
+                .iter()
+                .map(|param| {
+                    let param_name = param.name.to_string();
+                    let param_type = &param.param_type;
+                    let param_type_str = quote!(#param_type).to_string();
+                    quote! {
+                        (#param_name.to_string(), #param_type_str.to_string())
+                    }
+                })
+                .collect();
+
+            let query_param_infos: Vec<TokenStream> = endpoint
+                .query_params
                 .iter()
                 .map(|param| {
                     let param_name = param.name.to_string();
@@ -167,8 +192,9 @@ pub fn generate_openapi_code(
                     auth_required: #auth_required,
                     permissions: vec![#(#permissions.to_string()),*],
                     request_type_name: #request_type_name.to_string(),
-                    response_type_name: stringify!(#response_type).to_string(),
+                    response_type_name: #response_type_name.to_string(),
                     path_params: vec![#(#path_param_infos),*] as Vec<(String, String)>,
+                    query_params: vec![#(#query_param_infos),*] as Vec<(String, String)>,
                 }
             }
         })
@@ -185,6 +211,7 @@ pub fn generate_openapi_code(
             request_type_name: String,
             response_type_name: String,
             path_params: Vec<(String, String)>, // (name, type)
+            query_params: Vec<(String, String)>, // (name, type)
         }
 
         // Helper function to fix schema references and flatten nested definitions
@@ -367,25 +394,43 @@ pub fn generate_openapi_code(
                     }
                 });
 
-                // Add parameters (path parameters)
-                if !endpoint.path_params.is_empty() {
-                    let mut parameters = vec![];
-                    for (param_name, param_type) in &endpoint.path_params {
-                        parameters.push(json!({
-                            "name": param_name,
-                            "in": "path",
-                            "required": true,
-                            "description": format!("Path parameter of type {}", param_type),
-                            "schema": {
-                                "$ref": format!("#/components/schemas/{}", param_type)
-                            }
-                        }));
-                    }
+                // Add parameters (path and query parameters)
+                let mut parameters = vec![];
+                
+                // Add path parameters
+                for (param_name, param_type) in &endpoint.path_params {
+                    parameters.push(json!({
+                        "name": param_name,
+                        "in": "path",
+                        "required": true,
+                        "description": format!("Path parameter of type {}", param_type),
+                        "schema": {
+                            "$ref": format!("#/components/schemas/{}", param_type)
+                        }
+                    }));
+                }
+                
+                // Add query parameters
+                for (param_name, param_type) in &endpoint.query_params {
+                    // Check if the type is Option<T> to determine if it's required
+                    let is_optional = param_type.starts_with("Option <") || param_type.starts_with("Option<");
+                    parameters.push(json!({
+                        "name": param_name,
+                        "in": "query",
+                        "required": !is_optional,
+                        "description": format!("Query parameter of type {}", param_type),
+                        "schema": {
+                            "$ref": format!("#/components/schemas/{}", param_type)
+                        }
+                    }));
+                }
+                
+                if !parameters.is_empty() {
                     operation["parameters"] = json!(parameters);
                 }
 
                 // Add request body for non-GET methods
-                if endpoint.method != "GET" && endpoint.request_type_name != "()" {
+                if endpoint.method != "GET" && endpoint.request_type_name != "Unit" {
                     operation["requestBody"] = json!({
                         "description": "Request body",
                         "required": true,
@@ -474,6 +519,12 @@ pub fn generate_schema_impl_checks(service_def: &ServiceDefinition) -> TokenStre
         // Add path parameter types
         for path_param in &endpoint.path_params {
             let param_type = &path_param.param_type;
+            unique_types.insert(quote!(#param_type).to_string(), quote!(#param_type));
+        }
+
+        // Add query parameter types
+        for query_param in &endpoint.query_params {
+            let param_type = &query_param.param_type;
             unique_types.insert(quote!(#param_type).to_string(), quote!(#param_type));
         }
     }
