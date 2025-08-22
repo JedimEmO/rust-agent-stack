@@ -74,8 +74,7 @@ fn test_error_on_all_handlers_missing() {
     use test_service::*;
 
     // Create a service builder with no handlers configured
-    let builder = TestServiceBuilder::new("/api")
-        .auth_provider(TestAuthProvider);
+    let builder = TestServiceBuilder::new("/api").auth_provider(TestAuthProvider);
 
     // This should return an error with all handlers missing
     let result = builder.build();

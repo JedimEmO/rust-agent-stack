@@ -62,7 +62,7 @@ fn main() {
     // Uncomment the following code to see the panic in action:
     /*
     println!("1. Attempting to build service with only 'add' and 'subtract' handlers configured...");
-    
+
     let incomplete_builder = CalculatorServiceBuilder::new("/api/calc")
         .auth_provider(DemoAuthProvider)
         .add_handler(|req| async move {
@@ -78,28 +78,38 @@ fn main() {
     */
 
     println!("Building service with ALL handlers configured...");
-    
+
     let complete_builder = CalculatorServiceBuilder::new("/api/calc")
         .auth_provider(DemoAuthProvider)
         .add_handler(|req| async move {
-            Ok(CalculateResponse { result: req.a + req.b })
+            Ok(CalculateResponse {
+                result: req.a + req.b,
+            })
         })
         .subtract_handler(|req| async move {
-            Ok(CalculateResponse { result: req.a - req.b })
+            Ok(CalculateResponse {
+                result: req.a - req.b,
+            })
         })
         .multiply_handler(|_user, req| async move {
-            Ok(CalculateResponse { result: req.a * req.b })
+            Ok(CalculateResponse {
+                result: req.a * req.b,
+            })
         })
         .divide_handler(|_user, req| async move {
             if req.b == 0 {
                 Err("Division by zero".into())
             } else {
-                Ok(CalculateResponse { result: req.a / req.b })
+                Ok(CalculateResponse {
+                    result: req.a / req.b,
+                })
             }
         });
 
     // This should succeed
-    let _router = complete_builder.build().expect("Failed to build complete service");
+    let _router = complete_builder
+        .build()
+        .expect("Failed to build complete service");
     println!("✓ Build succeeded! All handlers are configured.");
 
     println!("\nSummary:");
@@ -107,6 +117,6 @@ fn main() {
     println!("- If any handler is missing, build() will panic with a helpful error message");
     println!("- This ensures that services are fully configured before deployment");
     println!("- The error message lists exactly which handlers are missing");
-    
+
     println!("\nTo see the panic behavior, uncomment the code block in the source file.");
 }

@@ -358,7 +358,7 @@ pub fn generate_openrpc_code(
                     // Sanitize type names for schema lookups
                     let sanitized_request_type = method.request_type_name.replace(" ", "");
                     let sanitized_response_type = method.response_type_name.replace(" ", "");
-                    
+
                     // Get the schema for the request type to generate an example
                     let request_example = if let Some(schema) = schemas.get(&sanitized_request_type) {
                         #generate_example_fn_name(schema, &schemas)
@@ -386,7 +386,7 @@ pub fn generate_openrpc_code(
 
                 // Sanitize the response type name for schema reference
                 let sanitized_response_type = method.response_type_name.replace(" ", "");
-                
+
                 let mut method_obj = json!({
                     "name": method.name,
                     "summary": format!("Calls the {} method", method.name),

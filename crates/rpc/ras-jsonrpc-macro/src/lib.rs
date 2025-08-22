@@ -425,7 +425,7 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
         let method_name = &method.name;
         let field_name = quote::format_ident!("{}_handler", method_name);
         let method_str = method_name.to_string();
-        
+
         quote! {
             if self.#field_name.is_none() {
                 missing_handlers.push(#method_str);

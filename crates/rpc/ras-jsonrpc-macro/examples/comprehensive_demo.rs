@@ -179,7 +179,10 @@ fn main() {
         .admin_action_handler(|_user, action| async move {
             Ok(StatusResponse {
                 success: true,
-                message: format!("Admin action {} on {} executed", action.action, action.target),
+                message: format!(
+                    "Admin action {} on {} executed",
+                    action.action, action.target
+                ),
             })
         });
     let _api_router = api_builder.build().expect("Failed to build ApiService");
@@ -218,7 +221,9 @@ fn main() {
                 username: request.username,
             })
         });
-    let _doc_router = doc_builder.build().expect("Failed to build DocumentedService");
+    let _doc_router = doc_builder
+        .build()
+        .expect("Failed to build DocumentedService");
 
     // Generate OpenRPC document
     let doc_openrpc = documented_service::generate_documentedservice_openrpc();

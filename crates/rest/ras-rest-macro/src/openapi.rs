@@ -66,6 +66,22 @@ pub fn generate_openapi_code(
         }
     }
 
+    // Helper function to sanitize type names for OpenAPI component names
+    let sanitize_type_name = |type_name: &str| -> String {
+        if type_name == "()" {
+            "Unit".to_string()
+        } else {
+            type_name
+                .replace("::", "_")
+                .replace("<", "_")
+                .replace(">", "")
+                .replace(" ", "")
+                .replace(",", "_")
+                .replace("(", "_")
+                .replace(")", "_")
+        }
+    };
+
     // Generate schema generation functions
     let schema_fns: Vec<TokenStream> = unique_types
         .iter()
@@ -73,14 +89,11 @@ pub fn generate_openapi_code(
             if type_name == "()" {
                 quote! {} // Skip unit type, we'll handle it separately
             } else {
+                let sanitized_name = sanitize_type_name(type_name);
                 let fn_name = quote::format_ident!(
                     "_generate_schema_for_{}_{}",
                     service_name.to_string().to_lowercase(),
-                    type_name
-                        .replace("::", "_")
-                        .replace("<", "_")
-                        .replace(">", "_")
-                        .replace(" ", "_")
+                    sanitized_name
                 );
                 quote! {
                     #[cfg(feature = "server")]
@@ -95,6 +108,7 @@ pub fn generate_openapi_code(
 
                         // Post-process schema to make it more Swagger UI friendly
                         normalize_nullable_properties(&mut schema_value);
+                        fix_option_types(&mut schema_value);
                         schema_value
                     }
                 }
@@ -114,17 +128,14 @@ pub fn generate_openapi_code(
                     }));
                 }
             } else {
+                let sanitized_name = sanitize_type_name(type_name);
                 let fn_name = quote::format_ident!(
                     "_generate_schema_for_{}_{}",
                     service_name.to_string().to_lowercase(),
-                    type_name
-                        .replace("::", "_")
-                        .replace("<", "_")
-                        .replace(">", "_")
-                        .replace(" ", "_")
+                    sanitized_name
                 );
                 quote! {
-                    schemas.insert(#type_name.to_string(), #fn_name());
+                    schemas.insert(#sanitized_name.to_string(), #fn_name());
                 }
             }
         })
@@ -148,7 +159,7 @@ pub fn generate_openapi_code(
             };
 
             let request_type_name = if let Some(request_type) = &endpoint.request_type {
-                quote!(#request_type).to_string()
+                sanitize_type_name(&quote!(#request_type).to_string())
             } else {
                 "Unit".to_string()
             };
@@ -157,7 +168,7 @@ pub fn generate_openapi_code(
             let response_type_name = if quote!(#response_type).to_string() == "()" {
                 "Unit".to_string()
             } else {
-                quote!(#response_type).to_string()
+                sanitize_type_name(&quote!(#response_type).to_string())
             };
             let path_param_infos: Vec<TokenStream> = endpoint
                 .path_params
@@ -165,7 +176,7 @@ pub fn generate_openapi_code(
                 .map(|param| {
                     let param_name = param.name.to_string();
                     let param_type = &param.param_type;
-                    let param_type_str = quote!(#param_type).to_string();
+                    let param_type_str = sanitize_type_name(&quote!(#param_type).to_string());
                     quote! {
                         (#param_name.to_string(), #param_type_str.to_string())
                     }
@@ -178,7 +189,7 @@ pub fn generate_openapi_code(
                 .map(|param| {
                     let param_name = param.name.to_string();
                     let param_type = &param.param_type;
-                    let param_type_str = quote!(#param_type).to_string();
+                    let param_type_str = sanitize_type_name(&quote!(#param_type).to_string());
                     quote! {
                         (#param_name.to_string(), #param_type_str.to_string())
                     }
@@ -330,6 +341,92 @@ pub fn generate_openapi_code(
             }
         }
 
+        // Helper function to fix Option types that use anyOf with null or type arrays
+        #[cfg(feature = "server")]
+        fn fix_option_types(value: &mut serde_json::Value) {
+            match value {
+                serde_json::Value::Object(obj) => {
+                    // Fix type: ["string", "null"] pattern
+                    if let Some(type_val) = obj.get("type") {
+                        if let serde_json::Value::Array(type_array) = type_val {
+                            if type_array.len() == 2 {
+                                let null_value = serde_json::Value::String("null".to_string());
+                                if type_array.contains(&null_value) {
+                                    // Find the non-null type
+                                    let non_null_type = type_array.iter()
+                                        .find(|t| **t != null_value)
+                                        .cloned();
+
+                                    if let Some(actual_type) = non_null_type {
+                                        // Replace with the non-null type and add nullable: true
+                                        obj.insert("type".to_string(), actual_type);
+                                        obj.insert("nullable".to_string(), serde_json::Value::Bool(true));
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Fix anyOf that includes {"type": "null"}
+                    if let Some(any_of) = obj.get_mut("anyOf") {
+                        if let serde_json::Value::Array(any_of_array) = any_of {
+                            // Check if this is an Option type pattern (one real type + null)
+                            if any_of_array.len() == 2 {
+                                let has_null = any_of_array.iter().any(|item| {
+                                    if let serde_json::Value::Object(item_obj) = item {
+                                        if let Some(type_val) = item_obj.get("type") {
+                                            if let serde_json::Value::String(type_str) = type_val {
+                                                return type_str == "null";
+                                            }
+                                        }
+                                    }
+                                    false
+                                });
+
+                                if has_null {
+                                    // Find the non-null schema
+                                    let non_null_schema = any_of_array.iter().find(|item| {
+                                        if let serde_json::Value::Object(item_obj) = item {
+                                            if let Some(type_val) = item_obj.get("type") {
+                                                if let serde_json::Value::String(type_str) = type_val {
+                                                    return type_str != "null";
+                                                }
+                                            }
+                                            // If it has other properties besides type, it's not the null schema
+                                            return item_obj.len() > 1 || !item_obj.contains_key("type");
+                                        }
+                                        true
+                                    }).cloned();
+
+                                    if let Some(schema) = non_null_schema {
+                                        // Replace anyOf with the non-null schema and add nullable
+                                        obj.remove("anyOf");
+                                        if let serde_json::Value::Object(schema_obj) = schema {
+                                            for (key, val) in schema_obj {
+                                                obj.insert(key, val);
+                                            }
+                                        }
+                                        obj.insert("nullable".to_string(), serde_json::Value::Bool(true));
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Recursively process all nested objects
+                    for (_, v) in obj.iter_mut() {
+                        fix_option_types(v);
+                    }
+                }
+                serde_json::Value::Array(arr) => {
+                    for item in arr.iter_mut() {
+                        fix_option_types(item);
+                    }
+                }
+                _ => {}
+            }
+        }
+
         // Generate schema functions for each type
         #(#schema_fns)*
 
@@ -354,6 +451,7 @@ pub fn generate_openapi_code(
             let mut final_schemas = serde_json::Map::new();
             for (name, mut schema) in schemas {
                 fix_schema_refs(&mut schema, &mut final_schemas);
+                fix_option_types(&mut schema);
                 final_schemas.insert(name, schema);
             }
 
@@ -396,7 +494,7 @@ pub fn generate_openapi_code(
 
                 // Add parameters (path and query parameters)
                 let mut parameters = vec![];
-                
+
                 // Add path parameters
                 for (param_name, param_type) in &endpoint.path_params {
                     parameters.push(json!({
@@ -409,11 +507,11 @@ pub fn generate_openapi_code(
                         }
                     }));
                 }
-                
+
                 // Add query parameters
                 for (param_name, param_type) in &endpoint.query_params {
                     // Check if the type is Option<T> to determine if it's required
-                    let is_optional = param_type.starts_with("Option <") || param_type.starts_with("Option<");
+                    let is_optional = param_type.starts_with("Option_") || param_type.starts_with("Option<") || param_type.starts_with("Option <");
                     parameters.push(json!({
                         "name": param_name,
                         "in": "query",
@@ -424,7 +522,7 @@ pub fn generate_openapi_code(
                         }
                     }));
                 }
-                
+
                 if !parameters.is_empty() {
                     operation["parameters"] = json!(parameters);
                 }

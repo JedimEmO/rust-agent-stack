@@ -374,7 +374,7 @@ impl Parse for EndpointDefinition {
         let mut query_params = Vec::new();
         if input.peek(Token![?]) {
             let _ = input.parse::<Token![?]>()?;
-            
+
             // Parse first query parameter
             let param_name = input.parse::<Ident>()?;
             let _ = input.parse::<Token![:]>()?;
@@ -383,9 +383,12 @@ impl Parse for EndpointDefinition {
                 name: param_name,
                 param_type,
             });
-            
+
             // Parse additional query parameters separated by &
-            while input.peek(Token![&]) && !input.peek2(syn::token::Paren) && !input.peek2(Token![->]) {
+            while input.peek(Token![&])
+                && !input.peek2(syn::token::Paren)
+                && !input.peek2(Token![->])
+            {
                 let _ = input.parse::<Token![&]>()?;
                 let param_name = input.parse::<Ident>()?;
                 let _ = input.parse::<Token![:]>()?;
@@ -501,25 +504,30 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
     // No more individual handler fields - we'll store the service implementation instead
 
     // Generate query parameter structs at module level
-    let query_structs: Vec<proc_macro2::TokenStream> = service_def.endpoints.iter().enumerate().map(|(idx, endpoint)| {
-        if !endpoint.query_params.is_empty() {
-            let struct_name = quote::format_ident!("QueryParams{}", idx);
-            let fields = endpoint.query_params.iter().map(|param| {
-                let name = &param.name;
-                let param_type = &param.param_type;
-                quote! { pub #name: #param_type }
-            });
-            quote! {
-                #[derive(serde::Deserialize)]
-                #[allow(dead_code)]
-                pub(super) struct #struct_name {
-                    #(#fields),*
+    let query_structs: Vec<proc_macro2::TokenStream> = service_def
+        .endpoints
+        .iter()
+        .enumerate()
+        .map(|(idx, endpoint)| {
+            if !endpoint.query_params.is_empty() {
+                let struct_name = quote::format_ident!("QueryParams{}", idx);
+                let fields = endpoint.query_params.iter().map(|param| {
+                    let name = &param.name;
+                    let param_type = &param.param_type;
+                    quote! { pub #name: #param_type }
+                });
+                quote! {
+                    #[derive(serde::Deserialize)]
+                    #[allow(dead_code)]
+                    pub(super) struct #struct_name {
+                        #(#fields),*
+                    }
                 }
+            } else {
+                quote! {}
             }
-        } else {
-            quote! {}
-        }
-    }).collect();
+        })
+        .collect();
 
     // Generate route registration
     let route_registrations = service_def.endpoints.iter().enumerate().map(|(idx, endpoint)| {
@@ -610,7 +618,7 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
         // Define query parameter structs
         #[cfg(feature = "server")]
         use self::query_params::*;
-        
+
         #[cfg(feature = "server")]
         mod query_params {
             use serde::Deserialize;
@@ -704,7 +712,7 @@ fn generate_axum_handler(endpoint: &EndpointDefinition, idx: usize) -> proc_macr
     // Add query parameter extractors
     if !endpoint.query_params.is_empty() {
         let struct_name = quote::format_ident!("QueryParams{}", idx);
-        extractors.push(quote! { 
+        extractors.push(quote! {
             axum::extract::Query(query_params): axum::extract::Query<query_params::#struct_name>
         });
     }
