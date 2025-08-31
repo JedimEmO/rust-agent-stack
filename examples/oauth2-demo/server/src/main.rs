@@ -159,6 +159,7 @@ fn create_session_service(config: &AppConfig) -> Result<SessionService> {
         jwt_secret: config.jwt_secret.clone(),
         jwt_ttl: chrono::Duration::hours(24),
         refresh_enabled: true,
+        enforce_active_sessions: false,
         algorithm: jsonwebtoken::Algorithm::HS256,
     };
 

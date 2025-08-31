@@ -45,6 +45,7 @@ pub struct SessionConfig {
     pub jwt_secret: String,
     pub jwt_ttl: Duration,
     pub refresh_enabled: bool,
+    pub enforce_active_sessions: bool,
     pub algorithm: Algorithm,
 }
 
@@ -54,18 +55,17 @@ impl Default for SessionConfig {
             jwt_secret: "change-me-in-production".to_string(),
             jwt_ttl: Duration::hours(24),
             refresh_enabled: true,
+            enforce_active_sessions: true,
             algorithm: Algorithm::HS256,
         }
     }
 }
-
 pub struct SessionService {
     config: SessionConfig,
     providers: Arc<RwLock<HashMap<String, Box<dyn IdentityProvider>>>>,
     active_sessions: Arc<RwLock<HashMap<String, JwtClaims>>>,
     permissions_provider: Option<Arc<dyn UserPermissions>>,
 }
-
 impl SessionService {
     pub fn new(config: SessionConfig) -> Self {
         Self {
@@ -124,8 +124,10 @@ impl SessionService {
             metadata: identity.metadata,
         };
 
-        let mut sessions = self.active_sessions.write().await;
-        sessions.insert(jti.clone(), claims.clone());
+        if self.config.enforce_active_sessions {
+            let mut sessions = self.active_sessions.write().await;
+            sessions.insert(jti.clone(), claims.clone());
+        }
 
         let token = encode(
             &Header::new(self.config.algorithm),
@@ -143,9 +145,11 @@ impl SessionService {
             &Validation::new(self.config.algorithm),
         )?;
 
-        let sessions = self.active_sessions.read().await;
-        if !sessions.contains_key(&token_data.claims.jti) {
-            return Err(SessionError::SessionNotFound);
+        if self.config.enforce_active_sessions {
+            let sessions = self.active_sessions.read().await;
+            if !sessions.contains_key(&token_data.claims.jti) {
+                return Err(SessionError::SessionNotFound);
+            }
         }
 
         Ok(token_data.claims)

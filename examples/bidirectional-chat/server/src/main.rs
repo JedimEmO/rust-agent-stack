@@ -1486,6 +1486,7 @@ async fn main() -> Result<()> {
         jwt_secret: config.auth.jwt_secret.clone(),
         jwt_ttl: chrono::Duration::seconds(config.auth.jwt_ttl_seconds),
         refresh_enabled: config.auth.refresh_enabled,
+        enforce_active_sessions: true,
         algorithm: match config.auth.jwt_algorithm.as_str() {
             "HS256" => jsonwebtoken::Algorithm::HS256,
             "HS384" => jsonwebtoken::Algorithm::HS384,

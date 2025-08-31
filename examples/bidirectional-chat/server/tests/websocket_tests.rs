@@ -141,6 +141,7 @@ impl TestChatServer {
             jwt_secret: config.auth.jwt_secret.clone(),
             jwt_ttl: chrono::Duration::seconds(config.auth.jwt_ttl_seconds),
             refresh_enabled: config.auth.refresh_enabled,
+            enforce_active_sessions: true,
             algorithm: jsonwebtoken::Algorithm::HS256,
         };
 
