@@ -87,6 +87,24 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
                     default_timeout: self.timeout,
                 })
             }
+
+            pub fn build_with_client_builder(self, mut client_builder: ::reqwest::ClientBuilder) -> Result<#client_name, Box<dyn std::error::Error + Send + Sync>> {
+                // Timeout is not supported in WASM builds
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(timeout) = self.timeout {
+                    client_builder = client_builder.timeout(timeout);
+                }
+
+                let client = client_builder.build()?;
+
+                Ok(#client_name {
+                    client,
+                    server_url: self.server_url,
+                    base_path: #base_path.to_string(),
+                    bearer_token: None,
+                    default_timeout: self.timeout,
+                })
+            }
         }
 
         #[cfg(feature = "client")]
