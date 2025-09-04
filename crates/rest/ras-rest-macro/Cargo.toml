@@ -24,6 +24,7 @@ schemars = { workspace = true }
 
 # Server dependencies
 axum = { workspace = true, optional = true }
+axum-extra.workspace = true
 ras-auth-core = { path = "../../core/ras-auth-core", optional = true }
 ras-rest-core = { path = "../ras-rest-core", optional = true }
 async-trait = { workspace = true, optional = true }

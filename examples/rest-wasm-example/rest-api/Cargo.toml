@@ -24,6 +24,7 @@ serde-wasm-bindgen = { version = "0.6", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 axum = { workspace = true }
+axum-extra.workspace = true
 tower = { workspace = true }
 http = { workspace = true }
 reqwest = { workspace = true }

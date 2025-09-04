@@ -713,7 +713,7 @@ fn generate_axum_handler(endpoint: &EndpointDefinition, idx: usize) -> proc_macr
     if !endpoint.query_params.is_empty() {
         let struct_name = quote::format_ident!("QueryParams{}", idx);
         extractors.push(quote! {
-            axum::extract::Query(query_params): axum::extract::Query<query_params::#struct_name>
+            ::axum_extra::extract::Query(query_params): ::axum_extra::extract::Query<query_params::#struct_name>
         });
     }
 

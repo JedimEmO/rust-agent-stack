@@ -27,7 +27,7 @@ resolver = "3"
 [workspace.dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
-axum-extra = "0.9"
+axum-extra = { version = "0.10", features = ["query"] }
 base64 = "0.22"
 bon = "3.2"
 console = "0.15"
