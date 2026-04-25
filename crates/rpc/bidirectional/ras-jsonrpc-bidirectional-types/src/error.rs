@@ -86,3 +86,80 @@ impl BidirectionalError {
         Self::Custom(error.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ConnectionId;
+
+    #[test]
+    fn helpers_wrap_display_into_correct_variant() {
+        let id = ConnectionId::new();
+        assert!(
+            BidirectionalError::ConnectionNotFound(id)
+                .to_string()
+                .contains(&id.to_string())
+        );
+        assert_eq!(
+            BidirectionalError::ConnectionAlreadyExists(id).to_string(),
+            format!("Connection already exists: {id}")
+        );
+        assert_eq!(
+            BidirectionalError::SendError("oops".into()).to_string(),
+            "Failed to send message: oops"
+        );
+        assert_eq!(
+            BidirectionalError::BroadcastError {
+                topic: "t".into(),
+                reason: "r".into(),
+            }
+            .to_string(),
+            "Failed to broadcast to topic 't': r"
+        );
+        assert_eq!(
+            BidirectionalError::AuthenticationRequired.to_string(),
+            "Authentication required"
+        );
+        assert_eq!(
+            BidirectionalError::PermissionDenied("admin".into()).to_string(),
+            "Permission denied: admin"
+        );
+        assert_eq!(
+            BidirectionalError::InvalidTopic("foo".into()).to_string(),
+            "Invalid subscription topic: foo"
+        );
+        assert_eq!(
+            BidirectionalError::ConnectionClosed.to_string(),
+            "Connection closed"
+        );
+        assert_eq!(BidirectionalError::Timeout.to_string(), "Request timeout");
+        assert_eq!(
+            BidirectionalError::RpcError("nope".into()).to_string(),
+            "RPC error: nope"
+        );
+        assert_eq!(
+            BidirectionalError::InvalidResponse("garbage".into()).to_string(),
+            "Invalid response: garbage"
+        );
+        assert_eq!(
+            BidirectionalError::ConnectionError("eof".into()).to_string(),
+            "Connection error: eof"
+        );
+
+        // Constructor helpers.
+        let we = BidirectionalError::websocket("boom");
+        assert!(matches!(we, BidirectionalError::WebSocketError(ref s) if s == "boom"));
+        let ie = BidirectionalError::internal("ugh");
+        assert!(matches!(ie, BidirectionalError::InternalError(ref s) if s == "ugh"));
+        let ce = BidirectionalError::custom("plain");
+        assert!(matches!(ce, BidirectionalError::Custom(ref s) if s == "plain"));
+    }
+
+    #[test]
+    fn from_serde_json_error() {
+        let parse_err = serde_json::from_str::<serde_json::Value>("{not json}").unwrap_err();
+        let wrapped: BidirectionalError = parse_err.into();
+        assert!(matches!(wrapped, BidirectionalError::SerializationError(_)));
+        assert!(wrapped.to_string().starts_with("Serialization error:"));
+    }
+}

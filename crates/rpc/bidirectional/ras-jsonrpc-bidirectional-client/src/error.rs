@@ -232,4 +232,93 @@ mod tests {
             panic!("Expected reconnection failed error");
         }
     }
+
+    #[test]
+    fn covers_all_constructors_and_display() {
+        // Stringy constructors → matching variants and messages.
+        for (err, expected_prefix) in [
+            (
+                ClientError::invalid_request_id("rid"),
+                "Invalid request ID:",
+            ),
+            (ClientError::invalid_url("not://valid"), "Invalid URL:"),
+            (ClientError::send_failed("eof"), "Failed to send message:"),
+            (
+                ClientError::receive_failed("eof"),
+                "Failed to receive message:",
+            ),
+            (ClientError::subscription("topic"), "Subscription error:"),
+            (ClientError::configuration("bad"), "Configuration error:"),
+            (ClientError::internal("oops"), "Internal error:"),
+            (ClientError::authentication("nope"), "Authentication error:"),
+        ] {
+            let s = err.to_string();
+            assert!(
+                s.starts_with(expected_prefix),
+                "expected prefix {expected_prefix:?} in {s:?}"
+            );
+        }
+
+        // Bare variants.
+        assert_eq!(
+            ClientError::NotConnected.to_string(),
+            "Client is not connected"
+        );
+        assert_eq!(
+            ClientError::AlreadyConnected.to_string(),
+            "Client is already connected"
+        );
+    }
+
+    #[test]
+    fn from_impls_route_to_correct_variants() {
+        let json_err = serde_json::from_str::<serde_json::Value>("not json").unwrap_err();
+        assert!(matches!(ClientError::from(json_err), ClientError::Json(_)));
+
+        let bidir_err = BidirectionalError::Timeout;
+        assert!(matches!(
+            ClientError::from(bidir_err),
+            ClientError::Bidirectional(_)
+        ));
+
+        let io_err = std::io::Error::new(std::io::ErrorKind::Other, "io");
+        assert!(matches!(ClientError::from(io_err), ClientError::Io(_)));
+
+        let url_err = url::Url::parse("not a url").unwrap_err();
+        assert!(matches!(
+            ClientError::from(url_err),
+            ClientError::UrlParse(_)
+        ));
+    }
+
+    #[test]
+    fn recovery_classification_is_exhaustive_for_named_buckets() {
+        // Should reconnect → also recoverable.
+        for err in [
+            ClientError::connection("x"),
+            ClientError::receive_failed("x"),
+            ClientError::NotConnected,
+        ] {
+            assert!(err.should_reconnect());
+            assert!(err.is_recoverable());
+        }
+
+        // Recoverable but no reconnect.
+        for err in [ClientError::timeout(1), ClientError::send_failed("x")] {
+            assert!(err.is_recoverable());
+            assert!(!err.should_reconnect());
+        }
+
+        // Neither.
+        for err in [
+            ClientError::authentication("x"),
+            ClientError::AlreadyConnected,
+            ClientError::invalid_url("x"),
+            ClientError::configuration("x"),
+            ClientError::internal("x"),
+        ] {
+            assert!(!err.is_recoverable());
+            assert!(!err.should_reconnect());
+        }
+    }
 }

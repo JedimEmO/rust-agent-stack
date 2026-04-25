@@ -125,3 +125,90 @@ impl ConnectionContext {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ras_auth_core::AuthenticatedUser;
+    use std::collections::HashSet;
+
+    fn user(id: &str, perms: &[&str]) -> AuthenticatedUser {
+        AuthenticatedUser {
+            user_id: id.to_string(),
+            permissions: perms.iter().map(|s| s.to_string()).collect::<HashSet<_>>(),
+            metadata: None,
+        }
+    }
+
+    fn ctx() -> ConnectionContext {
+        let id = ConnectionId::new();
+        let (tx, _rx) = mpsc::channel(8);
+        let sender = ChannelMessageSender::new(id, tx);
+        ConnectionContext::new(id, sender)
+    }
+
+    #[tokio::test]
+    async fn channel_sender_send_propagates_and_id_round_trips() {
+        let id = ConnectionId::new();
+        let (tx, mut rx) = mpsc::channel(2);
+        let sender = ChannelMessageSender::new(id, tx);
+        assert_eq!(sender.connection_id(), id);
+
+        sender.send(BidirectionalMessage::Ping).await.unwrap();
+        let received = rx.recv().await.unwrap();
+        assert!(matches!(received, BidirectionalMessage::Ping));
+    }
+
+    #[tokio::test]
+    async fn channel_sender_returns_string_error_when_closed() {
+        let id = ConnectionId::new();
+        let (tx, rx) = mpsc::channel(1);
+        drop(rx);
+        let sender = ChannelMessageSender::new(id, tx);
+        let err = sender.send(BidirectionalMessage::Ping).await.unwrap_err();
+        assert!(!err.is_empty());
+    }
+
+    #[tokio::test]
+    async fn auth_state_round_trips() {
+        let c = ctx();
+        assert!(!c.is_authenticated().await);
+        assert!(c.get_user().await.is_none());
+        assert!(!c.has_permission("admin").await);
+
+        c.set_user(user("alice", &["admin"])).await;
+        assert!(c.is_authenticated().await);
+        assert_eq!(c.get_user().await.unwrap().user_id, "alice");
+        assert!(c.has_permission("admin").await);
+        assert!(!c.has_permission("nope").await);
+
+        c.clear_user().await;
+        assert!(!c.is_authenticated().await);
+    }
+
+    #[tokio::test]
+    async fn subscriptions_round_trip() {
+        let c = ctx();
+        assert!(c.get_subscriptions().await.is_empty());
+        assert!(!c.is_subscribed_to("t1").await);
+
+        c.subscribe("t1".into()).await;
+        c.subscribe("t2".into()).await;
+        assert!(c.is_subscribed_to("t1").await);
+        assert_eq!(c.get_subscriptions().await.len(), 2);
+
+        assert!(c.unsubscribe("t1").await);
+        assert!(!c.is_subscribed_to("t1").await);
+        // Idempotent: removing again returns false.
+        assert!(!c.unsubscribe("t1").await);
+    }
+
+    #[tokio::test]
+    async fn metadata_get_set() {
+        let c = ctx();
+        assert!(c.get_metadata("k").await.is_none());
+        c.set_metadata("k", serde_json::json!("v")).await;
+        assert_eq!(c.get_metadata("k").await.unwrap(), serde_json::json!("v"));
+        assert!(c.get_metadata("missing").await.is_none());
+    }
+}

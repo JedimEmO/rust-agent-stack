@@ -168,3 +168,89 @@ impl<T, E: std::error::Error + Send + Sync + 'static> RestResultExt<T> for Resul
             .map_err(|e| RestError::with_internal(status, msg, e))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rest_response_constructors_set_correct_status() {
+        assert_eq!(RestResponse::ok(1).status, 200);
+        assert_eq!(RestResponse::created("x").status, 201);
+        assert_eq!(RestResponse::accepted(true).status, 202);
+        let nc: RestResponse<()> = RestResponse::no_content();
+        assert_eq!(nc.status, 204);
+        assert_eq!(RestResponse::with_status(418, "tea").status, 418);
+        // Body is preserved.
+        assert_eq!(RestResponse::ok(42).body, 42);
+    }
+
+    #[test]
+    fn rest_error_constructors_set_correct_status_and_message() {
+        let cases = [
+            (RestError::bad_request("a"), 400),
+            (RestError::unauthorized("a"), 401),
+            (RestError::forbidden("a"), 403),
+            (RestError::not_found("a"), 404),
+            (RestError::conflict("a"), 409),
+            (RestError::unprocessable_entity("a"), 422),
+            (RestError::internal_server_error("a"), 500),
+            (RestError::bad_gateway("a"), 502),
+            (RestError::service_unavailable("a"), 503),
+        ];
+        for (err, expected) in cases {
+            assert_eq!(err.status, expected);
+            assert_eq!(err.message, "a");
+            assert!(err.internal_error.is_none());
+            // Display includes the status and message.
+            let s = err.to_string();
+            assert!(s.contains(&expected.to_string()));
+            assert!(s.contains("a"));
+        }
+    }
+
+    #[test]
+    fn rest_error_with_internal_carries_source() {
+        #[derive(Debug, thiserror::Error)]
+        #[error("inner failure")]
+        struct Inner;
+        let err = RestError::with_internal(503, "down", Inner);
+        assert_eq!(err.status, 503);
+        assert!(err.internal_error.is_some());
+        // source() returns the wrapped error.
+        let src = std::error::Error::source(&err).unwrap();
+        assert_eq!(src.to_string(), "inner failure");
+    }
+
+    #[test]
+    fn into_rest_error_blanket_impl() {
+        let err = std::io::Error::new(std::io::ErrorKind::Other, "io");
+        let rest = err.into_rest_error();
+        assert_eq!(rest.status, 500);
+        assert_eq!(rest.message, "Internal server error");
+        assert!(rest.internal_error.is_some());
+    }
+
+    #[test]
+    fn rest_result_ext_maps_ok_and_err() {
+        let ok: Result<i32, std::io::Error> = Ok(7);
+        let mapped: RestResult<i32> = ok.internal_server_error();
+        let resp = mapped.unwrap();
+        assert_eq!(resp.status, 200);
+        assert_eq!(resp.body, 7);
+
+        let err: Result<i32, std::io::Error> =
+            Err(std::io::Error::new(std::io::ErrorKind::Other, "x"));
+        let mapped: RestResult<i32> = err.internal_server_error();
+        let e = mapped.unwrap_err();
+        assert_eq!(e.status, 500);
+
+        // rest_error variant lets callers customize.
+        let err: Result<i32, std::io::Error> =
+            Err(std::io::Error::new(std::io::ErrorKind::Other, "x"));
+        let mapped: RestResult<i32> = err.rest_error(418, "teapot");
+        let e = mapped.unwrap_err();
+        assert_eq!(e.status, 418);
+        assert_eq!(e.message, "teapot");
+    }
+}

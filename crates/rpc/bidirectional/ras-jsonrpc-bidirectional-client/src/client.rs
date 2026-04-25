@@ -734,4 +734,88 @@ mod tests {
         assert!(!client.is_connected().await);
         assert!(client.connection_id().await.is_none());
     }
+
+    #[tokio::test]
+    async fn builder_jwt_in_query_params_and_full_setters() {
+        // Exercise every with_* setter so each path is colored. We don't
+        // auto-connect (no server), but the resulting config must reflect
+        // each option.
+        let custom = ReconnectConfig::default();
+        let client = ClientBuilder::new("ws://localhost:8080")
+            .with_jwt_token("tok".into())
+            .with_jwt_in_header(false)
+            .with_header("X-Custom", "v")
+            .with_request_timeout(Duration::from_secs(11))
+            .with_reconnect_config(custom)
+            .with_heartbeat_interval(None)
+            .with_connection_timeout(Duration::from_secs(7))
+            .with_auto_connect(false)
+            .build()
+            .await
+            .expect("build");
+
+        assert!(matches!(client.config().auth, AuthConfig::JwtParams { .. }));
+        assert_eq!(client.config().request_timeout, Duration::from_secs(11));
+        assert_eq!(client.config().connection_timeout, Duration::from_secs(7));
+        assert!(client.config().heartbeat_interval.is_none());
+        assert_eq!(
+            client.config().custom_headers.get("X-Custom"),
+            Some(&"v".to_string())
+        );
+        assert!(client.active_subscriptions().is_empty());
+        assert_eq!(client.pending_requests_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn builder_without_token_yields_no_auth() {
+        let client = ClientBuilder::new("ws://localhost:8080")
+            .build()
+            .await
+            .expect("build");
+        assert!(matches!(client.config().auth, AuthConfig::None));
+    }
+
+    #[tokio::test]
+    async fn call_notify_subscribe_unsubscribe_require_connected_state() {
+        let client = ClientBuilder::new("ws://localhost:8080")
+            .build()
+            .await
+            .expect("build");
+
+        // call → NotConnected
+        let err = client.call("m", None).await.unwrap_err();
+        assert!(matches!(err, ClientError::NotConnected));
+
+        // notify → NotConnected
+        let err = client.notify("m", None).await.unwrap_err();
+        assert!(matches!(err, ClientError::NotConnected));
+
+        // subscribe → NotConnected
+        let handler: NotificationHandler = std::sync::Arc::new(|_method: &str, _params: &Value| {});
+        let err = client.subscribe("t", handler.clone()).await.unwrap_err();
+        assert!(matches!(err, ClientError::NotConnected));
+
+        // unsubscribe → NotConnected
+        let err = client.unsubscribe("t").await.unwrap_err();
+        assert!(matches!(err, ClientError::NotConnected));
+    }
+
+    #[tokio::test]
+    async fn handler_registration_does_not_require_connected_state() {
+        let client = ClientBuilder::new("ws://localhost:8080")
+            .build()
+            .await
+            .expect("build");
+
+        let n: NotificationHandler = std::sync::Arc::new(|_, _| {});
+        let e: ConnectionEventHandler = std::sync::Arc::new(|_event| {});
+        client.on_notification("evt", n);
+        client.on_connection_event("named", e);
+
+        // cleanup_expired_requests is callable even with nothing pending.
+        client.cleanup_expired_requests().await;
+
+        // Disconnect-when-already-disconnected is a no-op success.
+        client.disconnect().await.expect("disconnect ok");
+    }
 }

@@ -80,3 +80,72 @@ impl OAuth2Config {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn provider() -> OAuth2ProviderConfig {
+        OAuth2ProviderConfig {
+            provider_id: "google".into(),
+            client_id: "cid".into(),
+            client_secret: "secret".into(),
+            authorization_endpoint: "https://x/auth".into(),
+            token_endpoint: "https://x/token".into(),
+            userinfo_endpoint: Some("https://x/info".into()),
+            redirect_uri: "https://app/cb".into(),
+            scopes: vec!["openid".into(), "email".into()],
+            auth_params: HashMap::new(),
+            use_pkce: true,
+            user_info_mapping: None,
+        }
+    }
+
+    #[test]
+    fn user_info_mapping_default_uses_oidc_field_names() {
+        let m = UserInfoMapping::default();
+        assert_eq!(m.subject_field.as_deref(), Some("sub"));
+        assert_eq!(m.email_field.as_deref(), Some("email"));
+        assert_eq!(m.name_field.as_deref(), Some("name"));
+        assert_eq!(m.picture_field.as_deref(), Some("picture"));
+    }
+
+    #[test]
+    fn oauth2_config_builder_chains_settings() {
+        let p = provider();
+        let cfg = OAuth2Config::new()
+            .add_provider(p.clone())
+            .with_state_ttl(120)
+            .with_http_timeout(7);
+        assert_eq!(cfg.state_ttl_seconds, 120);
+        assert_eq!(cfg.http_timeout_seconds, 7);
+        assert!(cfg.providers.contains_key("google"));
+    }
+
+    #[test]
+    fn provider_config_round_trips_through_serde() {
+        let p = provider();
+        let json = serde_json::to_string(&p).unwrap();
+        let parsed: OAuth2ProviderConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.provider_id, p.provider_id);
+        assert_eq!(parsed.client_id, p.client_id);
+        assert_eq!(parsed.scopes, p.scopes);
+        assert!(parsed.use_pkce);
+    }
+
+    #[test]
+    fn user_info_mapping_serde() {
+        let m = UserInfoMapping::default();
+        let json = serde_json::to_string(&m).unwrap();
+        let parsed: UserInfoMapping = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.subject_field, m.subject_field);
+    }
+
+    #[test]
+    fn defaults_are_sensible() {
+        let cfg = OAuth2Config::default();
+        assert!(cfg.providers.is_empty());
+        assert_eq!(cfg.state_ttl_seconds, 600);
+        assert_eq!(cfg.http_timeout_seconds, 30);
+    }
+}

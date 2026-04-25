@@ -353,3 +353,71 @@ impl<H: MessageHandler> WebSocketHandler<H> {
             .map_err(|e| ServerError::WebSocketError(e.to_string()))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::connection::ChannelMessageSender;
+    use ras_jsonrpc_bidirectional_types::ConnectionId;
+
+    /// A minimal MessageHandler that only implements the required method —
+    /// every other method falls through to the default impl, which is what
+    /// these tests are verifying.
+    struct PassThrough;
+
+    #[async_trait]
+    impl MessageHandler for PassThrough {
+        async fn handle_request(
+            &self,
+            _request: JsonRpcRequest,
+            _context: Arc<ConnectionContext>,
+        ) -> ServerResult<Option<JsonRpcResponse>> {
+            Ok(None)
+        }
+    }
+
+    fn ctx() -> Arc<ConnectionContext> {
+        let id = ConnectionId::new();
+        let (tx, _rx) = mpsc::channel(4);
+        let sender = ChannelMessageSender::new(id, tx);
+        Arc::new(ConnectionContext::new(id, sender))
+    }
+
+    #[tokio::test]
+    async fn default_handle_subscribe_writes_to_context() {
+        let h = PassThrough;
+        let c = ctx();
+        h.handle_subscribe(vec!["a".into(), "b".into()], c.clone())
+            .await
+            .unwrap();
+        assert!(c.is_subscribed_to("a").await);
+        assert!(c.is_subscribed_to("b").await);
+    }
+
+    #[tokio::test]
+    async fn default_handle_unsubscribe_removes_from_context() {
+        let h = PassThrough;
+        let c = ctx();
+        c.subscribe("a".into()).await;
+        c.subscribe("b".into()).await;
+        h.handle_unsubscribe(vec!["a".into()], c.clone())
+            .await
+            .unwrap();
+        assert!(!c.is_subscribed_to("a").await);
+        assert!(c.is_subscribed_to("b").await);
+    }
+
+    #[tokio::test]
+    async fn default_lifecycle_methods_succeed() {
+        let h = PassThrough;
+        let c = ctx();
+        h.on_connect(c.clone()).await.unwrap();
+        h.on_ping(c.clone()).await.unwrap();
+        h.on_pong(c.clone()).await.unwrap();
+        h.on_disconnect(c.clone(), Some("bye".into()))
+            .await
+            .unwrap();
+        // None reason path too.
+        h.on_disconnect(c, None).await.unwrap();
+    }
+}
