@@ -1,0 +1,23 @@
+[package]
+name = "playwright-jsonrpc-fixture"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[features]
+default = ["server"]
+server = ["ras-jsonrpc-macro/server"]
+client = ["ras-jsonrpc-macro/client"]
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true }
+ras-auth-core = { path = "../../../../crates/core/ras-auth-core" }
+ras-jsonrpc-core = { path = "../../../../crates/rpc/ras-jsonrpc-core" }
+ras-jsonrpc-macro = { path = "../../../../crates/rpc/ras-jsonrpc-macro" }
+ras-jsonrpc-types = { path = "../../../../crates/rpc/ras-jsonrpc-types" }
+reqwest = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }

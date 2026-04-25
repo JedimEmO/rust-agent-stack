@@ -22,6 +22,7 @@ members = [
     "examples/rest-wasm-example/rest-api",
     "examples/rest-wasm-example/rest-backend",
     "examples/wasm-ui-demo",
+    "tests/playwright/fixtures/*",
 ]
 resolver = "3"
 

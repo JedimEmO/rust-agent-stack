@@ -29,12 +29,9 @@ pub fn generate_static_hosting_code(
         return TokenStream::new();
     }
 
-    // Load the template content at macro compile time
-    const TEMPLATE_CONTENT: &str = include_str!("jsonrpc_explorer_template.html");
+    const TEMPLATE_CONTENT: &str = include_str!("api_explorer_template.html");
 
     let explorer_path_suffix = &config.explorer_path;
-    // Use path relative to explorer directory
-    let openrpc_path_js = "explorer/openrpc.json".to_string();
     let service_name_str = service_name.to_string();
     let service_name_lower = service_name_str.to_lowercase();
     let openrpc_fn_name_str = ["generate_", &service_name_lower, "_openrpc"].concat();
@@ -55,17 +52,21 @@ pub fn generate_static_hosting_code(
 
             let serve_explorer = {
                 let base_path = base_path.to_string();
-                move || async move {
-                    // Template is embedded at macro expansion time
-                    const TEMPLATE: &str = #template_lit;
+                let openrpc_path = openrpc_path.clone();
+                move || {
+                    let base_path = base_path.clone();
+                    let openrpc_path = openrpc_path.clone();
+                    async move {
+                        const TEMPLATE: &str = #template_lit;
 
-                    // Replace placeholders
-                    let html = TEMPLATE
-                        .replace("{SERVICE_NAME}", #service_name_str)
-                        .replace("{OPENRPC_PATH}", &#openrpc_path_js)
-                        .replace("{RPC_BASE_PATH}", &base_path);
+                        let html = TEMPLATE
+                            .replace("{SERVICE_NAME_JSON}", &::serde_json::to_string(#service_name_str).unwrap_or_else(|_| "\"API\"".to_string()))
+                            .replace("{PROTOCOL_JSON}", &::serde_json::to_string("jsonrpc").unwrap_or_else(|_| "\"jsonrpc\"".to_string()))
+                            .replace("{SPEC_PATH_JSON}", &::serde_json::to_string(&openrpc_path).unwrap_or_else(|_| "\"openrpc.json\"".to_string()))
+                            .replace("{API_BASE_PATH_JSON}", &::serde_json::to_string(&base_path).unwrap_or_else(|_| "\"/\"".to_string()));
 
-                    Html(html)
+                        Html(html)
+                    }
                 }
             };
 

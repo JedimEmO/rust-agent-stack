@@ -61,8 +61,11 @@ mod tests {
         assert_eq!(response.status(), 200);
 
         let content = response.text().await.unwrap();
-        assert!(content.contains("UserService JSON-RPC Explorer"));
-        assert!(content.contains("Authentication"));
+        assert!(content.contains("\"UserService\""));
+        assert!(content.contains("Bearer token"));
+        assert!(content.contains("Saved requests"));
+        assert!(content.contains("History"));
+        assert!(content.contains("\"jsonrpc\""));
 
         // Test that the OpenRPC document is accessible
         let response = reqwest::get(format!("http://{}/explorer/openrpc.json", addr))
