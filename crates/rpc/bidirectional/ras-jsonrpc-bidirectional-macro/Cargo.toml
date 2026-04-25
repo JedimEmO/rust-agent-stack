@@ -24,6 +24,7 @@ ras-jsonrpc-bidirectional-server = { path = "../ras-jsonrpc-bidirectional-server
 ras-jsonrpc-bidirectional-client = { path = "../ras-jsonrpc-bidirectional-client" }
 ras-auth-core = { path = "../../../core/ras-auth-core" }
 ras-jsonrpc-types = { path = "../../ras-jsonrpc-types" }
+ras-test-helpers = { path = "../../../test-utils/ras-test-helpers" }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -38,3 +39,8 @@ uuid = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 chrono = { workspace = true }
+criterion = { workspace = true, features = ["async_tokio"] }
+
+[[bench]]
+name = "roundtrip"
+harness = false

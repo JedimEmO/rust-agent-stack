@@ -23,3 +23,11 @@ serde_json = { workspace = true }
 ras-auth-core = { path = "../../core/ras-auth-core" }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
+ras-test-helpers = { path = "../../test-utils/ras-test-helpers" }
+axum-test = { workspace = true }
+tempfile = { workspace = true }
+criterion = { workspace = true, features = ["async_tokio"] }
+
+[[bench]]
+name = "streaming"
+harness = false

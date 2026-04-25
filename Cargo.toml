@@ -9,6 +9,7 @@ members = [
     "crates/rpc/ras-jsonrpc-macro",
     "crates/rpc/ras-jsonrpc-types",
     "crates/specs/*",
+    "crates/test-utils/*",
     "crates/tools/*",
     "examples/basic-jsonrpc/*",
     "examples/bidirectional-chat/api",
@@ -32,6 +33,7 @@ base64 = "0.22"
 bon = "3.2"
 console = "0.15"
 console_error_panic_hook = "0.1"
+criterion = "0.5"
 crossterm = "0.28"
 dashmap = "6.1"
 dialoguer = "0.11"
