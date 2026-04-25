@@ -219,7 +219,7 @@ mod tests {
 
         // Create test context
         let connection_id = ConnectionId::new();
-        let (tx, _rx) = mpsc::unbounded_channel();
+        let (tx, _rx) = mpsc::channel(1);
         let sender = crate::connection::ChannelMessageSender::new(connection_id, tx);
         let context = Arc::new(ConnectionContext::new(connection_id, sender));
 
@@ -257,5 +257,159 @@ mod tests {
         assert_eq!(response.id, Some(json!(2)));
         assert!(response.error.is_some());
         assert_eq!(response.error.unwrap().code, -32601); // METHOD_NOT_FOUND
+    }
+
+    fn test_context() -> Arc<ConnectionContext> {
+        let connection_id = ConnectionId::new();
+        let (tx, _rx) = mpsc::channel(1);
+        let sender = crate::connection::ChannelMessageSender::new(connection_id, tx);
+        Arc::new(ConnectionContext::new(connection_id, sender))
+    }
+
+    #[tokio::test]
+    async fn register_low_level_handler_returns_explicit_response() {
+        let mut router = MessageRouter::new();
+        router.register("low.echo", |req, _ctx| async move {
+            // Hand-built response — proves the low-level register path is wired.
+            Ok(req
+                .id
+                .clone()
+                .map(|id| JsonRpcResponse::success(req.params.unwrap_or(json!(null)), Some(id))))
+        });
+
+        let ctx = test_context();
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            method: "low.echo".into(),
+            params: Some(json!(42)),
+            id: Some(json!(7)),
+        };
+        let resp = router.handle_request(req, ctx).await.unwrap().unwrap();
+        assert_eq!(resp.id, Some(json!(7)));
+        assert_eq!(resp.result.unwrap(), json!(42));
+    }
+
+    #[tokio::test]
+    async fn register_notification_never_returns_response() {
+        let mut router = MessageRouter::new();
+        let counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let c2 = counter.clone();
+        router.register_notification("evt.tick", move |_req, _ctx| {
+            let c = c2.clone();
+            async move {
+                c.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Ok(())
+            }
+        });
+
+        let ctx = test_context();
+        // Even if the request has an id, the notification handler returns None.
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            method: "evt.tick".into(),
+            params: None,
+            id: Some(json!(1)),
+        };
+        assert!(router.handle_request(req, ctx).await.unwrap().is_none());
+        assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn handler_error_with_id_becomes_error_response() {
+        let mut router = MessageRouter::new();
+        router.register("explode", |_req, _ctx| async move {
+            Err::<Option<JsonRpcResponse>, _>(ServerError::Internal("kaboom".into()))
+        });
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            method: "explode".into(),
+            params: None,
+            id: Some(json!("rid")),
+        };
+        let resp = router.handle_request(req, test_context()).await.unwrap();
+        let resp = resp.unwrap();
+        assert_eq!(resp.id, Some(json!("rid")));
+        // `internal_error` constructor strips details for security; the wire
+        // message is the canonical "Internal error" string. We confirm the code
+        // and the absence of leaked detail.
+        let err = resp.error.unwrap();
+        assert_eq!(err.code, -32603);
+        assert!(!err.message.contains("kaboom"));
+    }
+
+    #[tokio::test]
+    async fn handler_error_without_id_propagates_as_err() {
+        let mut router = MessageRouter::new();
+        router.register("explode", |_req, _ctx| async move {
+            Err::<Option<JsonRpcResponse>, _>(ServerError::Internal("kaboom".into()))
+        });
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            method: "explode".into(),
+            params: None,
+            id: None,
+        };
+        let result = router.handle_request(req, test_context()).await;
+        assert!(matches!(result, Err(ServerError::Internal(_))));
+    }
+
+    #[tokio::test]
+    async fn register_value_with_notification_request_returns_none() {
+        let mut router = MessageRouter::new();
+        router.register_value("v.echo", |req, _ctx| async move {
+            Ok::<serde_json::Value, ServerError>(req.params.unwrap_or(json!(null)))
+        });
+        // No id ⇒ notification. The register_value branch should return Ok(None).
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            method: "v.echo".into(),
+            params: Some(json!(true)),
+            id: None,
+        };
+        assert!(
+            router
+                .handle_request(req, test_context())
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn register_value_handler_error_with_id_becomes_error_response() {
+        let mut router = MessageRouter::new();
+        router.register_value("v.fail", |_req, _ctx| async move {
+            Err::<serde_json::Value, ServerError>(ServerError::Internal("nope".into()))
+        });
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            method: "v.fail".into(),
+            params: None,
+            id: Some(json!(9)),
+        };
+        let resp = router.handle_request(req, test_context()).await.unwrap();
+        let resp = resp.unwrap();
+        assert_eq!(resp.id, Some(json!(9)));
+        let err = resp.error.unwrap();
+        assert_eq!(err.code, -32603);
+        assert!(!err.message.contains("nope"));
+    }
+
+    #[tokio::test]
+    async fn unknown_method_without_id_returns_no_response() {
+        let router = MessageRouter::new();
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            method: "ghost".into(),
+            params: None,
+            id: None,
+        };
+        assert!(
+            router
+                .handle_request(req, test_context())
+                .await
+                .unwrap()
+                .is_none()
+        );
     }
 }

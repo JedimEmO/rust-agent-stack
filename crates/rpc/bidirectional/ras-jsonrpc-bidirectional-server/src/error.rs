@@ -74,3 +74,66 @@ impl ServerError {
 
 /// Convenience type alias for server operation results
 pub type ServerResult<T> = Result<T, ServerError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn status_codes_per_variant() {
+        assert_eq!(
+            ServerError::AuthenticationFailed(AuthError::InvalidToken).to_status_code(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            ServerError::PermissionDenied("nope".into()).to_status_code(),
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            ServerError::ConnectionNotFound("abc".into()).to_status_code(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            ServerError::InvalidRequest("bad".into()).to_status_code(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            ServerError::HandlerNotFound("m".into()).to_status_code(),
+            StatusCode::NOT_IMPLEMENTED
+        );
+        for variant in [
+            ServerError::UpgradeFailed("x".into()),
+            ServerError::RoutingFailed("x".into()),
+            ServerError::WebSocketError("x".into()),
+            ServerError::Internal("x".into()),
+        ] {
+            assert_eq!(variant.to_status_code(), StatusCode::INTERNAL_SERVER_ERROR);
+        }
+
+        // From impls
+        let json_err = serde_json::from_str::<serde_json::Value>("not json").unwrap_err();
+        let from_json: ServerError = json_err.into();
+        assert_eq!(
+            from_json.to_status_code(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+
+        let bidir_err: BidirectionalError = BidirectionalError::SendError("e".into());
+        let from_bidir: ServerError = bidir_err.into();
+        assert_eq!(
+            from_bidir.to_status_code(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+
+        let auth_err: AuthError = AuthError::TokenExpired;
+        let from_auth: ServerError = auth_err.into();
+        assert_eq!(from_auth.to_status_code(), StatusCode::UNAUTHORIZED);
+
+        // Display formatting: spot-check each kind once.
+        assert!(
+            ServerError::UpgradeFailed("x".into())
+                .to_string()
+                .starts_with("WebSocket upgrade failed:")
+        );
+    }
+}

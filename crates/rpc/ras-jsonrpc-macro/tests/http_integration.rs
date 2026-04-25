@@ -1,7 +1,6 @@
 use rand::Rng;
 use ras_jsonrpc_core::{AuthError, AuthFuture, AuthProvider, AuthenticatedUser};
 use ras_jsonrpc_macro::jsonrpc_service;
-use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashSet;
@@ -59,12 +58,6 @@ struct ProcessingResult {
     processed_count: usize,
     errors: Vec<String>,
     success: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-struct ErrorResponse {
-    error: String,
-    details: Option<String>,
 }
 
 // Simple test auth provider

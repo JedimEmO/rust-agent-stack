@@ -85,7 +85,7 @@ impl DefaultConnectionManager {
 impl ConnectionManager for DefaultConnectionManager {
     async fn add_connection(&self, info: ConnectionInfo) -> Result<()> {
         // Create a dummy sender - real senders should be added via add_connection_with_sender
-        let (tx, _rx) = mpsc::unbounded_channel();
+        let (tx, _rx) = mpsc::channel(1);
         let sender = ChannelMessageSender::new(info.id, tx);
         self.connections.insert(info.id, (info.clone(), sender));
         info!("Added connection: {}", info.id);
@@ -185,7 +185,7 @@ impl ConnectionManager for DefaultConnectionManager {
         // Update topic subscriptions
         self.subscriptions
             .entry(topic.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(id);
 
         // Update connection subscriptions
@@ -234,7 +234,7 @@ impl ConnectionManager for DefaultConnectionManager {
                 .1
                 .send(message)
                 .await
-                .map_err(|e| ras_jsonrpc_bidirectional_types::BidirectionalError::SendError(e))?;
+                .map_err(ras_jsonrpc_bidirectional_types::BidirectionalError::SendError)?;
         } else {
             warn!("Attempted to send to non-existent connection: {}", id);
         }
@@ -340,7 +340,7 @@ impl ConnectionManager for DefaultConnectionManager {
     ) -> Result<()> {
         self.pending_requests
             .entry(connection_id)
-            .or_insert_with(HashMap::new)
+            .or_default()
             .insert(request_id, response_sender);
 
         debug!(
@@ -373,17 +373,16 @@ impl ConnectionManager for DefaultConnectionManager {
         connection_id: ConnectionId,
         response: ras_jsonrpc_types::JsonRpcResponse,
     ) -> Result<bool> {
-        if let Some(request_id) = &response.id {
-            if let Some(sender) = self
+        if let Some(request_id) = &response.id
+            && let Some(sender) = self
                 .remove_pending_request(connection_id, request_id)
                 .await?
-            {
-                if let Err(_) = sender.send(response) {
-                    warn!("Failed to send response to pending request - receiver dropped");
-                }
-                debug!("Handled pending response for connection: {}", connection_id);
-                return Ok(true);
+        {
+            if sender.send(response).is_err() {
+                warn!("Failed to send response to pending request - receiver dropped");
             }
+            debug!("Handled pending response for connection: {}", connection_id);
+            return Ok(true);
         }
         Ok(false)
     }

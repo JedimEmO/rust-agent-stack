@@ -78,3 +78,73 @@ impl UserPermissions for StaticPermissions {
         Ok(self.permissions.clone())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn vi() -> VerifiedIdentity {
+        VerifiedIdentity {
+            provider_id: "test".into(),
+            subject: "alice".into(),
+            email: Some("a@b.com".into()),
+            display_name: Some("Alice".into()),
+            metadata: None,
+        }
+    }
+
+    #[test]
+    fn identity_error_display_per_variant() {
+        assert_eq!(
+            IdentityError::InvalidCredentials.to_string(),
+            "Invalid credentials"
+        );
+        assert_eq!(
+            IdentityError::ProviderNotFound("foo".into()).to_string(),
+            "Provider not found: foo"
+        );
+        assert_eq!(
+            IdentityError::ProviderError("bad".into()).to_string(),
+            "Provider error: bad"
+        );
+        assert_eq!(
+            IdentityError::UnsupportedMethod.to_string(),
+            "Unsupported authentication method"
+        );
+        assert_eq!(
+            IdentityError::InvalidPayload.to_string(),
+            "Invalid authentication payload"
+        );
+        assert_eq!(
+            IdentityError::SessionError("expired".into()).to_string(),
+            "Session error: expired"
+        );
+
+        let parse_err = serde_json::from_str::<serde_json::Value>("not json").unwrap_err();
+        let wrapped: IdentityError = parse_err.into();
+        assert!(wrapped.to_string().starts_with("Serialization error:"));
+    }
+
+    #[tokio::test]
+    async fn noop_permissions_returns_empty() {
+        let p = NoopPermissions;
+        let perms = p.get_permissions(&vi()).await.unwrap();
+        assert!(perms.is_empty());
+    }
+
+    #[tokio::test]
+    async fn static_permissions_returns_provided_list() {
+        let p = StaticPermissions::new(vec!["a".into(), "b".into()]);
+        let perms = p.get_permissions(&vi()).await.unwrap();
+        assert_eq!(perms, vec!["a".to_string(), "b".to_string()]);
+    }
+
+    #[test]
+    fn verified_identity_serde_round_trips() {
+        let v = vi();
+        let json = serde_json::to_string(&v).unwrap();
+        let parsed: VerifiedIdentity = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.subject, "alice");
+        assert_eq!(parsed.provider_id, "test");
+    }
+}

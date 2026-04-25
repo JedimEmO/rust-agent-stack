@@ -50,3 +50,11 @@ async-trait = { workspace = true }
 axum = { workspace = true }
 ras-auth-core = { path = "../../core/ras-auth-core" }
 ras-rest-core = { path = "../ras-rest-core" }
+ras-test-helpers = { path = "../../test-utils/ras-test-helpers" }
+axum-test = { workspace = true }
+schemars = { workspace = true }
+criterion = { workspace = true, features = ["async_tokio"] }
+
+[[bench]]
+name = "dispatch"
+harness = false

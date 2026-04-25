@@ -46,3 +46,12 @@ axum = { workspace = true }
 ras-jsonrpc-core = { path = "../ras-jsonrpc-core" }
 ras-auth-core = { path = "../../core/ras-auth-core" }
 async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+ras-test-helpers = { path = "../../test-utils/ras-test-helpers" }
+axum-test = { workspace = true }
+criterion = { workspace = true, features = ["async_tokio"] }
+
+[[bench]]
+name = "dispatch"
+harness = false

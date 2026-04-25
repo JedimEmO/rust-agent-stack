@@ -202,3 +202,76 @@ impl JsonRpcError {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn jsonrpc_request_constructor_sets_version() {
+        let r = JsonRpcRequest::new(
+            "m".into(),
+            Some(serde_json::json!(1)),
+            Some(serde_json::json!("rid")),
+        );
+        assert_eq!(r.jsonrpc, "2.0");
+        assert_eq!(r.method, "m");
+    }
+
+    #[test]
+    fn jsonrpc_response_success_and_error() {
+        let s = JsonRpcResponse::success(serde_json::json!("ok"), Some(serde_json::json!(1)));
+        assert_eq!(s.jsonrpc, "2.0");
+        assert!(s.error.is_none());
+        assert_eq!(s.result, Some(serde_json::json!("ok")));
+
+        let e = JsonRpcResponse::error(JsonRpcError::parse_error(), Some(serde_json::json!(1)));
+        assert!(e.result.is_none());
+        assert_eq!(e.error.unwrap().code, error_codes::PARSE_ERROR);
+    }
+
+    #[test]
+    fn json_rpc_error_constructors_use_canonical_codes() {
+        assert_eq!(JsonRpcError::parse_error().code, error_codes::PARSE_ERROR);
+        assert_eq!(
+            JsonRpcError::invalid_request().code,
+            error_codes::INVALID_REQUEST
+        );
+        let nf = JsonRpcError::method_not_found("m");
+        assert_eq!(nf.code, error_codes::METHOD_NOT_FOUND);
+        assert!(nf.message.contains("m"));
+        assert_eq!(
+            JsonRpcError::invalid_params("bad".into()).code,
+            error_codes::INVALID_PARAMS
+        );
+        assert_eq!(
+            JsonRpcError::internal_error("e".into()).code,
+            error_codes::INTERNAL_ERROR
+        );
+        assert_eq!(
+            JsonRpcError::authentication_required().code,
+            error_codes::AUTHENTICATION_REQUIRED
+        );
+        assert_eq!(
+            JsonRpcError::token_expired().code,
+            error_codes::TOKEN_EXPIRED
+        );
+    }
+
+    #[test]
+    fn insufficient_permissions_carries_data() {
+        let err = JsonRpcError::insufficient_permissions(vec!["admin".into()], vec!["user".into()]);
+        assert_eq!(err.code, error_codes::INSUFFICIENT_PERMISSIONS);
+        let data = err.data.unwrap();
+        assert_eq!(data["required"], serde_json::json!(["admin"]));
+        assert_eq!(data["has"], serde_json::json!(["user"]));
+    }
+
+    #[test]
+    fn request_with_no_id_skips_field_in_serialization() {
+        let req = JsonRpcRequest::new("notify".into(), None, None);
+        let s = serde_json::to_string(&req).unwrap();
+        assert!(!s.contains("\"id\""));
+        assert!(!s.contains("\"params\""));
+    }
+}

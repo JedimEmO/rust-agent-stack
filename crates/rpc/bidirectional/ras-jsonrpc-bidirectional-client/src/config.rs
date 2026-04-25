@@ -337,4 +337,104 @@ mod tests {
         config.request_timeout = Duration::from_secs(0);
         assert!(config.validate().is_err());
     }
+
+    #[test]
+    fn validate_rejects_each_invalid_field() {
+        let base = ClientConfig::new("ws://localhost:8080");
+
+        let mut c = base.clone();
+        c.request_timeout = Duration::ZERO;
+        assert!(c.validate().unwrap_err().contains("Request timeout"));
+
+        let mut c = base.clone();
+        c.connection_timeout = Duration::ZERO;
+        assert!(c.validate().unwrap_err().contains("Connection timeout"));
+
+        let mut c = base.clone();
+        c.message_buffer_size = 0;
+        assert!(c.validate().unwrap_err().contains("Message buffer size"));
+
+        let mut c = base.clone();
+        c.max_pending_requests = 0;
+        assert!(c.validate().unwrap_err().contains("Max pending requests"));
+
+        let mut c = base.clone();
+        c.reconnect.backoff_multiplier = 0.0;
+        assert!(c.validate().unwrap_err().contains("Backoff multiplier"));
+
+        let mut c = base.clone();
+        c.reconnect.jitter = 1.5;
+        assert!(c.validate().unwrap_err().contains("Jitter"));
+
+        // Native build also rejects an unparseable URL.
+        let mut c = base.clone();
+        c.url = "not a url".to_string();
+        assert!(c.validate().is_err());
+    }
+
+    #[test]
+    fn connection_url_appends_amp_when_query_already_present() {
+        let cfg = ClientConfig {
+            auth: AuthConfig::JwtParams {
+                token: "tok".into(),
+            },
+            ..ClientConfig::new("ws://h/ws?x=1")
+        };
+        assert_eq!(cfg.get_connection_url(), "ws://h/ws?x=1&token=tok");
+    }
+
+    #[test]
+    fn connection_url_with_custom_params() {
+        let mut params = HashMap::new();
+        params.insert("foo".to_string(), "bar".to_string());
+        let cfg = ClientConfig {
+            auth: AuthConfig::CustomParams { params },
+            ..ClientConfig::new("ws://h/ws")
+        };
+        let url = cfg.get_connection_url();
+        assert!(url.starts_with("ws://h/ws?"));
+        assert!(url.contains("foo=bar"));
+    }
+
+    #[test]
+    fn connection_headers_with_custom_headers_variant() {
+        let mut headers = HashMap::new();
+        headers.insert("X-API-Key".to_string(), "k".to_string());
+        let cfg = ClientConfig {
+            auth: AuthConfig::CustomHeaders {
+                headers: headers.clone(),
+            },
+            ..ClientConfig::new("ws://h/ws")
+        };
+        let h = cfg.get_connection_headers();
+        assert_eq!(h.get("X-API-Key"), Some(&"k".to_string()));
+    }
+
+    #[test]
+    fn connection_url_falls_through_for_no_param_auth() {
+        let cfg = ClientConfig {
+            auth: AuthConfig::JwtHeader {
+                token: "tok".into(),
+            },
+            ..ClientConfig::new("ws://h/ws")
+        };
+        // Header-based auth must NOT mutate the URL.
+        assert_eq!(cfg.get_connection_url(), "ws://h/ws");
+    }
+
+    #[test]
+    fn calculate_delay_zero_attempt_returns_initial() {
+        let cfg = ReconnectConfig {
+            jitter: 0.0,
+            ..ReconnectConfig::default()
+        };
+        assert_eq!(cfg.calculate_delay(0), cfg.initial_delay);
+    }
+
+    #[test]
+    fn auth_config_default_via_helper() {
+        // exercises the `Default` impl + AuthConfig::default branches.
+        let _ = AuthConfig::default();
+        let _ = ReconnectConfig::default();
+    }
 }

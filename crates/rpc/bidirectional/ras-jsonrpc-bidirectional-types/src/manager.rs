@@ -184,3 +184,291 @@ pub trait ConnectionManagerExt: ConnectionManager {
 
 // Blanket implementation for all ConnectionManager types
 impl<T: ConnectionManager> ConnectionManagerExt for T {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{BidirectionalError, BroadcastMessage, ConnectionId, ConnectionInfo};
+    use ras_auth_core::AuthenticatedUser;
+    use ras_jsonrpc_types::JsonRpcResponse;
+    use std::collections::HashMap;
+    use std::collections::HashSet;
+    use std::sync::Mutex;
+    use tokio::sync::oneshot;
+
+    /// Tiny stub manager: enough state to exercise the default `connection_*`
+    /// methods and the `ConnectionManagerExt` helpers without dragging in the
+    /// full `DefaultConnectionManager`. Uses sync `Mutex` for simplicity.
+    #[derive(Default)]
+    struct StubManager {
+        conns: Mutex<HashMap<ConnectionId, ConnectionInfo>>,
+        subs: Mutex<HashMap<String, HashSet<ConnectionId>>>,
+        sent: Mutex<Vec<(ConnectionId, BidirectionalMessage)>>,
+        broadcasts: Mutex<Vec<(String, BidirectionalMessage)>>,
+    }
+
+    #[async_trait]
+    impl ConnectionManager for StubManager {
+        async fn add_connection(&self, info: ConnectionInfo) -> Result<()> {
+            self.conns.lock().unwrap().insert(info.id, info);
+            Ok(())
+        }
+        async fn remove_connection(&self, id: ConnectionId) -> Result<()> {
+            self.conns
+                .lock()
+                .unwrap()
+                .remove(&id)
+                .ok_or(BidirectionalError::ConnectionNotFound(id))?;
+            Ok(())
+        }
+        async fn get_connection(&self, id: ConnectionId) -> Result<Option<ConnectionInfo>> {
+            Ok(self.conns.lock().unwrap().get(&id).cloned())
+        }
+        async fn get_all_connections(&self) -> Result<Vec<ConnectionInfo>> {
+            Ok(self.conns.lock().unwrap().values().cloned().collect())
+        }
+        async fn get_subscribed_connections(&self, topic: &str) -> Result<Vec<ConnectionInfo>> {
+            let ids = self
+                .subs
+                .lock()
+                .unwrap()
+                .get(topic)
+                .cloned()
+                .unwrap_or_default();
+            let conns = self.conns.lock().unwrap();
+            Ok(ids.iter().filter_map(|id| conns.get(id).cloned()).collect())
+        }
+        async fn set_connection_user(
+            &self,
+            id: ConnectionId,
+            user: AuthenticatedUser,
+        ) -> Result<()> {
+            if let Some(info) = self.conns.lock().unwrap().get_mut(&id) {
+                info.set_user(user);
+                Ok(())
+            } else {
+                Err(BidirectionalError::ConnectionNotFound(id))
+            }
+        }
+        async fn clear_connection_user(&self, id: ConnectionId) -> Result<()> {
+            if let Some(info) = self.conns.lock().unwrap().get_mut(&id) {
+                info.clear_user();
+                Ok(())
+            } else {
+                Err(BidirectionalError::ConnectionNotFound(id))
+            }
+        }
+        async fn add_subscription(&self, id: ConnectionId, topic: String) -> Result<()> {
+            self.subs
+                .lock()
+                .unwrap()
+                .entry(topic.clone())
+                .or_default()
+                .insert(id);
+            if let Some(info) = self.conns.lock().unwrap().get_mut(&id) {
+                info.subscribe(topic);
+            }
+            Ok(())
+        }
+        async fn remove_subscription(&self, id: ConnectionId, topic: &str) -> Result<()> {
+            if let Some(set) = self.subs.lock().unwrap().get_mut(topic) {
+                set.remove(&id);
+            }
+            if let Some(info) = self.conns.lock().unwrap().get_mut(&id) {
+                info.unsubscribe(topic);
+            }
+            Ok(())
+        }
+        async fn get_subscriptions(&self, id: ConnectionId) -> Result<Vec<String>> {
+            Ok(self
+                .conns
+                .lock()
+                .unwrap()
+                .get(&id)
+                .map(|c| c.subscriptions.iter().cloned().collect())
+                .unwrap_or_default())
+        }
+        async fn send_to_connection(
+            &self,
+            id: ConnectionId,
+            message: BidirectionalMessage,
+        ) -> Result<()> {
+            self.sent.lock().unwrap().push((id, message));
+            Ok(())
+        }
+        async fn broadcast_to_topic(
+            &self,
+            topic: &str,
+            message: BidirectionalMessage,
+        ) -> Result<usize> {
+            let n = self
+                .subs
+                .lock()
+                .unwrap()
+                .get(topic)
+                .map(|s| s.len())
+                .unwrap_or(0);
+            self.broadcasts
+                .lock()
+                .unwrap()
+                .push((topic.to_string(), message));
+            Ok(n)
+        }
+        async fn broadcast_to_authenticated(
+            &self,
+            _message: BidirectionalMessage,
+        ) -> Result<usize> {
+            Ok(self.authenticated_connection_count().await?)
+        }
+        async fn broadcast_to_permission(
+            &self,
+            permission: &str,
+            _message: BidirectionalMessage,
+        ) -> Result<usize> {
+            Ok(self
+                .conns
+                .lock()
+                .unwrap()
+                .values()
+                .filter(|c| c.has_permission(permission))
+                .count())
+        }
+        async fn register_pending_request(
+            &self,
+            _connection_id: ConnectionId,
+            _request_id: serde_json::Value,
+            _response_sender: oneshot::Sender<JsonRpcResponse>,
+        ) -> Result<()> {
+            Ok(())
+        }
+        async fn remove_pending_request(
+            &self,
+            _connection_id: ConnectionId,
+            _request_id: &serde_json::Value,
+        ) -> Result<Option<oneshot::Sender<JsonRpcResponse>>> {
+            Ok(None)
+        }
+        async fn handle_pending_response(
+            &self,
+            _connection_id: ConnectionId,
+            _response: JsonRpcResponse,
+        ) -> Result<bool> {
+            Ok(false)
+        }
+    }
+
+    fn user(id: &str, perms: &[&str]) -> AuthenticatedUser {
+        AuthenticatedUser {
+            user_id: id.to_string(),
+            permissions: perms.iter().map(|s| s.to_string()).collect(),
+            metadata: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn default_methods_delegate_to_required_methods() {
+        let mgr = StubManager::default();
+
+        // Initially nothing is registered.
+        assert_eq!(mgr.connection_count().await.unwrap(), 0);
+        assert_eq!(mgr.authenticated_connection_count().await.unwrap(), 0);
+        assert_eq!(mgr.cleanup_stale_connections().await.unwrap(), 0);
+
+        let id1 = ConnectionId::new();
+        let id2 = ConnectionId::new();
+        mgr.add_connection(ConnectionInfo::new(id1)).await.unwrap();
+        mgr.add_connection(ConnectionInfo::new(id2)).await.unwrap();
+
+        assert!(mgr.connection_exists(id1).await.unwrap());
+        assert!(mgr.connection_exists(id2).await.unwrap());
+        assert_eq!(mgr.connection_count().await.unwrap(), 2);
+
+        // Authenticate one connection.
+        mgr.set_connection_user(id1, user("u1", &["read"]))
+            .await
+            .unwrap();
+        assert_eq!(mgr.authenticated_connection_count().await.unwrap(), 1);
+
+        // The default `add_connection_with_sender` must fall through to
+        // `add_connection`.
+        let id3 = ConnectionId::new();
+        let dummy: Box<dyn std::any::Any + Send + Sync> = Box::new(()) as _;
+        mgr.add_connection_with_sender(ConnectionInfo::new(id3), dummy)
+            .await
+            .unwrap();
+        assert!(mgr.connection_exists(id3).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn ext_helpers_route_to_correct_messages() {
+        let mgr = StubManager::default();
+        let id = ConnectionId::new();
+        mgr.add_connection(ConnectionInfo::new(id)).await.unwrap();
+        mgr.add_subscription(id, "room:1".into()).await.unwrap();
+
+        // notify_connection wraps as ServerNotification.
+        mgr.notify_connection(id, "evt", serde_json::json!({"k": 1}))
+            .await
+            .unwrap();
+        let sent = mgr.sent.lock().unwrap();
+        assert_eq!(sent.len(), 1);
+        match &sent[0].1 {
+            BidirectionalMessage::ServerNotification(n) => assert_eq!(n.method, "evt"),
+            other => panic!("unexpected: {other:?}"),
+        }
+        drop(sent);
+
+        // notify_topic broadcasts to the topic with one subscriber.
+        let n = mgr
+            .notify_topic("room:1", "msg", serde_json::json!("hi"))
+            .await
+            .unwrap();
+        assert_eq!(n, 1);
+        let bs = mgr.broadcasts.lock().unwrap();
+        assert!(matches!(
+            &bs[0].1,
+            BidirectionalMessage::Broadcast(BroadcastMessage { method, .. }) if method == "msg"
+        ));
+        drop(bs);
+
+        // ping_connection should produce a Ping payload.
+        mgr.ping_connection(id).await.unwrap();
+        let sent = mgr.sent.lock().unwrap();
+        assert!(matches!(sent.last().unwrap().1, BidirectionalMessage::Ping));
+    }
+
+    #[tokio::test]
+    async fn user_helpers_filter_and_disconnect() {
+        let mgr = StubManager::default();
+        let alice1 = ConnectionId::new();
+        let alice2 = ConnectionId::new();
+        let bob = ConnectionId::new();
+        mgr.add_connection(ConnectionInfo::new(alice1))
+            .await
+            .unwrap();
+        mgr.add_connection(ConnectionInfo::new(alice2))
+            .await
+            .unwrap();
+        mgr.add_connection(ConnectionInfo::new(bob)).await.unwrap();
+        mgr.set_connection_user(alice1, user("alice", &[]))
+            .await
+            .unwrap();
+        mgr.set_connection_user(alice2, user("alice", &[]))
+            .await
+            .unwrap();
+        mgr.set_connection_user(bob, user("bob", &[]))
+            .await
+            .unwrap();
+
+        assert_eq!(mgr.get_user_connections("alice").await.unwrap().len(), 2);
+        assert_eq!(mgr.get_user_connections("bob").await.unwrap().len(), 1);
+        assert_eq!(mgr.get_user_connections("nobody").await.unwrap().len(), 0);
+
+        let dropped = mgr.disconnect_user("alice").await.unwrap();
+        assert_eq!(dropped, 2);
+        assert!(!mgr.connection_exists(alice1).await.unwrap());
+        assert!(!mgr.connection_exists(alice2).await.unwrap());
+        // Bob unaffected.
+        assert!(mgr.connection_exists(bob).await.unwrap());
+    }
+}

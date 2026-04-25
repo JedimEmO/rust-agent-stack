@@ -292,7 +292,7 @@ fn generate_wasm_client(definition: &FileServiceDefinition) -> TokenStream {
     let wasm_methods = generate_wasm_methods(&definition.endpoints);
 
     quote! {
-        #[cfg(all(target_arch = "wasm32", feature = "wasm-client"))]
+        #[cfg(target_arch = "wasm32")]
         pub mod wasm_client {
             use super::*;
             use wasm_bindgen::prelude::*;

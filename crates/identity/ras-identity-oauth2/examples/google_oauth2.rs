@@ -51,8 +51,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let oauth2_provider = OAuth2Provider::new(oauth2_config, state_store);
 
     // Create session service
-    let session_config = SessionConfig::default();
-    let session_service = SessionService::new(session_config);
+    let session_config =
+        SessionConfig::new("oauth2-example-secret-that-is-long-enough-for-tests").unwrap();
+    let session_service = SessionService::new(session_config).unwrap();
 
     // Register OAuth2 provider with session service
     session_service

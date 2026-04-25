@@ -484,45 +484,45 @@ impl Default for Schema {
 impl Validate for Schema {
     fn validate(&self) -> OpenRpcResult<()> {
         // Validate numeric constraints
-        if let (Some(min), Some(max)) = (self.minimum, self.maximum) {
-            if min > max {
-                return Err(crate::error::OpenRpcError::validation(
-                    "minimum cannot be greater than maximum",
-                ));
-            }
+        if let (Some(min), Some(max)) = (self.minimum, self.maximum)
+            && min > max
+        {
+            return Err(crate::error::OpenRpcError::validation(
+                "minimum cannot be greater than maximum",
+            ));
         }
 
-        if let (Some(min), Some(max)) = (self.min_length, self.max_length) {
-            if min > max {
-                return Err(crate::error::OpenRpcError::validation(
-                    "minLength cannot be greater than maxLength",
-                ));
-            }
+        if let (Some(min), Some(max)) = (self.min_length, self.max_length)
+            && min > max
+        {
+            return Err(crate::error::OpenRpcError::validation(
+                "minLength cannot be greater than maxLength",
+            ));
         }
 
-        if let (Some(min), Some(max)) = (self.min_items, self.max_items) {
-            if min > max {
-                return Err(crate::error::OpenRpcError::validation(
-                    "minItems cannot be greater than maxItems",
-                ));
-            }
+        if let (Some(min), Some(max)) = (self.min_items, self.max_items)
+            && min > max
+        {
+            return Err(crate::error::OpenRpcError::validation(
+                "minItems cannot be greater than maxItems",
+            ));
         }
 
-        if let (Some(min), Some(max)) = (self.min_properties, self.max_properties) {
-            if min > max {
-                return Err(crate::error::OpenRpcError::validation(
-                    "minProperties cannot be greater than maxProperties",
-                ));
-            }
+        if let (Some(min), Some(max)) = (self.min_properties, self.max_properties)
+            && min > max
+        {
+            return Err(crate::error::OpenRpcError::validation(
+                "minProperties cannot be greater than maxProperties",
+            ));
         }
 
         // Validate multipleOf
-        if let Some(multiple_of) = self.multiple_of {
-            if multiple_of <= 0.0 {
-                return Err(crate::error::OpenRpcError::validation(
-                    "multipleOf must be greater than 0",
-                ));
-            }
+        if let Some(multiple_of) = self.multiple_of
+            && multiple_of <= 0.0
+        {
+            return Err(crate::error::OpenRpcError::validation(
+                "multipleOf must be greater than 0",
+            ));
         }
 
         // Validate pattern if present

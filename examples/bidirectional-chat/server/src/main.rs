@@ -1500,6 +1500,7 @@ async fn main() -> Result<()> {
     );
     let session_service = Arc::new(
         SessionService::new(session_config)
+            .map_err(anyhow::Error::from)?
             .with_permissions(Arc::new(ChatPermissions::new(config.admin.users.clone()))),
     );
 

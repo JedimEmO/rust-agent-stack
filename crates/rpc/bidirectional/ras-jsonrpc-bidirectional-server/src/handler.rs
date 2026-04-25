@@ -93,7 +93,8 @@ pub struct WebSocketHandler<H: MessageHandler> {
     /// Connection context
     context: Arc<ConnectionContext>,
     /// Channel for receiving messages to send to client
-    message_rx: mpsc::UnboundedReceiver<BidirectionalMessage>,
+    message_rx: mpsc::Receiver<BidirectionalMessage>,
+    max_message_size: usize,
 }
 
 impl<H: MessageHandler> WebSocketHandler<H> {
@@ -101,12 +102,14 @@ impl<H: MessageHandler> WebSocketHandler<H> {
     pub fn new(
         handler: Arc<H>,
         context: Arc<ConnectionContext>,
-        message_rx: mpsc::UnboundedReceiver<BidirectionalMessage>,
+        message_rx: mpsc::Receiver<BidirectionalMessage>,
+        max_message_size: usize,
     ) -> Self {
         Self {
             handler,
             context,
             message_rx,
+            max_message_size,
         }
     }
 
@@ -205,10 +208,22 @@ impl<H: MessageHandler> WebSocketHandler<H> {
     ) -> ServerResult<()> {
         match msg {
             Message::Text(text) => {
-                debug!("Received text message: {}", text);
+                if text.len() > self.max_message_size {
+                    warn!("Received oversized text message: {} bytes", text.len());
+                    return Err(ServerError::InvalidRequest(
+                        "Message exceeds maximum size".to_string(),
+                    ));
+                }
+                debug!("Received text message ({} bytes)", text.len());
                 self.handle_text_message(text.to_string(), socket).await
             }
             Message::Binary(data) => {
+                if data.len() > self.max_message_size {
+                    warn!("Received oversized binary message: {} bytes", data.len());
+                    return Err(ServerError::InvalidRequest(
+                        "Message exceeds maximum size".to_string(),
+                    ));
+                }
                 debug!("Received binary message ({} bytes)", data.len());
                 // Try to parse as UTF-8 text
                 match String::from_utf8(data.to_vec()) {
@@ -259,10 +274,9 @@ impl<H: MessageHandler> WebSocketHandler<H> {
         }
 
         // If neither worked, return error
-        Err(ServerError::InvalidRequest(format!(
-            "Could not parse message as JSON-RPC or bidirectional message: {}",
-            text
-        )))
+        Err(ServerError::InvalidRequest(
+            "Could not parse message as JSON-RPC or bidirectional message".to_string(),
+        ))
     }
 
     /// Handle bidirectional messages
@@ -337,5 +351,73 @@ impl<H: MessageHandler> WebSocketHandler<H> {
             .send(Message::Text(json.into()))
             .await
             .map_err(|e| ServerError::WebSocketError(e.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::connection::ChannelMessageSender;
+    use ras_jsonrpc_bidirectional_types::ConnectionId;
+
+    /// A minimal MessageHandler that only implements the required method —
+    /// every other method falls through to the default impl, which is what
+    /// these tests are verifying.
+    struct PassThrough;
+
+    #[async_trait]
+    impl MessageHandler for PassThrough {
+        async fn handle_request(
+            &self,
+            _request: JsonRpcRequest,
+            _context: Arc<ConnectionContext>,
+        ) -> ServerResult<Option<JsonRpcResponse>> {
+            Ok(None)
+        }
+    }
+
+    fn ctx() -> Arc<ConnectionContext> {
+        let id = ConnectionId::new();
+        let (tx, _rx) = mpsc::channel(4);
+        let sender = ChannelMessageSender::new(id, tx);
+        Arc::new(ConnectionContext::new(id, sender))
+    }
+
+    #[tokio::test]
+    async fn default_handle_subscribe_writes_to_context() {
+        let h = PassThrough;
+        let c = ctx();
+        h.handle_subscribe(vec!["a".into(), "b".into()], c.clone())
+            .await
+            .unwrap();
+        assert!(c.is_subscribed_to("a").await);
+        assert!(c.is_subscribed_to("b").await);
+    }
+
+    #[tokio::test]
+    async fn default_handle_unsubscribe_removes_from_context() {
+        let h = PassThrough;
+        let c = ctx();
+        c.subscribe("a".into()).await;
+        c.subscribe("b".into()).await;
+        h.handle_unsubscribe(vec!["a".into()], c.clone())
+            .await
+            .unwrap();
+        assert!(!c.is_subscribed_to("a").await);
+        assert!(c.is_subscribed_to("b").await);
+    }
+
+    #[tokio::test]
+    async fn default_lifecycle_methods_succeed() {
+        let h = PassThrough;
+        let c = ctx();
+        h.on_connect(c.clone()).await.unwrap();
+        h.on_ping(c.clone()).await.unwrap();
+        h.on_pong(c.clone()).await.unwrap();
+        h.on_disconnect(c.clone(), Some("bye".into()))
+            .await
+            .unwrap();
+        // None reason path too.
+        h.on_disconnect(c, None).await.unwrap();
     }
 }

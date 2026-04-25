@@ -12,5 +12,4 @@ file_service!({
 #[test]
 fn test_compilation() {
     // If it compiles, the test passes
-    assert!(true);
 }

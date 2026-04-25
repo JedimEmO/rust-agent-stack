@@ -32,6 +32,9 @@ pub enum ToolError {
         source: std::io::Error,
     },
 
+    #[error("Unsafe OpenRPC method name for file generation: {0}")]
+    UnsafeMethodName(String),
+
     #[error("Invalid base URL: {0}")]
     #[allow(dead_code)]
     InvalidBaseUrl(String),

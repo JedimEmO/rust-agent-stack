@@ -106,9 +106,9 @@ pub fn generate_server(definition: &FileServiceDefinition) -> TokenStream {
                     #error_name::NotFound => (StatusCode::NOT_FOUND, self.to_string()),
                     #error_name::InvalidFormat => (StatusCode::BAD_REQUEST, self.to_string()),
                     #error_name::FileTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, self.to_string()),
-                    #error_name::UploadFailed(msg) => (StatusCode::BAD_REQUEST, msg),
-                    #error_name::DownloadFailed(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
-                    #error_name::Internal(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
+                    #error_name::UploadFailed(_) => (StatusCode::BAD_REQUEST, "Upload failed".to_string()),
+                    #error_name::DownloadFailed(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Download failed".to_string()),
+                    #error_name::Internal(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string()),
                 };
 
                 <(::axum::http::StatusCode, String) as ::axum::response::IntoResponse>::into_response((status, message))

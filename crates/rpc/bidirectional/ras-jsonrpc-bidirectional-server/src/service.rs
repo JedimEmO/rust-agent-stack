@@ -16,7 +16,11 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{error, info};
 
+const DEFAULT_MESSAGE_CHANNEL_CAPACITY: usize = 1024;
+const DEFAULT_MAX_MESSAGE_SIZE: usize = 1024 * 1024;
+
 /// Trait for services that handle WebSocket JSON-RPC communication
+#[allow(async_fn_in_trait)]
 pub trait WebSocketService: Clone + Send + Sync + 'static {
     /// The message handler type
     type Handler: MessageHandler;
@@ -36,6 +40,16 @@ pub trait WebSocketService: Clone + Send + Sync + 'static {
 
     /// Check if authentication is required
     fn require_auth(&self) -> bool;
+
+    /// Maximum queued outbound messages per connection.
+    fn message_channel_capacity(&self) -> usize {
+        DEFAULT_MESSAGE_CHANNEL_CAPACITY
+    }
+
+    /// Maximum accepted inbound WebSocket message size in bytes.
+    fn max_message_size(&self) -> usize {
+        DEFAULT_MAX_MESSAGE_SIZE
+    }
 
     /// Handle WebSocket upgrade
     async fn handle_upgrade(
@@ -73,7 +87,8 @@ pub trait WebSocketService: Clone + Send + Sync + 'static {
             info!("New WebSocket connection: {}", connection_id);
 
             // Create message channel for this connection
-            let (message_tx, message_rx) = mpsc::unbounded_channel();
+            let channel_capacity = service.message_channel_capacity().max(1);
+            let (message_tx, message_rx) = mpsc::channel(channel_capacity);
             let sender = ChannelMessageSender::new(connection_id, message_tx);
 
             // Create connection info and add to manager
@@ -93,10 +108,15 @@ pub trait WebSocketService: Clone + Send + Sync + 'static {
                 .connection_manager()
                 .add_connection_with_sender(info, Box::new(sender.clone()))
                 .await
-                .map_err(|e| ServerError::ConnectionError(e))?;
+                .map_err(ServerError::ConnectionError)?;
 
             // Create and run WebSocket handler
-            let handler = WebSocketHandler::new(service.handler(), context.clone(), message_rx);
+            let handler = WebSocketHandler::new(
+                service.handler(),
+                context.clone(),
+                message_rx,
+                service.max_message_size(),
+            );
 
             // Handle the connection (this will block until connection closes)
             let result = handler.run(socket).await;
@@ -127,6 +147,12 @@ pub struct WebSocketServiceBuilder<H, A, M = DefaultConnectionManager> {
     /// Whether authentication is required
     #[builder(default = false)]
     require_auth: bool,
+    /// Maximum queued outbound messages per connection
+    #[builder(default = DEFAULT_MESSAGE_CHANNEL_CAPACITY)]
+    message_channel_capacity: usize,
+    /// Maximum accepted inbound WebSocket message size in bytes
+    #[builder(default = DEFAULT_MAX_MESSAGE_SIZE)]
+    max_message_size: usize,
 }
 
 impl<H, A> WebSocketServiceBuilder<H, A, DefaultConnectionManager>
@@ -143,6 +169,8 @@ where
                 .connection_manager
                 .unwrap_or_else(|| Arc::new(DefaultConnectionManager::new())),
             require_auth: self.require_auth,
+            message_channel_capacity: self.message_channel_capacity,
+            max_message_size: self.max_message_size,
         }
     }
 }
@@ -160,6 +188,8 @@ where
             auth_provider: self.auth_provider,
             connection_manager: manager,
             require_auth: self.require_auth,
+            message_channel_capacity: self.message_channel_capacity,
+            max_message_size: self.max_message_size,
         }
     }
 }
@@ -170,6 +200,8 @@ pub struct BuiltWebSocketService<H, A, M> {
     auth_provider: Arc<A>,
     connection_manager: Arc<M>,
     require_auth: bool,
+    message_channel_capacity: usize,
+    max_message_size: usize,
 }
 
 impl<H, A, M> Clone for BuiltWebSocketService<H, A, M> {
@@ -179,6 +211,8 @@ impl<H, A, M> Clone for BuiltWebSocketService<H, A, M> {
             auth_provider: self.auth_provider.clone(),
             connection_manager: self.connection_manager.clone(),
             require_auth: self.require_auth,
+            message_channel_capacity: self.message_channel_capacity,
+            max_message_size: self.max_message_size,
         }
     }
 }
@@ -207,6 +241,14 @@ where
 
     fn require_auth(&self) -> bool {
         self.require_auth
+    }
+
+    fn message_channel_capacity(&self) -> usize {
+        self.message_channel_capacity
+    }
+
+    fn max_message_size(&self) -> usize {
+        self.max_message_size
     }
 }
 

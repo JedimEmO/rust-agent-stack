@@ -35,8 +35,10 @@ async fn test_conversion(
     assert!(env_file.exists(), "environment file should be created");
 
     // Check that method files were created
-    for method in expected_methods {
-        let method_file = output_dir.path().join(format!("{}.bru", method));
+    for (index, method) in expected_methods.iter().enumerate() {
+        let method_file = output_dir
+            .path()
+            .join(format!("{:03}_{}.bru", index + 1, method));
         assert!(
             method_file.exists(),
             "method file {} should be created",
@@ -60,6 +62,92 @@ async fn test_conversion(
     }
 
     Ok(())
+}
+
+#[tokio::test]
+async fn test_rejects_path_traversal_method_name() {
+    use clap::Parser;
+    use openrpc_to_bruno::{cli::Args, error::ToolError};
+
+    let temp = tempdir().unwrap();
+    let input_path = temp.path().join("openrpc.json");
+    let output_dir = temp.path().join("out");
+    let escaped = temp.path().join("evil.bru");
+
+    let spec = serde_json::json!({
+        "openrpc": "1.3.2",
+        "info": {
+            "title": "Unsafe API",
+            "version": "1.0.0"
+        },
+        "methods": [{
+            "name": "../evil",
+            "params": [],
+            "result": {
+                "name": "result",
+                "schema": { "type": "string" }
+            }
+        }]
+    });
+    fs::write(&input_path, serde_json::to_vec(&spec).unwrap())
+        .await
+        .unwrap();
+
+    let args = Args::try_parse_from(vec![
+        "openrpc-to-bruno",
+        "--input",
+        input_path.to_str().unwrap(),
+        "--output",
+        output_dir.to_str().unwrap(),
+        "--force",
+    ])
+    .unwrap();
+
+    let err = args.run().await.unwrap_err();
+    assert!(matches!(err, ToolError::UnsafeMethodName(_)));
+    assert!(!escaped.exists());
+}
+
+#[tokio::test]
+async fn test_sanitizes_safe_method_filename() {
+    use clap::Parser;
+    use openrpc_to_bruno::cli::Args;
+
+    let temp = tempdir().unwrap();
+    let input_path = temp.path().join("openrpc.json");
+    let output_dir = temp.path().join("out");
+
+    let spec = serde_json::json!({
+        "openrpc": "1.3.2",
+        "info": {
+            "title": "Safe API",
+            "version": "1.0.0"
+        },
+        "methods": [{
+            "name": "system status",
+            "params": [],
+            "result": {
+                "name": "result",
+                "schema": { "type": "string" }
+            }
+        }]
+    });
+    fs::write(&input_path, serde_json::to_vec(&spec).unwrap())
+        .await
+        .unwrap();
+
+    let args = Args::try_parse_from(vec![
+        "openrpc-to-bruno",
+        "--input",
+        input_path.to_str().unwrap(),
+        "--output",
+        output_dir.to_str().unwrap(),
+        "--force",
+    ])
+    .unwrap();
+
+    args.run().await.unwrap();
+    assert!(output_dir.join("001_system_status.bru").exists());
 }
 
 #[tokio::test]

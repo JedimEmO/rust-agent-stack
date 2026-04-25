@@ -623,6 +623,10 @@ pub fn generate_static_hosting_code(
                     <label class="input-label" for="jwt-token">JWT Token</label>
                     <input type="password" id="jwt-token" class="input-field" placeholder="Enter your JWT token...">
                 </div>
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                    <input type="checkbox" id="remember-token">
+                    Remember for this tab
+                </label>
                 <div style="display: flex; gap: 0.5rem;">
                     <button id="save-token" class="btn btn-primary btn-sm">Save Token</button>
                     <button id="clear-token" class="btn btn-secondary btn-sm">Clear</button>
@@ -705,7 +709,7 @@ pub fn generate_static_hosting_code(
         // Global state
         let apiSpec = null;
         let currentEndpoint = null;
-        let jwtToken = localStorage.getItem('jwt-token') || '';
+        let jwtToken = '';
 
         // Initialize the application
         document.addEventListener('DOMContentLoaded', async () => {{
@@ -732,9 +736,13 @@ pub fn generate_static_hosting_code(
         function initializeAuth() {{
             const tokenInput = document.getElementById('jwt-token');
             const authStatus = document.getElementById('auth-status');
+            const rememberToken = document.getElementById('remember-token');
+            const rememberedToken = sessionStorage.getItem('jwt-token') || '';
 
-            if (jwtToken) {{
+            if (rememberedToken) {{
+                jwtToken = rememberedToken;
                 tokenInput.value = jwtToken;
+                rememberToken.checked = true;
                 authStatus.classList.add('authenticated');
             }}
         }}
@@ -773,13 +781,17 @@ pub fn generate_static_hosting_code(
         function saveToken() {{
             const tokenInput = document.getElementById('jwt-token');
             const authStatus = document.getElementById('auth-status');
+            const rememberToken = document.getElementById('remember-token');
 
             jwtToken = tokenInput.value.trim();
-            localStorage.setItem('jwt-token', jwtToken);
+            sessionStorage.removeItem('jwt-token');
+            if (jwtToken && rememberToken.checked) {{
+                sessionStorage.setItem('jwt-token', jwtToken);
+            }}
 
             if (jwtToken) {{
                 authStatus.classList.add('authenticated');
-                showSuccess('Token saved successfully');
+                showSuccess(rememberToken.checked ? 'Token saved for this tab' : 'Token ready for this page');
             }} else {{
                 authStatus.classList.remove('authenticated');
             }}
@@ -788,8 +800,9 @@ pub fn generate_static_hosting_code(
         // Clear JWT token
         function clearToken() {{
             jwtToken = '';
-            localStorage.removeItem('jwt-token');
+            sessionStorage.removeItem('jwt-token');
             document.getElementById('jwt-token').value = '';
+            document.getElementById('remember-token').checked = false;
             document.getElementById('auth-status').classList.remove('authenticated');
             showSuccess('Token cleared');
         }}

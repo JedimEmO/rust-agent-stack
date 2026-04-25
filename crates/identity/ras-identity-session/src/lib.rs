@@ -25,6 +25,9 @@ pub enum SessionError {
 
     #[error("Invalid session")]
     InvalidSession,
+
+    #[error("Invalid session configuration: {0}")]
+    InvalidConfig(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,17 +52,60 @@ pub struct SessionConfig {
     pub algorithm: Algorithm,
 }
 
-impl Default for SessionConfig {
-    fn default() -> Self {
-        Self {
-            jwt_secret: "change-me-in-production".to_string(),
+impl SessionConfig {
+    pub fn new(jwt_secret: impl Into<String>) -> Result<Self, SessionError> {
+        let config = Self {
+            jwt_secret: jwt_secret.into(),
             jwt_ttl: Duration::hours(24),
             refresh_enabled: true,
             enforce_active_sessions: true,
             algorithm: Algorithm::HS256,
+        };
+        config.validate()?;
+        Ok(config)
+    }
+
+    pub fn validate(&self) -> Result<(), SessionError> {
+        validate_jwt_secret(&self.jwt_secret)?;
+
+        if self.jwt_ttl <= Duration::zero() {
+            return Err(SessionError::InvalidConfig(
+                "jwt_ttl must be positive".to_string(),
+            ));
         }
+
+        Ok(())
     }
 }
+
+fn validate_jwt_secret(secret: &str) -> Result<(), SessionError> {
+    let trimmed = secret.trim();
+    let insecure_placeholders = [
+        "change-me-in-production",
+        "change-me",
+        "secret",
+        "test-secret",
+        "test-secret-key",
+    ];
+
+    if trimmed.len() < 32 {
+        return Err(SessionError::InvalidConfig(
+            "jwt_secret must be at least 32 bytes".to_string(),
+        ));
+    }
+
+    if insecure_placeholders
+        .iter()
+        .any(|placeholder| trimmed.eq_ignore_ascii_case(placeholder))
+    {
+        return Err(SessionError::InvalidConfig(
+            "jwt_secret must not use a placeholder value".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
 pub struct SessionService {
     config: SessionConfig,
     providers: Arc<RwLock<HashMap<String, Box<dyn IdentityProvider>>>>,
@@ -67,13 +113,14 @@ pub struct SessionService {
     permissions_provider: Option<Arc<dyn UserPermissions>>,
 }
 impl SessionService {
-    pub fn new(config: SessionConfig) -> Self {
-        Self {
+    pub fn new(config: SessionConfig) -> Result<Self, SessionError> {
+        config.validate()?;
+        Ok(Self {
             config,
             providers: Arc::new(RwLock::new(HashMap::new())),
             active_sessions: Arc::new(RwLock::new(HashMap::new())),
             permissions_provider: None,
-        }
+        })
     }
 
     pub fn with_permissions(mut self, provider: Arc<dyn UserPermissions>) -> Self {
@@ -95,6 +142,10 @@ impl SessionService {
         provider_id: &str,
         auth_payload: serde_json::Value,
     ) -> Result<String, SessionError> {
+        if self.config.enforce_active_sessions {
+            self.cleanup_expired_sessions().await;
+        }
+
         let providers = self.providers.read().await;
         let provider = providers
             .get(provider_id)
@@ -139,10 +190,18 @@ impl SessionService {
     }
 
     pub async fn verify_session(&self, token: &str) -> Result<JwtClaims, SessionError> {
+        if self.config.enforce_active_sessions {
+            self.cleanup_expired_sessions().await;
+        }
+
+        let mut validation = Validation::new(self.config.algorithm);
+        validation.set_required_spec_claims(&["exp"]);
+        validation.validate_exp = true;
+
         let token_data = decode::<JwtClaims>(
             token,
             &DecodingKey::from_secret(self.config.jwt_secret.as_bytes()),
-            &Validation::new(self.config.algorithm),
+            &validation,
         )?;
 
         if self.config.enforce_active_sessions {
@@ -158,6 +217,14 @@ impl SessionService {
     pub async fn end_session(&self, jti: &str) -> Option<JwtClaims> {
         let mut sessions = self.active_sessions.write().await;
         sessions.remove(jti)
+    }
+
+    pub async fn cleanup_expired_sessions(&self) -> usize {
+        let now = Utc::now().timestamp();
+        let mut sessions = self.active_sessions.write().await;
+        let before = sessions.len();
+        sessions.retain(|_, claims| claims.exp > now);
+        before - sessions.len()
     }
 }
 
@@ -206,10 +273,12 @@ mod tests {
     use ras_identity_core::StaticPermissions;
     use ras_identity_local::LocalUserProvider;
 
+    const TEST_SECRET: &str = "test-secret-that-is-long-enough-for-hs256";
+
     #[tokio::test]
     async fn test_session_lifecycle() {
-        let config = SessionConfig::default();
-        let session_service = SessionService::new(config);
+        let config = SessionConfig::new(TEST_SECRET).unwrap();
+        let session_service = SessionService::new(config).unwrap();
 
         let local_provider = LocalUserProvider::new();
         local_provider
@@ -248,12 +317,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_session_with_permissions() {
-        let config = SessionConfig::default();
+        let config = SessionConfig::new(TEST_SECRET).unwrap();
         let permissions_provider = Arc::new(StaticPermissions::new(vec![
             "read".to_string(),
             "write".to_string(),
         ]));
-        let session_service = SessionService::new(config).with_permissions(permissions_provider);
+        let session_service = SessionService::new(config)
+            .unwrap()
+            .with_permissions(permissions_provider);
 
         let local_provider = LocalUserProvider::new();
         local_provider
@@ -285,5 +356,59 @@ mod tests {
         assert_eq!(claims.permissions.len(), 2);
         assert!(claims.permissions.contains("read"));
         assert!(claims.permissions.contains("write"));
+    }
+
+    #[test]
+    fn test_rejects_placeholder_secret() {
+        let result = SessionConfig::new("change-me-in-production");
+        assert!(matches!(result, Err(SessionError::InvalidConfig(_))));
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_expired_sessions() {
+        let config = SessionConfig::new(TEST_SECRET).unwrap();
+        let service = SessionService::new(config).unwrap();
+
+        {
+            let mut sessions = service.active_sessions.write().await;
+            sessions.insert(
+                "expired".to_string(),
+                JwtClaims {
+                    sub: "user".to_string(),
+                    exp: Utc::now().timestamp() - 1,
+                    iat: Utc::now().timestamp() - 10,
+                    jti: "expired".to_string(),
+                    provider_id: "local".to_string(),
+                    email: None,
+                    display_name: None,
+                    permissions: HashSet::new(),
+                    metadata: None,
+                },
+            );
+        }
+
+        assert_eq!(service.cleanup_expired_sessions().await, 1);
+    }
+
+    #[tokio::test]
+    async fn test_malformed_exp_claim_is_rejected() {
+        let config = SessionConfig::new(TEST_SECRET).unwrap();
+        let service = SessionService::new(config).unwrap();
+
+        let token = encode(
+            &Header::new(Algorithm::HS256),
+            &serde_json::json!({
+                "sub": "user",
+                "exp": "not-a-number",
+                "iat": Utc::now().timestamp(),
+                "jti": "malformed",
+                "provider_id": "local",
+                "permissions": [],
+            }),
+            &EncodingKey::from_secret(TEST_SECRET.as_bytes()),
+        )
+        .unwrap();
+
+        assert!(service.verify_session(&token).await.is_err());
     }
 }
