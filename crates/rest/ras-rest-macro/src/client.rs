@@ -1,5 +1,18 @@
 use crate::{EndpointDefinition, HttpMethod, ServiceDefinition};
 use quote::quote;
+use syn::Type;
+
+/// True if `ty` is syntactically `Option<...>`. Matches the bare `Option`
+/// segment as well as fully-qualified forms like `std::option::Option<T>` /
+/// `core::option::Option<T>` — anything whose last path segment is `Option`.
+fn is_option_type(ty: &Type) -> bool {
+    if let Type::Path(type_path) = ty {
+        if let Some(last) = type_path.path.segments.last() {
+            return last.ident == "Option";
+        }
+    }
+    false
+}
 
 /// Generate client code for REST service
 pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::TokenStream {
@@ -148,6 +161,14 @@ fn generate_client_method(endpoint: &EndpointDefinition) -> proc_macro2::TokenSt
         call_args.push(quote! { #param_name });
     }
 
+    // Add query parameters (mirroring the macro syntax order: path → query → body).
+    for query_param in endpoint.query_params.iter() {
+        let param_name = &query_param.name;
+        let param_type = &query_param.param_type;
+        params.push(quote! { #param_name: #param_type });
+        call_args.push(quote! { #param_name });
+    }
+
     // Add request body parameter if present
     if endpoint.request_type.is_some() {
         let request_type = endpoint.request_type.as_ref().unwrap();
@@ -211,6 +232,44 @@ fn generate_client_method_with_timeout(endpoint: &EndpointDefinition) -> proc_ma
         };
     }
 
+    // Build query-string handling. Required params are always serialized;
+    // `Option<T>` params are skipped when `None`. Values are converted with
+    // `ToString` and url-encoded by reqwest's `.query()` helper.
+    let query_handling = if endpoint.query_params.is_empty() {
+        quote! {}
+    } else {
+        let pushes = endpoint.query_params.iter().map(|qp| {
+            let param_name = &qp.name;
+            let param_str = qp.name.to_string();
+            if is_option_type(&qp.param_type) {
+                quote! {
+                    if let Some(__v) = &#param_name {
+                        __query_pairs.push((#param_str, __v.to_string()));
+                    }
+                }
+            } else {
+                quote! {
+                    __query_pairs.push((#param_str, #param_name.to_string()));
+                }
+            }
+        });
+        quote! {
+            let mut __query_pairs: Vec<(&'static str, String)> = Vec::new();
+            #(#pushes)*
+            if !__query_pairs.is_empty() {
+                request_builder = request_builder.query(&__query_pairs);
+            }
+        }
+    };
+
+    // Add query parameters to the function signature (after path params,
+    // before the body — matches macro syntax order).
+    for query_param in endpoint.query_params.iter() {
+        let param_name = &query_param.name;
+        let param_type = &query_param.param_type;
+        params.push(quote! { #param_name: #param_type });
+    }
+
     // Add request body parameter if present
     let request_body_handling = if let Some(request_type) = &endpoint.request_type {
         params.push(quote! { body: #request_type });
@@ -265,6 +324,8 @@ fn generate_client_method_with_timeout(endpoint: &EndpointDefinition) -> proc_ma
             if let Some(token) = &self.bearer_token {
                 request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
             }
+
+            #query_handling
 
             #request_body_handling
 
