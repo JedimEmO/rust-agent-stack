@@ -102,34 +102,37 @@ impl DocumentServiceTrait for DocumentServiceImpl {
     ) -> Result<UploadResponse, DocumentServiceFileError> {
         println!("User {} is uploading a file", user.user_id);
 
-        // Process the multipart upload
-        while let Some(field) = multipart.next_field().await.map_err(|e| {
-            DocumentServiceFileError::UploadFailed(format!("Failed to get next field: {}", e))
-        })? {
-            let name = field.name().unwrap_or("unknown").to_string();
-            let file_name = field.file_name().unwrap_or("unknown").to_string();
-            let data = field.bytes().await.map_err(|e| {
-                DocumentServiceFileError::UploadFailed(format!("Failed to read field data: {}", e))
+        // Process the first multipart field — that's the uploaded file in the
+        // demo's contract. Real implementations would loop and accept several.
+        let field = multipart
+            .next_field()
+            .await
+            .map_err(|e| {
+                DocumentServiceFileError::UploadFailed(format!("Failed to get next field: {}", e))
+            })?
+            .ok_or_else(|| {
+                DocumentServiceFileError::UploadFailed("No file in multipart data".to_string())
             })?;
 
-            println!(
-                "Received field '{}' with filename '{}', size: {} bytes",
-                name,
-                file_name,
-                data.len()
-            );
+        let name = field.name().unwrap_or("unknown").to_string();
+        let file_name = field.file_name().unwrap_or("unknown").to_string();
+        let data = field.bytes().await.map_err(|e| {
+            DocumentServiceFileError::UploadFailed(format!("Failed to read field data: {}", e))
+        })?;
 
-            // In a real implementation, you would save this to storage
-            return Ok(UploadResponse {
-                file_id: format!("file_{}", Uuid::new_v4()),
-                size: data.len() as u64,
-                filename: file_name,
-            });
-        }
+        println!(
+            "Received field '{}' with filename '{}', size: {} bytes",
+            name,
+            file_name,
+            data.len()
+        );
 
-        Err(DocumentServiceFileError::UploadFailed(
-            "No file in multipart data".to_string(),
-        ))
+        // In a real implementation, you would save this to storage
+        Ok(UploadResponse {
+            file_id: format!("file_{}", Uuid::new_v4()),
+            size: data.len() as u64,
+            filename: file_name,
+        })
     }
 
     async fn info(
