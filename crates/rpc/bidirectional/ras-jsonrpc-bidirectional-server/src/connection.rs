@@ -9,15 +9,12 @@ use tokio::sync::{RwLock, mpsc};
 #[derive(Debug, Clone)]
 pub struct ChannelMessageSender {
     connection_id: ConnectionId,
-    sender: mpsc::UnboundedSender<BidirectionalMessage>,
+    sender: mpsc::Sender<BidirectionalMessage>,
 }
 
 impl ChannelMessageSender {
     /// Create a new channel message sender
-    pub fn new(
-        connection_id: ConnectionId,
-        sender: mpsc::UnboundedSender<BidirectionalMessage>,
-    ) -> Self {
+    pub fn new(connection_id: ConnectionId, sender: mpsc::Sender<BidirectionalMessage>) -> Self {
         Self {
             connection_id,
             sender,
@@ -26,7 +23,7 @@ impl ChannelMessageSender {
 
     /// Send a message through the channel
     pub async fn send(&self, message: BidirectionalMessage) -> Result<(), String> {
-        self.sender.send(message).map_err(|e| e.to_string())
+        self.sender.send(message).await.map_err(|e| e.to_string())
     }
 
     /// Get the connection ID

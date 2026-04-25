@@ -178,15 +178,15 @@ impl UserManagementServiceTrait for UserManagementServiceImpl {
         let filtered_users: Vec<UserSummary> = users
             .into_iter()
             .filter(|u| {
-                if let Some(pattern) = &req.username_pattern {
-                    if !u.username.contains(pattern) {
-                        return false;
-                    }
+                if let Some(pattern) = &req.username_pattern
+                    && !u.username.contains(pattern)
+                {
+                    return false;
                 }
-                if let Some(pattern) = &req.email_pattern {
-                    if !u.email.contains(pattern) {
-                        return false;
-                    }
+                if let Some(pattern) = &req.email_pattern
+                    && !u.email.contains(pattern)
+                {
+                    return false;
                 }
                 true
             })

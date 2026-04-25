@@ -17,6 +17,15 @@ fn test_xss_protection_in_generated_html() {
     }
 }
 
+#[test]
+fn test_generated_docs_do_not_store_jwt_in_local_storage() {
+    let source = include_str!("../src/static_hosting.rs");
+    assert!(!source.contains("localStorage.getItem('jwt-token')"));
+    assert!(!source.contains("localStorage.setItem('jwt-token'"));
+    assert!(!source.contains("localStorage.removeItem('jwt-token'"));
+    assert!(source.contains("sessionStorage.setItem('jwt-token'"));
+}
+
 fn escape_html(unsafe_str: &str) -> String {
     unsafe_str
         .replace('&', "&amp;")

@@ -6,6 +6,7 @@ use openrpc_types::{
     Schema, SchemaType,
 };
 use serde_json::{Map, Value};
+use std::path::Path;
 use tokio::fs;
 
 pub struct OpenRpcToBrunoConverter {
@@ -240,7 +241,8 @@ impl OpenRpcToBrunoConverter {
         }
 
         let content = bruno_request.to_bru_format();
-        let path = self.args.output.join(format!("{}.bru", method.name));
+        let file_name = safe_method_file_name(&method.name, sequence)?;
+        let path = self.safe_output_path(&file_name).await?;
 
         fs::write(&path, content)
             .await
@@ -250,6 +252,31 @@ impl OpenRpcToBrunoConverter {
             })?;
 
         Ok(())
+    }
+
+    async fn safe_output_path(&self, file_name: &str) -> Result<std::path::PathBuf, ToolError> {
+        let output_dir =
+            fs::canonicalize(&self.args.output)
+                .await
+                .map_err(|e| ToolError::OutputDirCreate {
+                    path: self.args.output.clone(),
+                    source: e,
+                })?;
+
+        let candidate = output_dir.join(file_name);
+        let parent = candidate.parent().unwrap_or(&output_dir);
+        let parent = fs::canonicalize(parent)
+            .await
+            .map_err(|e| ToolError::OutputDirCreate {
+                path: parent.to_path_buf(),
+                source: e,
+            })?;
+
+        if !parent.starts_with(&output_dir) {
+            return Err(ToolError::UnsafeMethodName(file_name.to_string()));
+        }
+
+        Ok(candidate)
     }
 
     fn create_jsonrpc_request_body(&self, method: &Method) -> Result<Value, ToolError> {
@@ -330,4 +357,35 @@ impl OpenRpcToBrunoConverter {
             None => Ok(Value::String("any_value".to_string())),
         }
     }
+}
+
+fn safe_method_file_name(method_name: &str, sequence: u32) -> Result<String, ToolError> {
+    let name = method_name.trim();
+    if name.is_empty()
+        || name == "."
+        || name == ".."
+        || name.contains('\0')
+        || name.contains('/')
+        || name.contains('\\')
+        || Path::new(name).is_absolute()
+    {
+        return Err(ToolError::UnsafeMethodName(method_name.to_string()));
+    }
+
+    let sanitized: String = name
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-') {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect();
+
+    if sanitized.is_empty() || sanitized == "." || sanitized == ".." {
+        return Err(ToolError::UnsafeMethodName(method_name.to_string()));
+    }
+
+    Ok(format!("{sequence:03}_{sanitized}.bru"))
 }

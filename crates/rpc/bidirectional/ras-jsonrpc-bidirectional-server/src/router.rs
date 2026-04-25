@@ -219,7 +219,7 @@ mod tests {
 
         // Create test context
         let connection_id = ConnectionId::new();
-        let (tx, _rx) = mpsc::unbounded_channel();
+        let (tx, _rx) = mpsc::channel(1);
         let sender = crate::connection::ChannelMessageSender::new(connection_id, tx);
         let context = Arc::new(ConnectionContext::new(connection_id, sender));
 

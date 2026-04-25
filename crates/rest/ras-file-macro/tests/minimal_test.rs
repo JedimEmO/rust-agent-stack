@@ -46,5 +46,4 @@ fn test_compilation() {
     let service = MyService;
     let auth = DummyAuth;
     let _builder = MinimalServiceBuilder::new(service).auth_provider(auth);
-    assert!(true);
 }

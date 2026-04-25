@@ -26,31 +26,31 @@ impl WebSocketUpgrade {
     /// Extract authentication token from headers
     pub fn extract_auth_token(&self) -> Option<String> {
         // Try Authorization header first (Bearer token)
-        if let Some(auth_header) = self.headers.get("authorization") {
-            if let Ok(auth_str) = auth_header.to_str() {
-                if auth_str.starts_with("Bearer ") {
-                    return Some(auth_str[7..].to_string());
-                }
-                // Also support just the token without "Bearer " prefix
-                return Some(auth_str.to_string());
+        if let Some(auth_header) = self.headers.get("authorization")
+            && let Ok(auth_str) = auth_header.to_str()
+        {
+            if let Some(token) = auth_str.strip_prefix("Bearer ") {
+                return Some(token.to_string());
             }
+            // Also support just the token without "Bearer " prefix
+            return Some(auth_str.to_string());
         }
 
         // Try custom WebSocket auth headers
-        if let Some(token_header) = self.headers.get("sec-websocket-protocol") {
-            if let Ok(token_str) = token_header.to_str() {
-                // Support protocols like "token.{jwt_token}"
-                if token_str.starts_with("token.") {
-                    return Some(token_str[6..].to_string());
-                }
+        if let Some(token_header) = self.headers.get("sec-websocket-protocol")
+            && let Ok(token_str) = token_header.to_str()
+        {
+            // Support protocols like "token.{jwt_token}"
+            if let Some(token) = token_str.strip_prefix("token.") {
+                return Some(token.to_string());
             }
         }
 
         // Try X-Auth-Token header
-        if let Some(token_header) = self.headers.get("x-auth-token") {
-            if let Ok(token_str) = token_header.to_str() {
-                return Some(token_str.to_string());
-            }
+        if let Some(token_header) = self.headers.get("x-auth-token")
+            && let Ok(token_str) = token_header.to_str()
+        {
+            return Some(token_str.to_string());
         }
 
         None
@@ -167,7 +167,7 @@ impl WebSocketUpgrade {
         for header_name in &ip_headers {
             if let Some(value) = self.get_header(header_name) {
                 // For X-Forwarded-For, take the first IP
-                let ip = value.split(',').next().unwrap_or(&value).trim();
+                let ip = value.split(',').next().unwrap_or(value.as_str()).trim();
                 if !ip.is_empty() {
                     return Some(ip.to_string());
                 }
@@ -220,22 +220,21 @@ mod tests {
 
         // Test Bearer token extraction logic
         headers.insert("authorization", "Bearer abc123".parse().unwrap());
-        if let Some(auth_header) = headers.get("authorization") {
-            if let Ok(auth_str) = auth_header.to_str() {
-                if auth_str.starts_with("Bearer ") {
-                    assert_eq!(&auth_str[7..], "abc123");
-                }
-            }
+        if let Some(auth_header) = headers.get("authorization")
+            && let Ok(auth_str) = auth_header.to_str()
+            && let Some(token) = auth_str.strip_prefix("Bearer ")
+        {
+            assert_eq!(token, "abc123");
         }
 
         // Test X-Forwarded-For parsing logic
         headers.clear();
         headers.insert("x-forwarded-for", "192.168.1.1, 10.0.0.1".parse().unwrap());
-        if let Some(header_value) = headers.get("x-forwarded-for") {
-            if let Ok(value) = header_value.to_str() {
-                let ip = value.split(',').next().unwrap_or(&value).trim();
-                assert_eq!(ip, "192.168.1.1");
-            }
+        if let Some(header_value) = headers.get("x-forwarded-for")
+            && let Ok(value) = header_value.to_str()
+        {
+            let ip = value.split(',').next().unwrap_or(value).trim();
+            assert_eq!(ip, "192.168.1.1");
         }
     }
 

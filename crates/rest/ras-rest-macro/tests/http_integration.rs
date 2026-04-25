@@ -2,7 +2,6 @@ use rand::Rng;
 use ras_jsonrpc_core::{AuthError, AuthFuture, AuthProvider, AuthenticatedUser};
 use ras_rest_core::{RestError, RestResponse};
 use ras_rest_macro::rest_service;
-use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashSet;
@@ -57,12 +56,6 @@ struct Post {
 struct PostsResponse {
     posts: Vec<Post>,
     total: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-struct ErrorResponse {
-    error: String,
-    details: Option<String>,
 }
 
 // Simple test auth provider
@@ -940,7 +933,6 @@ async fn test_openapi_generation() {
 
     // The fact that this compiles means the REST service macro generated the builder correctly
     // with OpenAPI configuration enabled
-    assert!(true, "OpenAPI generation compiled successfully");
 }
 
 #[tokio::test]
@@ -951,7 +943,6 @@ async fn test_missing_dependencies() {
     // This test ensures that our future handling is working correctly
     let handles: Vec<tokio::task::JoinHandle<()>> = vec![];
     let _results = join_all(handles).await;
-    assert!(true, "Futures dependency is working");
 }
 
 #[tokio::test]
@@ -1049,7 +1040,7 @@ async fn test_generated_rest_client() {
 
     assert_eq!(resp.total, 2);
 
-    let _resp = client
+    client
         .delete_users_by_id_with_timeout(resp.users[0].id.unwrap(), None)
         .await
         .expect("failed to get users");
@@ -1118,7 +1109,7 @@ async fn test_query_parameters_with_auth() {
     assert_eq!(response.status(), 200);
     let posts_response: PostsResponse = response.json().await.unwrap();
     assert!(posts_response.posts[0].tags.contains(&"test".to_string()));
-    assert_eq!(posts_response.posts[0].published, true);
+    assert!(posts_response.posts[0].published);
 
     // Test with no query parameters - all optional
     let response = make_rest_request(

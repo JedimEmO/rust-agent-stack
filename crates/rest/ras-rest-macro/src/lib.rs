@@ -542,7 +542,7 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
 
         // Generate the axum handler based on endpoint configuration using the idx for the QueryParams struct
         let axum_handler = generate_axum_handler(endpoint, idx);
-        let handler_body = generate_handler_body(endpoint, &handler_name, method_str, path, idx);
+        let handler_body = generate_handler_body(endpoint, handler_name, method_str, path, idx);
 
         // Generate permission groups code for quote
         let permission_groups_code = if permission_groups.is_empty() {

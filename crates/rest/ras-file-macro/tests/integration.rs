@@ -179,13 +179,13 @@ mod tests {
         client.set_bearer_token(Some("test-token"));
 
         // Test that client methods exist
-        assert!(true); // Basic compilation test
+        let _ = client;
     }
 
     #[test]
     fn test_file_error_variants() {
         // Test that all error variants exist
-        let _errors = vec![
+        let _errors = [
             TestFileServiceFileError::NotFound,
             TestFileServiceFileError::UploadFailed("test".to_string()),
             TestFileServiceFileError::DownloadFailed("test".to_string()),
@@ -195,8 +195,8 @@ mod tests {
         ];
     }
 
-    #[test]
-    fn test_error_into_response() {
+    #[tokio::test]
+    async fn test_error_into_response() {
         use axum::http::StatusCode;
         use axum::response::IntoResponse;
 
@@ -229,5 +229,14 @@ mod tests {
             let (parts, _) = response.into_parts();
             assert_eq!(parts.status, expected_status);
         }
+
+        let response = TestFileServiceFileError::Internal("database password leaked".to_string())
+            .into_response();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+        assert!(body.contains("Internal server error"));
+        assert!(!body.contains("database password leaked"));
     }
 }

@@ -93,7 +93,8 @@ pub struct WebSocketHandler<H: MessageHandler> {
     /// Connection context
     context: Arc<ConnectionContext>,
     /// Channel for receiving messages to send to client
-    message_rx: mpsc::UnboundedReceiver<BidirectionalMessage>,
+    message_rx: mpsc::Receiver<BidirectionalMessage>,
+    max_message_size: usize,
 }
 
 impl<H: MessageHandler> WebSocketHandler<H> {
@@ -101,12 +102,14 @@ impl<H: MessageHandler> WebSocketHandler<H> {
     pub fn new(
         handler: Arc<H>,
         context: Arc<ConnectionContext>,
-        message_rx: mpsc::UnboundedReceiver<BidirectionalMessage>,
+        message_rx: mpsc::Receiver<BidirectionalMessage>,
+        max_message_size: usize,
     ) -> Self {
         Self {
             handler,
             context,
             message_rx,
+            max_message_size,
         }
     }
 
@@ -205,10 +208,22 @@ impl<H: MessageHandler> WebSocketHandler<H> {
     ) -> ServerResult<()> {
         match msg {
             Message::Text(text) => {
-                debug!("Received text message: {}", text);
+                if text.len() > self.max_message_size {
+                    warn!("Received oversized text message: {} bytes", text.len());
+                    return Err(ServerError::InvalidRequest(
+                        "Message exceeds maximum size".to_string(),
+                    ));
+                }
+                debug!("Received text message ({} bytes)", text.len());
                 self.handle_text_message(text.to_string(), socket).await
             }
             Message::Binary(data) => {
+                if data.len() > self.max_message_size {
+                    warn!("Received oversized binary message: {} bytes", data.len());
+                    return Err(ServerError::InvalidRequest(
+                        "Message exceeds maximum size".to_string(),
+                    ));
+                }
                 debug!("Received binary message ({} bytes)", data.len());
                 // Try to parse as UTF-8 text
                 match String::from_utf8(data.to_vec()) {
@@ -259,10 +274,9 @@ impl<H: MessageHandler> WebSocketHandler<H> {
         }
 
         // If neither worked, return error
-        Err(ServerError::InvalidRequest(format!(
-            "Could not parse message as JSON-RPC or bidirectional message: {}",
-            text
-        )))
+        Err(ServerError::InvalidRequest(
+            "Could not parse message as JSON-RPC or bidirectional message".to_string(),
+        ))
     }
 
     /// Handle bidirectional messages

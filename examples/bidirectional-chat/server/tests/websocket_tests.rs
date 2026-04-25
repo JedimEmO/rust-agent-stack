@@ -58,7 +58,7 @@ impl TestChatServer {
                 cors: Default::default(),
             },
             auth: AuthConfig {
-                jwt_secret: "test-secret-key".to_string(),
+                jwt_secret: "test-secret-key-that-is-long-enough".to_string(),
                 jwt_ttl_seconds: 3600,
                 refresh_enabled: true,
                 jwt_algorithm: "HS256".to_string(),
@@ -145,9 +145,13 @@ impl TestChatServer {
             algorithm: jsonwebtoken::Algorithm::HS256,
         };
 
-        let session_service = Arc::new(SessionService::new(session_config).with_permissions(
-            Arc::new(TestChatPermissions::new(config.admin.users.clone())),
-        ));
+        let session_service = Arc::new(
+            SessionService::new(session_config)
+                .unwrap()
+                .with_permissions(Arc::new(TestChatPermissions::new(
+                    config.admin.users.clone(),
+                ))),
+        );
 
         // Register identity provider with session service
         let session_identity_provider = LocalUserProvider::new();

@@ -45,7 +45,7 @@ impl AppConfig {
             redirect_uri: std::env::var("REDIRECT_URI")
                 .unwrap_or_else(|_| "http://localhost:3000/auth/callback".to_string()),
             jwt_secret: std::env::var("JWT_SECRET")
-                .unwrap_or_else(|_| "change-me-in-production-please".to_string()),
+                .context("JWT_SECRET environment variable is required")?,
             server_host: std::env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".to_string()),
             server_port: std::env::var("SERVER_PORT")
                 .unwrap_or_else(|_| "3000".to_string())
@@ -164,8 +164,9 @@ fn create_session_service(config: &AppConfig) -> Result<SessionService> {
     };
 
     let permissions_provider = Arc::new(GoogleOAuth2Permissions::new());
-    let session_service =
-        SessionService::new(session_config).with_permissions(permissions_provider);
+    let session_service = SessionService::new(session_config)
+        .map_err(anyhow::Error::from)?
+        .with_permissions(permissions_provider);
 
     Ok(session_service)
 }

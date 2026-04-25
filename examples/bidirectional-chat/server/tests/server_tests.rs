@@ -123,7 +123,7 @@ async fn create_test_config() -> Result<(Config, TempDir)> {
             cors: Default::default(),
         },
         auth: AuthConfig {
-            jwt_secret: "test-secret-key".to_string(),
+            jwt_secret: "test-secret-key-that-is-long-enough".to_string(),
             jwt_ttl_seconds: 3600,
             refresh_enabled: true,
             jwt_algorithm: "HS256".to_string(),
