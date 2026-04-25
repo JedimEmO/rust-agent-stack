@@ -22,6 +22,12 @@ The fixtures use:
 - REST: `http://127.0.0.1:3101/api/v1/docs`
 - JSON-RPC: `http://127.0.0.1:3102/rpc/explorer`
 
+To avoid local port collisions, override the ports before running the suite:
+
+```bash
+PLAYWRIGHT_REST_PORT=3201 PLAYWRIGHT_JSONRPC_PORT=3202 npm --prefix tests/playwright test
+```
+
 Test tokens:
 
 - `user-token`

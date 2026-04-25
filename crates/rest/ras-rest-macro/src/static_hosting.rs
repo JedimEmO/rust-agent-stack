@@ -58,15 +58,23 @@ pub fn generate_static_hosting_code(
     quote! {
         #[cfg(feature = "server")]
         async fn #docs_handler_name() -> ::axum::response::Html<String> {
-            const TEMPLATE: &str = #template_lit;
+            static HTML: ::std::sync::OnceLock<String> = ::std::sync::OnceLock::new();
 
-            let html = TEMPLATE
-                .replace("{SERVICE_NAME_JSON}", &::serde_json::to_string(stringify!(#service_name)).unwrap_or_else(|_| "\"API\"".to_string()))
-                .replace("{PROTOCOL_JSON}", &::serde_json::to_string("rest").unwrap_or_else(|_| "\"rest\"".to_string()))
-                .replace("{SPEC_PATH_JSON}", &::serde_json::to_string(#spec_path).unwrap_or_else(|_| "\"/openapi.json\"".to_string()))
-                .replace("{API_BASE_PATH_JSON}", &::serde_json::to_string(#api_base_path).unwrap_or_else(|_| "\"/\"".to_string()));
+            let html = HTML.get_or_init(|| {
+                const TEMPLATE: &str = #template_lit;
+                let config_json = ::serde_json::json!({
+                    "serviceName": stringify!(#service_name),
+                    "protocol": "rest",
+                    "specPath": #spec_path,
+                    "apiBasePath": #api_base_path
+                })
+                .to_string()
+                .replace("<", "\\u003c");
 
-            ::axum::response::Html(html)
+                TEMPLATE.replace("{EXPLORER_CONFIG_JSON}", &config_json)
+            });
+
+            ::axum::response::Html(html.clone())
         }
 
         #[cfg(feature = "server")]

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const RPC_URL = 'http://127.0.0.1:3102/rpc/explorer';
+const RPC_PORT = process.env.PLAYWRIGHT_JSONRPC_PORT ?? '3102';
+const RPC_URL = `http://127.0.0.1:${RPC_PORT}/rpc/explorer`;
 
 async function selectMethod(page: Page, name: string) {
   await page.locator('.op').filter({ hasText: name }).click();
@@ -34,7 +35,7 @@ test.describe('JSON-RPC API explorer', () => {
     await selectMethod(page, 'ping');
     await expect(page.locator('#params-editor')).toBeVisible();
     await page.locator('#params-editor').fill(JSON.stringify({ message: 'hello' }, null, 2));
-    await expect(page.locator('#request-url')).toHaveText('http://127.0.0.1:3102/rpc');
+    await expect(page.locator('#request-url')).toHaveText(`http://127.0.0.1:${RPC_PORT}/rpc`);
 
     await selectMethod(page, 'no_params');
     await expect(page.locator('#params-editor')).toHaveCount(0);
@@ -109,5 +110,14 @@ test.describe('JSON-RPC API explorer', () => {
     expect(localStorageValues).not.toContain('user-token');
     const sessionStorageValues = await page.evaluate(() => Object.values(sessionStorage).join('\n'));
     expect(sessionStorageValues).toContain('admin-token');
+  });
+
+  test('persists theme preference in localStorage', async ({ page }) => {
+    await page.locator('#theme-toggle').click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    const theme = await page.evaluate(() => localStorage.getItem('ras-explorer-theme'));
+    expect(theme).toBe('light');
   });
 });

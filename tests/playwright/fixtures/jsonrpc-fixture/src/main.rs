@@ -98,7 +98,9 @@ async fn main() -> Result<()> {
         .expect("fixture JSON-RPC service should build");
 
     let app = Router::new().merge(rpc_router);
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3102").await?;
+    let bind_addr =
+        std::env::var("PLAYWRIGHT_JSONRPC_ADDR").unwrap_or_else(|_| "127.0.0.1:3102".to_string());
+    let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
     axum::serve(listener, app).await?;
 
     Ok(())

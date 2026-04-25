@@ -481,8 +481,8 @@ async fn test_docs_explorer_routes_generated() {
     assert!(docs.contains("\"TestRestService\""));
     assert!(docs.contains("\"rest\""));
     assert!(docs.contains("/api/v1/docs/openapi.json"));
-    assert!(docs.contains("Bearer token"));
-    assert!(docs.contains("Saved requests"));
+    assert!(docs.contains("id=\"jwt-token\""));
+    assert!(docs.contains("id=\"saved-list\""));
 
     let spec_response = reqwest::get(format!("{}/api/v1/docs/openapi.json", base_url))
         .await

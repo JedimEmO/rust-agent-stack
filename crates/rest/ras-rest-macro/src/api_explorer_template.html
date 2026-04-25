@@ -459,7 +459,7 @@
                 </section>
                 <section class="panel">
                     <div class="panel-head">
-                        <strong>History</strong>
+                        <strong>History (last 30)</strong>
                         <button id="clear-history">Clear history</button>
                     </div>
                     <div id="history-list" class="panel-body"></div>
@@ -469,13 +469,10 @@
     </div>
     <div id="toast" class="toast"></div>
 
+    <!-- Replaced by the Rust macro as raw JSON script content. Keep this token outside HTML attributes and JS strings. -->
+    <script id="ras-explorer-config" type="application/json">{EXPLORER_CONFIG_JSON}</script>
     <script>
-        const CONFIG = {
-            serviceName: {SERVICE_NAME_JSON},
-            protocol: {PROTOCOL_JSON},
-            specPath: {SPEC_PATH_JSON},
-            apiBasePath: {API_BASE_PATH_JSON}
-        };
+        const CONFIG = JSON.parse(document.getElementById("ras-explorer-config").textContent);
 
         const METHODS = ["get", "post", "put", "patch", "delete", "head", "options"];
         const state = {
@@ -945,6 +942,7 @@
         }
 
         function requestId() {
+            if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
             return `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         }
 
@@ -1156,7 +1154,7 @@
             try {
                 await loadSpec();
             } catch (error) {
-                $("operation-list").innerHTML = "";
+                $("operation-list").textContent = "";
                 const empty = document.createElement("div");
                 empty.className = "empty";
                 empty.textContent = error.message;

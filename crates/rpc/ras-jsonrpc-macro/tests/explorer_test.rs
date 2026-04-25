@@ -62,9 +62,9 @@ mod tests {
 
         let content = response.text().await.unwrap();
         assert!(content.contains("\"UserService\""));
-        assert!(content.contains("Bearer token"));
-        assert!(content.contains("Saved requests"));
-        assert!(content.contains("History"));
+        assert!(content.contains("id=\"jwt-token\""));
+        assert!(content.contains("id=\"saved-list\""));
+        assert!(content.contains("id=\"history-list\""));
         assert!(content.contains("\"jsonrpc\""));
 
         // Test that the OpenRPC document is accessible

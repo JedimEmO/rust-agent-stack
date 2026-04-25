@@ -29,7 +29,8 @@ pub fn generate_static_hosting_code(
         return TokenStream::new();
     }
 
-    const TEMPLATE_CONTENT: &str = include_str!("api_explorer_template.html");
+    const TEMPLATE_CONTENT: &str =
+        include_str!("../../../rest/ras-rest-macro/src/api_explorer_template.html");
 
     let explorer_path_suffix = &config.explorer_path;
     let service_name_str = service_name.to_string();
@@ -50,22 +51,26 @@ pub fn generate_static_hosting_code(
             let explorer_path = format!("{}{}", base_path, #explorer_path_suffix);
             let openrpc_path = format!("{}/openrpc.json", &explorer_path);
 
+            let explorer_html = {
+                const TEMPLATE: &str = #template_lit;
+                let config_json = ::serde_json::json!({
+                    "serviceName": #service_name_str,
+                    "protocol": "jsonrpc",
+                    "specPath": &openrpc_path,
+                    "apiBasePath": base_path
+                })
+                .to_string()
+                .replace("<", "\\u003c");
+
+                ::std::sync::Arc::new(TEMPLATE.replace("{EXPLORER_CONFIG_JSON}", &config_json))
+            };
+
             let serve_explorer = {
-                let base_path = base_path.to_string();
-                let openrpc_path = openrpc_path.clone();
+                let explorer_html = explorer_html.clone();
                 move || {
-                    let base_path = base_path.clone();
-                    let openrpc_path = openrpc_path.clone();
+                    let explorer_html = explorer_html.clone();
                     async move {
-                        const TEMPLATE: &str = #template_lit;
-
-                        let html = TEMPLATE
-                            .replace("{SERVICE_NAME_JSON}", &::serde_json::to_string(#service_name_str).unwrap_or_else(|_| "\"API\"".to_string()))
-                            .replace("{PROTOCOL_JSON}", &::serde_json::to_string("jsonrpc").unwrap_or_else(|_| "\"jsonrpc\"".to_string()))
-                            .replace("{SPEC_PATH_JSON}", &::serde_json::to_string(&openrpc_path).unwrap_or_else(|_| "\"openrpc.json\"".to_string()))
-                            .replace("{API_BASE_PATH_JSON}", &::serde_json::to_string(&base_path).unwrap_or_else(|_| "\"/\"".to_string()));
-
-                        Html(html)
+                        Html((*explorer_html).clone())
                     }
                 }
             };

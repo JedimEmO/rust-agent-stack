@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const REST_URL = 'http://127.0.0.1:3101/api/v1/docs';
+const REST_PORT = process.env.PLAYWRIGHT_REST_PORT ?? '3101';
+const REST_URL = `http://127.0.0.1:${REST_PORT}/api/v1/docs`;
 
 async function selectOperation(page: Page, method: string, path: string) {
   await page.locator('.op').filter({ hasText: method }).filter({ hasText: path }).click();
@@ -72,6 +73,18 @@ test.describe('REST API explorer', () => {
     await expect(page.locator('#response-output')).toContainText('content-type');
     await page.locator('[data-response-tab="request"]').click();
     await expect(page.locator('#response-output')).toContainText('Created From UI');
+  });
+
+  test('shows permission denied responses for insufficient token permissions', async ({ page }) => {
+    await selectOperation(page, 'POST', '/widgets');
+    await page.locator('#body-editor').fill(JSON.stringify({ name: 'Denied Widget', owner: 'playwright' }, null, 2));
+    await page.locator('#jwt-token').fill('user-token');
+    await page.locator('#save-token').click();
+    await expect(page.locator('#auth-state')).toContainText('Token set');
+
+    await send(page);
+    await expect(page.locator('#response-status')).toContainText('403');
+    await expect(page.locator('#history-list')).toContainText('403');
   });
 
   test('saves requests, restores history, and keeps tokens out of localStorage', async ({ page }) => {

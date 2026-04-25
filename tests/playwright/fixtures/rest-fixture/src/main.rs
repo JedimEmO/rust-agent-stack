@@ -139,7 +139,9 @@ async fn main() -> Result<()> {
         .auth_provider(FixtureAuthProvider)
         .build();
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3101").await?;
+    let bind_addr =
+        std::env::var("PLAYWRIGHT_REST_ADDR").unwrap_or_else(|_| "127.0.0.1:3101".to_string());
+    let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
     axum::serve(listener, app).await?;
 
     Ok(())
