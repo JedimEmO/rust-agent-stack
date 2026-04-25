@@ -30,18 +30,19 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p bench-output
-          for crate in \
-            ras-jsonrpc-macro \
-            ras-rest-macro \
-            ras-file-macro \
-            ras-jsonrpc-bidirectional-macro
+          while read -r crate bench
           do
-            echo "::group::$crate"
-            cargo bench -p "$crate" -- \
+            echo "::group::$crate/$bench"
+            cargo bench -p "$crate" --bench "$bench" -- \
               --warm-up-time 1 --measurement-time 3 \
-              | tee "bench-output/$crate.txt"
+              | tee "bench-output/$crate-$bench.txt"
             echo "::endgroup::"
-          done
+          done <<'BENCHES'
+          ras-jsonrpc-macro dispatch
+          ras-rest-macro dispatch
+          ras-file-macro streaming
+          ras-jsonrpc-bidirectional-macro roundtrip
+          BENCHES
       - name: Upload bench artifacts
         if: always()
         uses: actions/upload-artifact@v4
