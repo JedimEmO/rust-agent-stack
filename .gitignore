@@ -27,3 +27,4 @@ test_login.sh
 # Build outputs
 **/openrpc/
 **/openapi/
+.references/
