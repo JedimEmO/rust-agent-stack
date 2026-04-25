@@ -29,12 +29,10 @@ pub fn generate_static_hosting_code(
         return TokenStream::new();
     }
 
-    // Load the template content at macro compile time
-    const TEMPLATE_CONTENT: &str = include_str!("jsonrpc_explorer_template.html");
+    const TEMPLATE_CONTENT: &str =
+        include_str!("../../../rest/ras-rest-macro/src/api_explorer_template.html");
 
     let explorer_path_suffix = &config.explorer_path;
-    // Use path relative to explorer directory
-    let openrpc_path_js = "explorer/openrpc.json".to_string();
     let service_name_str = service_name.to_string();
     let service_name_lower = service_name_str.to_lowercase();
     let openrpc_fn_name_str = ["generate_", &service_name_lower, "_openrpc"].concat();
@@ -53,19 +51,27 @@ pub fn generate_static_hosting_code(
             let explorer_path = format!("{}{}", base_path, #explorer_path_suffix);
             let openrpc_path = format!("{}/openrpc.json", &explorer_path);
 
+            let explorer_html = {
+                const TEMPLATE: &str = #template_lit;
+                let config_json = ::serde_json::json!({
+                    "serviceName": #service_name_str,
+                    "protocol": "jsonrpc",
+                    "specPath": &openrpc_path,
+                    "apiBasePath": base_path
+                })
+                .to_string()
+                .replace("<", "\\u003c");
+
+                ::std::sync::Arc::new(TEMPLATE.replace("{EXPLORER_CONFIG_JSON}", &config_json))
+            };
+
             let serve_explorer = {
-                let base_path = base_path.to_string();
-                move || async move {
-                    // Template is embedded at macro expansion time
-                    const TEMPLATE: &str = #template_lit;
-
-                    // Replace placeholders
-                    let html = TEMPLATE
-                        .replace("{SERVICE_NAME}", #service_name_str)
-                        .replace("{OPENRPC_PATH}", &#openrpc_path_js)
-                        .replace("{RPC_BASE_PATH}", &base_path);
-
-                    Html(html)
+                let explorer_html = explorer_html.clone();
+                move || {
+                    let explorer_html = explorer_html.clone();
+                    async move {
+                        Html((*explorer_html).clone())
+                    }
                 }
             };
 

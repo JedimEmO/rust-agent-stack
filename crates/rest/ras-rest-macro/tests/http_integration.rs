@@ -469,6 +469,32 @@ async fn make_rest_request(
 }
 
 #[tokio::test]
+async fn test_docs_explorer_routes_generated() {
+    let (base_url, _handle) = create_rest_test_server().await;
+
+    let docs_response = reqwest::get(format!("{}/api/v1/docs", base_url))
+        .await
+        .unwrap();
+    assert_eq!(docs_response.status(), 200);
+
+    let docs = docs_response.text().await.unwrap();
+    assert!(docs.contains("\"TestRestService\""));
+    assert!(docs.contains("\"rest\""));
+    assert!(docs.contains("/api/v1/docs/openapi.json"));
+    assert!(docs.contains("id=\"jwt-token\""));
+    assert!(docs.contains("id=\"saved-list\""));
+
+    let spec_response = reqwest::get(format!("{}/api/v1/docs/openapi.json", base_url))
+        .await
+        .unwrap();
+    assert_eq!(spec_response.status(), 200);
+
+    let spec: serde_json::Value = spec_response.json().await.unwrap();
+    assert_eq!(spec["info"]["title"], "TestRestService REST API");
+    assert!(spec["paths"].is_object());
+}
+
+#[tokio::test]
 async fn test_unauthorized_endpoints() {
     let (base_url, _handle) = create_rest_test_server().await;
 

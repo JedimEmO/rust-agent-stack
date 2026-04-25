@@ -1,0 +1,25 @@
+[package]
+name = "playwright-rest-fixture"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[features]
+default = ["server"]
+server = ["ras-rest-macro/server"]
+client = ["ras-rest-macro/client"]
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+axum = { workspace = true }
+axum-extra = { workspace = true }
+ras-auth-core = { path = "../../../../crates/core/ras-auth-core" }
+ras-rest-core = { path = "../../../../crates/rest/ras-rest-core" }
+ras-rest-macro = { path = "../../../../crates/rest/ras-rest-macro" }
+reqwest = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
