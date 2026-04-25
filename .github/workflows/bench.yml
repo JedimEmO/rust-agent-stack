@@ -1,0 +1,53 @@
+name: Benchmarks
+
+# GitHub-hosted runners are noisy — benches here track the *order of magnitude*
+# baseline rather than fail on small regressions. They run on master pushes and
+# on demand. PRs intentionally do NOT run benches: they're slow and the noise
+# floor would just produce false alarms.
+
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  bench:
+    name: Criterion benches
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Bench builds use the release profile; cache it under its own key
+          # so it doesn't fight with the test job's debug cache.
+          key: bench
+      - name: Run criterion benches (each macro)
+        run: |
+          set -euo pipefail
+          mkdir -p bench-output
+          for crate in \
+            ras-jsonrpc-macro \
+            ras-rest-macro \
+            ras-file-macro \
+            ras-jsonrpc-bidirectional-macro
+          do
+            echo "::group::$crate"
+            cargo bench -p "$crate" -- \
+              --warm-up-time 1 --measurement-time 3 \
+              | tee "bench-output/$crate.txt"
+            echo "::endgroup::"
+          done
+      - name: Upload bench artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-results
+          path: |
+            bench-output/
+            target/criterion/
+          retention-days: 30
