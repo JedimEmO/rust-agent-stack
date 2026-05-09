@@ -7,10 +7,13 @@ use ras_jsonrpc_macro::jsonrpc_service;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// Request payload for the ping method.
+/// Request payload for the `ping` method.
+///
+/// **Schema docs** should render with Markdown.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct PingRequest {
     /// Message echoed by the fixture service.
+    /// This line must stay on a new line.
     pub message: String,
 }
 
@@ -45,9 +48,20 @@ jsonrpc_service!({
     openrpc: true,
     explorer: true,
     methods: [
-        /// Echo a ping message.
+        /// Echo a `PingRequest` message.
         ///
-        /// Used by explorer tests to verify OpenRPC method docs render.
+        /// **Use this in tests.**
+        /// - Confirms list rendering
+        /// - Preserves list items
+        ///
+        /// Line one
+        /// Line two
+        ///
+        /// ```json
+        /// {"message":"hello"}
+        /// ```
+        ///
+        /// See [Rust API Stack](https://example.com/docs).
         UNAUTHORIZED ping(PingRequest) -> PingResponse,
         UNAUTHORIZED no_params(()) -> String,
         WITH_PERMISSIONS(["admin"]) create_widget(CreateWidgetRequest) -> Widget,

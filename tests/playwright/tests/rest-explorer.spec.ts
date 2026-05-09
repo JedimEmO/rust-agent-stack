@@ -22,18 +22,36 @@ test.describe('REST API explorer', () => {
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await expect(page.locator('#service-subtitle')).toContainText('REST OpenAPI');
     await expect(page.locator('#operation-list')).toContainText('/health');
-    await expect(page.locator('.op').filter({ hasText: '/health' })).toContainText('Check fixture service health.');
+    await expect(page.locator('.op').filter({ hasText: '/health' })).toContainText('Check fixture `health`.');
     await expect(page.locator('#operation-list')).toContainText('/widgets');
     await expect(page.locator('#operation-list')).toContainText('/search/widgets');
 
     await selectOperation(page, 'GET', '/health');
-    await expect(page.locator('#operation-description')).toContainText('Check fixture service health.');
-    await expect(page.locator('#operation-description')).toContainText(
-      'Used by explorer tests to verify OpenAPI operation docs render.'
+    await expect(page.locator('#operation-description p code')).toContainText('health');
+    await expect(page.locator('#operation-description strong')).toContainText('REST docs');
+    await expect(page.locator('#operation-description li')).toContainText([
+      'Shows operation details',
+      'Preserves line breaks'
+    ]);
+    await expect(page.locator('#operation-description pre code')).toContainText('{"status":"ok"}');
+    await expect(page.locator('#operation-description a').filter({ hasText: 'REST docs' })).toHaveAttribute(
+      'href',
+      'https://example.com/rest'
     );
+    const descriptionText = await page.locator('#operation-description').evaluate((el) => el.textContent ?? '');
+    expect(descriptionText).toContain('Alpha line\nBeta line');
+
     await expect(page.locator('#request-form')).toContainText('Response schema');
     await expect(page.locator('#request-form')).toContainText('Health status returned by the fixture service.');
+    await expect(page.locator('#request-form .schema-desc strong')).toContainText('Schema docs');
     await expect(page.locator('#request-form')).toContainText('Current health state.');
+    const statusDocText = await page
+      .locator('.schema-field')
+      .filter({ hasText: 'Current health state.' })
+      .locator('.schema-field-desc')
+      .first()
+      .evaluate((el) => el.textContent ?? '');
+    expect(statusDocText).toContain('Current health state.\nThis field description keeps its line break.');
   });
 
   test('searches operations and switches request forms without stale UI', async ({ page }) => {

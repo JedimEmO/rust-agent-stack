@@ -22,18 +22,33 @@ test.describe('JSON-RPC API explorer', () => {
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await expect(page.locator('#service-subtitle')).toContainText('JSON-RPC OpenRPC');
     await expect(page.locator('#operation-list')).toContainText('ping');
-    await expect(page.locator('.op').filter({ hasText: 'ping' })).toContainText('Echo a ping message.');
+    await expect(page.locator('.op').filter({ hasText: 'ping' })).toContainText('Echo a `PingRequest` message.');
     await expect(page.locator('#operation-list')).toContainText('create_widget');
     await expect(page.locator('#operation-list')).toContainText('current_profile');
 
     await selectMethod(page, 'ping');
-    await expect(page.locator('#operation-description')).toContainText('Echo a ping message.');
-    await expect(page.locator('#operation-description')).toContainText(
-      'Used by explorer tests to verify OpenRPC method docs render.'
+    await expect(page.locator('#operation-description p code')).toContainText('PingRequest');
+    await expect(page.locator('#operation-description strong')).toContainText('Use this in tests.');
+    await expect(page.locator('#operation-description li')).toContainText(['Confirms list rendering', 'Preserves list items']);
+    await expect(page.locator('#operation-description pre code')).toContainText('{"message":"hello"}');
+    await expect(page.locator('#operation-description a').filter({ hasText: 'Rust API Stack' })).toHaveAttribute(
+      'href',
+      'https://example.com/docs'
     );
+    const descriptionText = await page.locator('#operation-description').evaluate((el) => el.textContent ?? '');
+    expect(descriptionText).toContain('Line one\nLine two');
+
     await expect(page.locator('#request-form')).toContainText('Params schema');
     await expect(page.locator('#request-form')).toContainText('Request payload for the ping method.');
+    await expect(page.locator('#request-form .schema-desc strong')).toContainText('Schema docs');
     await expect(page.locator('#request-form')).toContainText('Message echoed by the fixture service.');
+    const messageDocText = await page
+      .locator('.schema-field')
+      .filter({ hasText: 'Message echoed by the fixture service.' })
+      .locator('.schema-field-desc')
+      .first()
+      .evaluate((el) => el.textContent ?? '');
+    expect(messageDocText).toContain('Message echoed by the fixture service.\nThis line must stay on a new line.');
     await expect(page.locator('#request-form')).toContainText('Result schema');
     await expect(page.locator('#request-form')).toContainText('Response returned by the ping method.');
     await expect(page.locator('#request-form')).toContainText('Message returned from the fixture service.');
