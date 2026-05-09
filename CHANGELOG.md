@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added - 2026-05-09
+- Established repository versioning and changelog policy in `VERSIONING.md`.
+- Added doc-comment support for generated API documentation:
+  - `ras-jsonrpc-macro` now maps `///` comments on JSON-RPC methods into OpenRPC `summary` and `description`.
+  - `ras-rest-macro` now maps `///` comments on REST endpoints into OpenAPI operation `summary` and `description`.
+- Enhanced the API explorer to render documentation from generated specs:
+  - Shows operation/method docs for both REST and JSON-RPC.
+  - Shows schema/type and field descriptions produced by `schemars::JsonSchema`.
+  - Renders a safe dependency-free Markdown subset for paragraphs, line breaks, bold, inline code, fenced code blocks, lists, and HTTP(S) links.
+- Added Playwright e2e coverage for REST and JSON-RPC explorer documentation rendering.
+
+### Changed - 2026-05-09
+- Bumped `ras-jsonrpc-macro` from `0.1.1` to `0.1.2`.
+- Bumped `ras-rest-macro` from `0.1.0` to `0.1.1`.
+
 ### Added - 2025-01-14
 - Cat avatar system for bidirectional chat users
   - Unique ASCII art cat avatars generated from username hashes
