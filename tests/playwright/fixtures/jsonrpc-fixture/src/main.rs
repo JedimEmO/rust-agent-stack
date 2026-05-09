@@ -7,13 +7,17 @@ use ras_jsonrpc_macro::jsonrpc_service;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+/// Request payload for the ping method.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct PingRequest {
+    /// Message echoed by the fixture service.
     pub message: String,
 }
 
+/// Response returned by the ping method.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct PingResponse {
+    /// Message returned from the fixture service.
     pub message: String,
 }
 

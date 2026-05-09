@@ -31,6 +31,12 @@ test.describe('JSON-RPC API explorer', () => {
     await expect(page.locator('#operation-description')).toContainText(
       'Used by explorer tests to verify OpenRPC method docs render.'
     );
+    await expect(page.locator('#request-form')).toContainText('Params schema');
+    await expect(page.locator('#request-form')).toContainText('Request payload for the ping method.');
+    await expect(page.locator('#request-form')).toContainText('Message echoed by the fixture service.');
+    await expect(page.locator('#request-form')).toContainText('Result schema');
+    await expect(page.locator('#request-form')).toContainText('Response returned by the ping method.');
+    await expect(page.locator('#request-form')).toContainText('Message returned from the fixture service.');
   });
 
   test('searches methods and switches params editor without stale UI', async ({ page }) => {

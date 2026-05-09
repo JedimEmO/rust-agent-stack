@@ -7,8 +7,10 @@ use ras_rest_macro::rest_service;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+/// Health status returned by the fixture service.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct HealthResponse {
+    /// Current health state.
     pub status: String,
 }
 

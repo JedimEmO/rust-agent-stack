@@ -31,6 +31,9 @@ test.describe('REST API explorer', () => {
     await expect(page.locator('#operation-description')).toContainText(
       'Used by explorer tests to verify OpenAPI operation docs render.'
     );
+    await expect(page.locator('#request-form')).toContainText('Response schema');
+    await expect(page.locator('#request-form')).toContainText('Health status returned by the fixture service.');
+    await expect(page.locator('#request-form')).toContainText('Current health state.');
   });
 
   test('searches operations and switches request forms without stale UI', async ({ page }) => {

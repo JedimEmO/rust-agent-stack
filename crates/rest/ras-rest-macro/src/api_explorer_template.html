@@ -274,6 +274,41 @@
             color: var(--muted);
             font-size: 0.82rem;
         }
+        .schema-docs {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--panel-2);
+            padding: 0.75rem;
+            display: grid;
+            gap: 0.6rem;
+        }
+        .schema-head {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .schema-desc {
+            margin: 0;
+            color: var(--muted);
+            white-space: pre-wrap;
+        }
+        .schema-fields {
+            display: grid;
+            gap: 0.45rem;
+        }
+        .schema-field {
+            display: grid;
+            grid-template-columns: minmax(120px, 0.9fr) minmax(80px, 0.5fr) minmax(160px, 1.5fr);
+            gap: 0.55rem;
+            align-items: start;
+            padding-top: 0.45rem;
+            border-top: 1px solid var(--border);
+        }
+        .schema-field-desc {
+            color: var(--muted);
+            white-space: pre-wrap;
+        }
         .tabs {
             display: flex;
             gap: 0.45rem;
@@ -361,7 +396,7 @@
             }
             .list { max-height: 42vh; }
             .main-scroll, .response-scroll { height: auto; }
-            .grid2, .param-row { grid-template-columns: 1fr; }
+            .grid2, .param-row, .schema-field { grid-template-columns: 1fr; }
             .topbar { align-items: flex-start; }
         }
     </style>
@@ -542,6 +577,33 @@
             return "object";
         }
 
+        function schemaTitle(schema) {
+            const refName = schema?.$ref?.split("/").pop();
+            const resolved = resolveRef(schema);
+            return resolved?.title || refName || schemaType(schema);
+        }
+
+        function schemaFields(schema) {
+            const resolved = resolveRef(schema);
+            const properties = resolved?.properties || {};
+            const required = new Set(resolved?.required || []);
+            return Object.entries(properties).map(([name, prop]) => {
+                const propSchema = resolveRef(prop);
+                return {
+                    name,
+                    required: required.has(name),
+                    type: schemaType(prop),
+                    description: propSchema?.description || ""
+                };
+            });
+        }
+
+        function schemaHasDocs(schema) {
+            const resolved = resolveRef(schema);
+            if (!resolved) return false;
+            return Boolean(resolved.description || schemaFields(schema).some((field) => field.description));
+        }
+
         function exampleFromSchema(schema, seen = new Set()) {
             const resolved = resolveRef(schema);
             if (!resolved) return {};
@@ -571,6 +633,57 @@
                 return output;
             }
             return {};
+        }
+
+        function renderSchemaDocs(title, schema) {
+            if (!schemaHasDocs(schema)) return null;
+
+            const resolved = resolveRef(schema);
+            const docs = document.createElement("div");
+            docs.className = "schema-docs";
+            const section = document.createElement("div");
+            section.className = "section-title";
+            section.textContent = title;
+            const head = document.createElement("div");
+            head.className = "schema-head";
+            const name = document.createElement("strong");
+            name.textContent = schemaTitle(schema);
+            const type = document.createElement("span");
+            type.className = "badge";
+            type.textContent = schemaType(schema);
+            head.append(name, type);
+            docs.append(section, head);
+
+            if (resolved?.description) {
+                const description = document.createElement("p");
+                description.className = "schema-desc";
+                description.textContent = resolved.description;
+                docs.appendChild(description);
+            }
+
+            const fields = schemaFields(schema);
+            if (fields.length) {
+                const rows = document.createElement("div");
+                rows.className = "schema-fields";
+                fields.forEach((field) => {
+                    const row = document.createElement("div");
+                    row.className = "schema-field";
+                    const fieldName = document.createElement("div");
+                    fieldName.className = "mono";
+                    fieldName.textContent = `${field.name}${field.required ? " *" : ""}`;
+                    const fieldType = document.createElement("span");
+                    fieldType.className = "badge";
+                    fieldType.textContent = field.type;
+                    const fieldDescription = document.createElement("div");
+                    fieldDescription.className = "schema-field-desc";
+                    fieldDescription.textContent = field.description || "";
+                    row.append(fieldName, fieldType, fieldDescription);
+                    rows.appendChild(row);
+                });
+                docs.appendChild(rows);
+            }
+
+            return docs;
         }
 
         function jsonPretty(value) {
@@ -843,7 +956,11 @@
             });
             if (operation.requestSchema) {
                 fragment.appendChild(editorBlock("JSON body", "body-editor", jsonPretty(exampleFromSchema(operation.requestSchema))));
+                const docs = renderSchemaDocs("Request schema", operation.requestSchema);
+                if (docs) fragment.appendChild(docs);
             }
+            const responseDocs = renderSchemaDocs("Response schema", operation.responseSchema);
+            if (responseDocs) fragment.appendChild(responseDocs);
             return fragment;
         }
 
@@ -879,12 +996,16 @@
             fragment.appendChild(grid);
             if (operation.paramsSchema) {
                 fragment.appendChild(editorBlock("Params", "params-editor", jsonPretty(exampleFromSchema(operation.paramsSchema))));
+                const docs = renderSchemaDocs("Params schema", operation.paramsSchema);
+                if (docs) fragment.appendChild(docs);
             } else {
                 const empty = document.createElement("div");
                 empty.className = "empty";
                 empty.textContent = "This method has no params.";
                 fragment.appendChild(empty);
             }
+            const responseDocs = renderSchemaDocs("Result schema", operation.responseSchema);
+            if (responseDocs) fragment.appendChild(responseDocs);
             return fragment;
         }
 
