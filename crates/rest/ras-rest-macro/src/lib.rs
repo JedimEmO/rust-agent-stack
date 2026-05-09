@@ -87,6 +87,7 @@ enum OpenApiConfig {
 
 #[derive(Debug)]
 struct EndpointDefinition {
+    docs: Option<DocComment>,
     method: HttpMethod,
     auth: AuthRequirement,
     path: String,
@@ -95,6 +96,29 @@ struct EndpointDefinition {
     request_type: Option<Type>,
     response_type: Type,
     handler_name: Ident,
+}
+
+#[derive(Debug)]
+struct DocComment {
+    summary: String,
+    description: String,
+}
+
+impl DocComment {
+    fn from_lines(lines: Vec<String>) -> Option<Self> {
+        let lines: Vec<String> = lines
+            .into_iter()
+            .map(|line| line.trim().to_string())
+            .collect();
+        let start = lines.iter().position(|line| !line.is_empty())?;
+        let end = lines.iter().rposition(|line| !line.is_empty())?;
+        let lines = &lines[start..=end];
+
+        Some(Self {
+            summary: lines[0].clone(),
+            description: lines.join("\n"),
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -144,6 +168,38 @@ struct QueryParam {
 enum AuthRequirement {
     Unauthorized,
     WithPermissions(Vec<Vec<String>>), // Vec of permission groups - OR between groups, AND within groups
+}
+
+const DOC_COMMENT_EXPECTED: &str = "Expected doc comment in the form `/// ...`";
+
+fn parse_doc_comment_attrs(
+    attrs: Vec<syn::Attribute>,
+    entry_kind: &str,
+) -> syn::Result<Option<DocComment>> {
+    let lines = attrs
+        .into_iter()
+        .map(|attr| parse_doc_comment_attr(attr, entry_kind))
+        .collect::<syn::Result<Vec<_>>>()?;
+
+    Ok(DocComment::from_lines(lines))
+}
+
+fn parse_doc_comment_attr(attr: syn::Attribute, entry_kind: &str) -> syn::Result<String> {
+    if !attr.path().is_ident("doc") {
+        return Err(syn::Error::new_spanned(
+            attr,
+            format!("Only doc comments (`/// ...`) are supported before {entry_kind} definitions"),
+        ));
+    }
+
+    if let syn::Meta::NameValue(name_value) = &attr.meta
+        && let syn::Expr::Lit(expr_lit) = &name_value.value
+        && let syn::Lit::Str(doc_line) = &expr_lit.lit
+    {
+        return Ok(doc_line.value());
+    }
+
+    Err(syn::Error::new_spanned(attr, DOC_COMMENT_EXPECTED))
 }
 
 impl Parse for ServiceDefinition {
@@ -253,6 +309,8 @@ impl Parse for ServiceDefinition {
 
 impl Parse for EndpointDefinition {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let docs = parse_doc_comment_attrs(input.call(syn::Attribute::parse_outer)?, "endpoint")?;
+
         // Parse HTTP method (GET, POST, PUT, DELETE, PATCH)
         let method_ident = input.parse::<Ident>()?;
         let method = match method_ident.to_string().as_str() {
@@ -423,6 +481,7 @@ impl Parse for EndpointDefinition {
         let response_type = input.parse::<Type>()?;
 
         Ok(EndpointDefinition {
+            docs,
             method,
             auth,
             path,

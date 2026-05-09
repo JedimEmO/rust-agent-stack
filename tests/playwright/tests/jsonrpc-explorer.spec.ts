@@ -22,8 +22,15 @@ test.describe('JSON-RPC API explorer', () => {
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await expect(page.locator('#service-subtitle')).toContainText('JSON-RPC OpenRPC');
     await expect(page.locator('#operation-list')).toContainText('ping');
+    await expect(page.locator('.op').filter({ hasText: 'ping' })).toContainText('Echo a ping message.');
     await expect(page.locator('#operation-list')).toContainText('create_widget');
     await expect(page.locator('#operation-list')).toContainText('current_profile');
+
+    await selectMethod(page, 'ping');
+    await expect(page.locator('#operation-description')).toContainText('Echo a ping message.');
+    await expect(page.locator('#operation-description')).toContainText(
+      'Used by explorer tests to verify OpenRPC method docs render.'
+    );
   });
 
   test('searches methods and switches params editor without stale UI', async ({ page }) => {

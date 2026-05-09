@@ -117,7 +117,11 @@ rest_service!({
     ui_theme: "default",
     endpoints: [
         // User management endpoints
+        /// List users.
+        ///
+        /// Returns all users visible to the caller.
         GET UNAUTHORIZED users() -> UsersResponse,
+        /// Create a user.
         POST WITH_PERMISSIONS(["admin"]) users(CreateUserRequest) -> User,
         GET WITH_PERMISSIONS(["user"]) users/{id: i32}() -> User,
         PUT WITH_PERMISSIONS(["admin"]) users/{id: i32}(UpdateUserRequest) -> User,
@@ -952,13 +956,25 @@ async fn test_path_parameters() {
 
 #[tokio::test]
 async fn test_openapi_generation() {
-    // Test that OpenAPI document generation works
-    // Note: This tests compilation and basic structure, actual OpenAPI document
-    // generation would be tested separately
     let _ = TestRestServiceBuilder::new(TestRestServiceImpl);
 
-    // The fact that this compiles means the REST service macro generated the builder correctly
-    // with OpenAPI configuration enabled
+    let openapi_doc = generate_testrestservice_openapi();
+    assert_eq!(openapi_doc["openapi"], "3.0.3");
+
+    let get_users = &openapi_doc["paths"]["/users"]["get"];
+    assert_eq!(get_users["summary"], "List users.");
+    assert_eq!(
+        get_users["description"],
+        "List users.\n\nReturns all users visible to the caller."
+    );
+
+    let post_users = &openapi_doc["paths"]["/users"]["post"];
+    assert_eq!(post_users["summary"], "Create a user.");
+    assert_eq!(post_users["description"], "Create a user.");
+
+    let health = &openapi_doc["paths"]["/health"]["get"];
+    assert_eq!(health["summary"], "GET /health");
+    assert_eq!(health["description"], "Handles GET requests to /health");
 }
 
 #[tokio::test]

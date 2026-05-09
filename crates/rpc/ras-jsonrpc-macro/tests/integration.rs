@@ -54,6 +54,7 @@ mod basic_service {
     jsonrpc_service!({
         service_name: MyService,
         methods: [
+            /// Sign in with user credentials.
             UNAUTHORIZED sign_in(SignInRequest) -> SignInResponse,
             WITH_PERMISSIONS(["admin"]) create_user(CreateUserRequest) -> User,
             WITH_PERMISSIONS([]) get_profile(()) -> User,
@@ -104,7 +105,11 @@ mod openrpc_service {
         service_name: OpenRpcService,
         openrpc: true,
         methods: [
+            /// Sign in with user credentials.
             UNAUTHORIZED sign_in(SignInRequest) -> SignInResponse,
+            /// Create a user account.
+            ///
+            /// Requires administrator permissions and returns the created user.
             WITH_PERMISSIONS(["admin"]) create_user(CreateUserRequest) -> User,
             WITH_PERMISSIONS([]) sign_out(()) -> (),
         ]
@@ -163,11 +168,26 @@ async fn test_openrpc_generation() {
     // Check sign_in method (unauthorized)
     let sign_in_method = methods.iter().find(|m| m["name"] == "sign_in").unwrap();
     assert!(sign_in_method.get("x-authentication").is_none());
+    assert_eq!(sign_in_method["summary"], "Sign in with user credentials.");
+    assert_eq!(
+        sign_in_method["description"],
+        "Sign in with user credentials."
+    );
 
     // Check create_user method (requires admin permission)
     let create_user_method = methods.iter().find(|m| m["name"] == "create_user").unwrap();
     assert_eq!(create_user_method["x-authentication"]["required"], true);
     assert_eq!(create_user_method["x-permissions"][0], "admin");
+    assert_eq!(create_user_method["summary"], "Create a user account.");
+    assert_eq!(
+        create_user_method["description"],
+        "Create a user account.\n\nRequires administrator permissions and returns the created user."
+    );
+
+    // Check undocumented fallback summary remains generated
+    let sign_out_method = methods.iter().find(|m| m["name"] == "sign_out").unwrap();
+    assert_eq!(sign_out_method["summary"], "Calls the sign_out method");
+    assert!(sign_out_method.get("description").is_none());
 
     // Test writing to file
     assert!(generate_openrpcservice_openrpc_to_file().is_ok());

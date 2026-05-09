@@ -22,8 +22,15 @@ test.describe('REST API explorer', () => {
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await expect(page.locator('#service-subtitle')).toContainText('REST OpenAPI');
     await expect(page.locator('#operation-list')).toContainText('/health');
+    await expect(page.locator('.op').filter({ hasText: '/health' })).toContainText('Check fixture service health.');
     await expect(page.locator('#operation-list')).toContainText('/widgets');
     await expect(page.locator('#operation-list')).toContainText('/search/widgets');
+
+    await selectOperation(page, 'GET', '/health');
+    await expect(page.locator('#operation-description')).toContainText('Check fixture service health.');
+    await expect(page.locator('#operation-description')).toContainText(
+      'Used by explorer tests to verify OpenAPI operation docs render.'
+    );
   });
 
   test('searches operations and switches request forms without stale UI', async ({ page }) => {

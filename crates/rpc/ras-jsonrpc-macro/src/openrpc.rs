@@ -157,10 +157,23 @@ pub fn generate_openrpc_code(
 
             let request_type = &method.request_type;
             let response_type = &method.response_type;
+            let (summary, description) = match &method.docs {
+                Some(docs) => {
+                    let summary = &docs.summary;
+                    let description = &docs.description;
+                    (
+                        quote! { Some(#summary.to_string()) },
+                        quote! { Some(#description.to_string()) },
+                    )
+                }
+                None => (quote! { None }, quote! { None }),
+            };
 
             quote! {
                 #method_info_struct_name {
                     name: #method_name.to_string(),
+                    summary: #summary,
+                    description: #description,
                     auth_required: #auth_required,
                     permissions: vec![#(#permissions.to_string()),*],
                     request_type_name: stringify!(#request_type).to_string(),
@@ -174,6 +187,8 @@ pub fn generate_openrpc_code(
         #[derive(serde::Serialize)]
         struct #method_info_struct_name {
             name: String,
+            summary: Option<String>,
+            description: Option<String>,
             auth_required: bool,
             permissions: Vec<String>,
             request_type_name: String,
@@ -386,10 +401,14 @@ pub fn generate_openrpc_code(
 
                 // Sanitize the response type name for schema reference
                 let sanitized_response_type = method.response_type_name.replace(" ", "");
+                let method_summary = method
+                    .summary
+                    .clone()
+                    .unwrap_or_else(|| format!("Calls the {} method", method.name));
 
                 let mut method_obj = json!({
                     "name": method.name,
-                    "summary": format!("Calls the {} method", method.name),
+                    "summary": method_summary,
                     "params": params,
                     "result": {
                         "name": "result",
@@ -405,6 +424,10 @@ pub fn generate_openrpc_code(
 
                 // Add extensions to the method object
                 if let Some(obj) = method_obj.as_object_mut() {
+                    if let Some(description) = &method.description {
+                        obj.insert("description".to_string(), json!(description));
+                    }
+
                     for (key, value) in extensions {
                         obj.insert(key, value);
                     }

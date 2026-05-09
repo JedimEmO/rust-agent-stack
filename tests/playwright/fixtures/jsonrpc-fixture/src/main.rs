@@ -41,6 +41,9 @@ jsonrpc_service!({
     openrpc: true,
     explorer: true,
     methods: [
+        /// Echo a ping message.
+        ///
+        /// Used by explorer tests to verify OpenRPC method docs render.
         UNAUTHORIZED ping(PingRequest) -> PingResponse,
         UNAUTHORIZED no_params(()) -> String,
         WITH_PERMISSIONS(["admin"]) create_widget(CreateWidgetRequest) -> Widget,

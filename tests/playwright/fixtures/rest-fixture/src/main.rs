@@ -44,6 +44,9 @@ rest_service!({
     serve_docs: true,
     docs_path: "/docs",
     endpoints: [
+        /// Check fixture service health.
+        ///
+        /// Used by explorer tests to verify OpenAPI operation docs render.
         GET UNAUTHORIZED health() -> HealthResponse,
         GET UNAUTHORIZED widgets/{id: String}() -> Widget,
         GET UNAUTHORIZED search/widgets ? q: String & limit: Option<u32> () -> WidgetsResponse,
