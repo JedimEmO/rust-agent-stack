@@ -24,6 +24,14 @@ struct ItemsResponse {
     items: Vec<Item>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, schemars::JsonSchema)]
+enum SortOrder {
+    #[serde(rename = "asc")]
+    Asc,
+    #[serde(rename = "desc")]
+    Desc,
+}
+
 rest_service!({
     service_name: Demo,
     base_path: "/api",
@@ -35,6 +43,8 @@ rest_service!({
         GET WITH_PERMISSIONS(["user"]) items/{id: u32}() -> Item,
         POST WITH_PERMISSIONS(["admin"]) items(CreateItem) -> Item,
         GET UNAUTHORIZED search ? q: String & limit: Option<u32> & exact: bool () -> ItemsResponse,
+        GET UNAUTHORIZED filter ? tags: Vec<String> & optional_tags: Option<Vec<String>> () -> ItemsResponse,
+        GET UNAUTHORIZED sorted ? order: SortOrder () -> ItemsResponse,
         POST WITH_PERMISSIONS(["admin"]) items/batch ? notify: bool (CreateItem) -> Item,
         GET WITH_PERMISSIONS(["user"]) items/{id: u32}/related ? tag: Option<String> () -> ItemsResponse,
     ]
@@ -87,6 +97,49 @@ impl DemoTrait for DemoImpl {
             })
             .collect();
         Ok(RestResponse::ok(ItemsResponse { items }))
+    }
+
+    async fn get_filter(
+        &self,
+        tags: Vec<String>,
+        optional_tags: Option<Vec<String>>,
+    ) -> RestResult<ItemsResponse> {
+        let mut items: Vec<Item> = tags
+            .into_iter()
+            .enumerate()
+            .map(|(idx, tag)| Item {
+                id: idx as u32,
+                name: format!("tag:{tag}"),
+            })
+            .collect();
+
+        let offset = items.len();
+        items.extend(
+            optional_tags
+                .unwrap_or_default()
+                .into_iter()
+                .enumerate()
+                .map(|(idx, tag)| Item {
+                    id: (offset + idx) as u32,
+                    name: format!("optional:{tag}"),
+                }),
+        );
+
+        Ok(RestResponse::ok(ItemsResponse { items }))
+    }
+
+    async fn get_sorted(&self, order: SortOrder) -> RestResult<ItemsResponse> {
+        let label = match order {
+            SortOrder::Asc => "asc",
+            SortOrder::Desc => "desc",
+        };
+
+        Ok(RestResponse::ok(ItemsResponse {
+            items: vec![Item {
+                id: 0,
+                name: format!("order:{label}"),
+            }],
+        }))
     }
 
     async fn post_items_batch(
@@ -218,6 +271,47 @@ async fn query_params_required_and_optional_serialize_correctly() {
         .expect("search ok");
     assert_eq!(resp.items.len(), 2);
     assert_eq!(resp.items[0].name, "fuzzy:zz-0");
+}
+
+#[tokio::test]
+async fn vec_query_params_serialize_as_repeated_keys() {
+    let server = spawn_http(router());
+    let base = server.server_address().unwrap().to_string();
+
+    let resp = client(&base)
+        .get_filter(
+            vec!["red".to_string(), "blue".to_string()],
+            Some(vec!["featured".to_string()]),
+        )
+        .await
+        .expect("filter with repeated keys");
+    let names: Vec<_> = resp.items.into_iter().map(|item| item.name).collect();
+    assert_eq!(names, vec!["tag:red", "tag:blue", "optional:featured"]);
+
+    let resp = client(&base)
+        .get_filter(vec!["solo".to_string()], None)
+        .await
+        .expect("filter without optional tags");
+    let names: Vec<_> = resp.items.into_iter().map(|item| item.name).collect();
+    assert_eq!(names, vec!["tag:solo"]);
+}
+
+#[tokio::test]
+async fn enum_query_params_use_serde_renames_without_display() {
+    let server = spawn_http(router());
+    let base = server.server_address().unwrap().to_string();
+
+    let resp = client(&base)
+        .get_sorted(SortOrder::Asc)
+        .await
+        .expect("sort asc");
+    assert_eq!(resp.items[0].name, "order:asc");
+
+    let resp = client(&base)
+        .get_sorted(SortOrder::Desc)
+        .await
+        .expect("sort desc");
+    assert_eq!(resp.items[0].name, "order:desc");
 }
 
 #[tokio::test]

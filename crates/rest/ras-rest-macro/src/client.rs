@@ -1,18 +1,42 @@
 use crate::{EndpointDefinition, HttpMethod, ServiceDefinition};
 use quote::quote;
-use syn::Type;
+use syn::{GenericArgument, PathArguments, Type};
 
-/// True if `ty` is syntactically `Option<...>`. Matches the bare `Option`
-/// segment as well as fully-qualified forms like `std::option::Option<T>` /
-/// `core::option::Option<T>` — anything whose last path segment is `Option`.
-fn is_option_type(ty: &Type) -> bool {
-    if let Type::Path(type_path) = ty
-        && let Some(last) = type_path.path.segments.last()
-    {
-        return last.ident == "Option";
+/// Returns the inner type for syntactic wrappers like `Option<T>` or `Vec<T>`.
+/// Matches bare and fully-qualified forms by checking the final path segment.
+fn generic_inner_type<'a>(ty: &'a Type, wrapper: &str) -> Option<&'a Type> {
+    let Type::Path(type_path) = ty else {
+        return None;
+    };
+
+    let last = type_path.path.segments.last()?;
+    if last.ident != wrapper {
+        return None;
     }
 
-    false
+    let PathArguments::AngleBracketed(args) = &last.arguments else {
+        return None;
+    };
+
+    args.args.iter().find_map(|arg| {
+        if let GenericArgument::Type(inner) = arg {
+            Some(inner)
+        } else {
+            None
+        }
+    })
+}
+
+fn option_inner_type(ty: &Type) -> Option<&Type> {
+    generic_inner_type(ty, "Option")
+}
+
+fn vec_inner_type(ty: &Type) -> Option<&Type> {
+    generic_inner_type(ty, "Vec")
+}
+
+fn option_vec_inner_type(ty: &Type) -> Option<&Type> {
+    option_inner_type(ty).and_then(vec_inner_type)
 }
 
 /// Generate client code for REST service
@@ -234,32 +258,43 @@ fn generate_client_method_with_timeout(endpoint: &EndpointDefinition) -> proc_ma
     }
 
     // Build query-string handling. Required params are always serialized;
-    // `Option<T>` params are skipped when `None`. Values are converted with
-    // `ToString` and url-encoded by reqwest's `.query()` helper.
+    // `Option<T>` params are skipped when `None`. Values are serialized by
+    // reqwest's serde-backed `.query()` helper so enum serde renames and other
+    // query wire formats stay aligned with server-side extraction.
     let query_handling = if endpoint.query_params.is_empty() {
         quote! {}
     } else {
-        let pushes = endpoint.query_params.iter().map(|qp| {
+        let query_serializers = endpoint.query_params.iter().map(|qp| {
             let param_name = &qp.name;
             let param_str = qp.name.to_string();
-            if is_option_type(&qp.param_type) {
+            if option_vec_inner_type(&qp.param_type).is_some() {
+                quote! {
+                    if let Some(__values) = &#param_name {
+                        for __item in __values {
+                            request_builder = request_builder.query(&[(#param_str, __item)]);
+                        }
+                    }
+                }
+            } else if vec_inner_type(&qp.param_type).is_some() {
+                quote! {
+                    for __item in &#param_name {
+                        request_builder = request_builder.query(&[(#param_str, __item)]);
+                    }
+                }
+            } else if option_inner_type(&qp.param_type).is_some() {
                 quote! {
                     if let Some(__v) = &#param_name {
-                        __query_pairs.push((#param_str, __v.to_string()));
+                        request_builder = request_builder.query(&[(#param_str, __v)]);
                     }
                 }
             } else {
                 quote! {
-                    __query_pairs.push((#param_str, #param_name.to_string()));
+                    request_builder = request_builder.query(&[(#param_str, &#param_name)]);
                 }
             }
         });
         quote! {
-            let mut __query_pairs: Vec<(&'static str, String)> = Vec::new();
-            #(#pushes)*
-            if !__query_pairs.is_empty() {
-                request_builder = request_builder.query(&__query_pairs);
-            }
+            #(#query_serializers)*
         }
     };
 
