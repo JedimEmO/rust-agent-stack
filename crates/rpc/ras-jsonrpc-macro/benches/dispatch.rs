@@ -28,10 +28,22 @@ jsonrpc_service!({
     ]
 });
 
+struct BenchSvcImpl;
+
+impl BenchSvcTrait for BenchSvcImpl {
+    async fn add(
+        &self,
+        _user: &ras_jsonrpc_core::AuthenticatedUser,
+        req: AddRequest,
+    ) -> Result<AddResponse, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(AddResponse { sum: req.a + req.b })
+    }
+}
+
 fn build_router() -> axum::Router {
-    BenchSvcBuilder::new("/rpc")
+    BenchSvcBuilder::new(BenchSvcImpl)
+        .base_url("/rpc")
         .auth_provider(MockAuthProvider::default())
-        .add_handler(|_user, req: AddRequest| async move { Ok(AddResponse { sum: req.a + req.b }) })
         .build()
         .expect("router build")
 }

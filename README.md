@@ -100,18 +100,21 @@ jsonrpc_service!({
 // Implement the generated trait
 struct TaskServiceImpl { /* ... */ }
 
-#[async_trait::async_trait]
-impl TaskServiceHandler for TaskServiceImpl {
-    async fn sign_in(&self, request: SignInRequest) -> JsonRpcResult<SignInResponse> {
+impl TaskServiceTrait for TaskServiceImpl {
+    async fn sign_in(
+        &self,
+        request: SignInRequest,
+    ) -> Result<SignInResponse, Box<dyn std::error::Error + Send + Sync>> {
         // Your implementation
     }
     // ... other methods
 }
 
 // Use with the builder
-let service = TaskService::builder()
+let router = TaskServiceBuilder::new(TaskServiceImpl { /* ... */ })
+    .base_url("/rpc")
     .auth_provider(JwtAuthProvider::new())
-    .build(Arc::new(TaskServiceImpl { /* ... */ }));
+    .build()?;
 ```
 
 ### Type-Safe REST APIs
@@ -278,10 +281,10 @@ use ras_observability_otel::standard_setup;
 let otel = standard_setup("my-service")?;
 
 // Use with service builders
-let service = MyServiceBuilder::new(impl)
+let service = MyServiceBuilder::new(MyServiceImpl::new())
     .with_usage_tracker(otel.usage_tracker())
     .with_method_duration_tracker(otel.duration_tracker())
-    .build();
+    .build()?;
 
 // Metrics available at /metrics endpoint
 ```

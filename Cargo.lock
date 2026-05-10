@@ -3371,10 +3371,11 @@ dependencies = [
 
 [[package]]
 name = "ras-jsonrpc-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ras-auth-core",
  "ras-jsonrpc-types",
+ "ras-version-core",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -3382,7 +3383,7 @@ dependencies = [
 
 [[package]]
 name = "ras-jsonrpc-macro"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "axum",
@@ -3449,16 +3450,17 @@ dependencies = [
 
 [[package]]
 name = "ras-rest-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "ras-auth-core",
+ "ras-version-core",
  "serde",
  "thiserror 2.0.12",
 ]
 
 [[package]]
 name = "ras-rest-macro"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-trait",
  "axum",
@@ -3496,6 +3498,10 @@ dependencies = [
  "ras-auth-core",
  "tokio",
 ]
+
+[[package]]
+name = "ras-version-core"
+version = "0.1.0"
 
 [[package]]
 name = "ratatui"

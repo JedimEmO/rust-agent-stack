@@ -119,19 +119,17 @@ async fn make_jsonrpc_request(
     app.oneshot(request).await.unwrap()
 }
 
+fn test_app() -> Router {
+    TestServiceBuilder::new(TestServiceImpl)
+        .base_url("/rpc")
+        .auth_provider(MockAuthProvider)
+        .build()
+        .expect("Failed to build router")
+}
+
 #[tokio::test]
 async fn test_authentication_required_returns_401() {
-    let app = TestServiceBuilder::new("/rpc")
-        .auth_provider(MockAuthProvider)
-        .public_method_handler(|req| async move { TestServiceImpl.public_method(req).await })
-        .user_method_handler(
-            |user, req| async move { TestServiceImpl.user_method(&user, req).await },
-        )
-        .admin_method_handler(
-            |user, req| async move { TestServiceImpl.admin_method(&user, req).await },
-        )
-        .build()
-        .expect("Failed to build router");
+    let app = test_app();
 
     // Test: No auth header for protected method should return 401
     let response = make_jsonrpc_request(
@@ -155,17 +153,7 @@ async fn test_authentication_required_returns_401() {
 
 #[tokio::test]
 async fn test_insufficient_permissions_returns_403() {
-    let app = TestServiceBuilder::new("/rpc")
-        .auth_provider(MockAuthProvider)
-        .public_method_handler(|req| async move { TestServiceImpl.public_method(req).await })
-        .user_method_handler(
-            |user, req| async move { TestServiceImpl.user_method(&user, req).await },
-        )
-        .admin_method_handler(
-            |user, req| async move { TestServiceImpl.admin_method(&user, req).await },
-        )
-        .build()
-        .expect("Failed to build router");
+    let app = test_app();
 
     // Test: User token trying to access admin method should return 403
     let response = make_jsonrpc_request(
@@ -189,17 +177,7 @@ async fn test_insufficient_permissions_returns_403() {
 
 #[tokio::test]
 async fn test_invalid_token_returns_401() {
-    let app = TestServiceBuilder::new("/rpc")
-        .auth_provider(MockAuthProvider)
-        .public_method_handler(|req| async move { TestServiceImpl.public_method(req).await })
-        .user_method_handler(
-            |user, req| async move { TestServiceImpl.user_method(&user, req).await },
-        )
-        .admin_method_handler(
-            |user, req| async move { TestServiceImpl.admin_method(&user, req).await },
-        )
-        .build()
-        .expect("Failed to build router");
+    let app = test_app();
 
     // Test: Invalid token should return 401
     let response = make_jsonrpc_request(
@@ -223,17 +201,7 @@ async fn test_invalid_token_returns_401() {
 
 #[tokio::test]
 async fn test_successful_auth_returns_200() {
-    let app = TestServiceBuilder::new("/rpc")
-        .auth_provider(MockAuthProvider)
-        .public_method_handler(|req| async move { TestServiceImpl.public_method(req).await })
-        .user_method_handler(
-            |user, req| async move { TestServiceImpl.user_method(&user, req).await },
-        )
-        .admin_method_handler(
-            |user, req| async move { TestServiceImpl.admin_method(&user, req).await },
-        )
-        .build()
-        .expect("Failed to build router");
+    let app = test_app();
 
     // Test: Valid user token accessing user method should return 200
     let response = make_jsonrpc_request(
@@ -257,17 +225,7 @@ async fn test_successful_auth_returns_200() {
 
 #[tokio::test]
 async fn test_token_expired_returns_401() {
-    let app = TestServiceBuilder::new("/rpc")
-        .auth_provider(MockAuthProvider)
-        .public_method_handler(|req| async move { TestServiceImpl.public_method(req).await })
-        .user_method_handler(
-            |user, req| async move { TestServiceImpl.user_method(&user, req).await },
-        )
-        .admin_method_handler(
-            |user, req| async move { TestServiceImpl.admin_method(&user, req).await },
-        )
-        .build()
-        .expect("Failed to build router");
+    let app = test_app();
 
     // Test: Expired token should return 401
     let response = make_jsonrpc_request(

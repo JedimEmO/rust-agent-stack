@@ -3,8 +3,12 @@ import { expect, test, type Page } from '@playwright/test';
 const REST_PORT = process.env.PLAYWRIGHT_REST_PORT ?? '3101';
 const REST_URL = `http://127.0.0.1:${REST_PORT}/api/v1/docs`;
 
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 async function selectOperation(page: Page, method: string, path: string) {
-  await page.locator('.op').filter({ hasText: method }).filter({ hasText: path }).click();
+  await page.getByRole('button', { name: new RegExp(`^${method}\\s+${escapeRegex(path)}(?:\\s|$)`) }).click();
 }
 
 async function send(page: Page) {
@@ -25,6 +29,8 @@ test.describe('REST API explorer', () => {
     await expect(page.locator('.op').filter({ hasText: '/health' })).toContainText('Check fixture `health`.');
     await expect(page.locator('#operation-list')).toContainText('/widgets');
     await expect(page.locator('#operation-list')).toContainText('/search/widgets');
+    await expect(page.locator('#operation-list')).toContainText('/v2/widgets/{id}/rename');
+    await expect(page.locator('#operation-list')).toContainText('/v1/widgets/{id}/rename');
 
     await selectOperation(page, 'GET', '/health');
     await expect(page.locator('#operation-description p code')).toContainText('health');
@@ -83,6 +89,14 @@ test.describe('REST API explorer', () => {
     await expect(page.locator('#response-status')).toContainText('200');
     await expect(page.locator('#response-output')).toContainText('"status": "ok"');
     await expect(page.locator('#history-list')).toContainText('GET /health');
+
+    await selectOperation(page, 'POST', '/v1/widgets/{id}/rename');
+    await page.locator('[data-path-param="id"]').fill('legacy-widget');
+    await page.locator('#body-editor').fill(JSON.stringify({ name: 'Legacy REST Widget' }, null, 2));
+    await send(page);
+    await expect(page.locator('#response-status')).toContainText('200');
+    await expect(page.locator('#response-output')).toContainText('Legacy REST Widget');
+    await expect(page.locator('#history-list')).toContainText('POST /v1/widgets/{id}/rename');
 
     await selectOperation(page, 'POST', '/widgets');
     await page.locator('#body-editor').fill(JSON.stringify({ name: 'Created From UI', owner: 'playwright' }, null, 2));

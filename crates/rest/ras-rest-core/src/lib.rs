@@ -8,6 +8,7 @@ use thiserror::Error;
 
 // Re-export authentication types for convenience
 pub use ras_auth_core::{AuthError, AuthProvider, AuthResult, AuthenticatedUser};
+pub use ras_version_core::*;
 
 /// Result type for REST handlers that allows explicit HTTP status codes.
 pub type RestResult<T> = Result<RestResponse<T>, RestError>;

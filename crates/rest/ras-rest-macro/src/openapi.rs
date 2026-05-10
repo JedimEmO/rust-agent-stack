@@ -64,6 +64,29 @@ pub fn generate_openapi_code(
             let param_type_str = quote!(#param_type).to_string();
             unique_types.insert(param_type_str, quote!(#param_type));
         }
+
+        for version in &endpoint.versions {
+            if let Some(request_type) = &version.request_type {
+                let request_type_str = quote!(#request_type).to_string();
+                unique_types.insert(request_type_str, quote!(#request_type));
+            }
+
+            let response_type = &version.response_type;
+            let response_type_str = quote!(#response_type).to_string();
+            unique_types.insert(response_type_str, quote!(#response_type));
+
+            for path_param in &version.path_params {
+                let param_type = &path_param.param_type;
+                let param_type_str = quote!(#param_type).to_string();
+                unique_types.insert(param_type_str, quote!(#param_type));
+            }
+
+            for query_param in &version.query_params {
+                let param_type = &query_param.param_type;
+                let param_type_str = quote!(#param_type).to_string();
+                unique_types.insert(param_type_str, quote!(#param_type));
+            }
+        }
     }
 
     // Helper function to sanitize type names for OpenAPI component names
@@ -145,9 +168,14 @@ pub fn generate_openapi_code(
     let endpoint_infos: Vec<TokenStream> = service_def
         .endpoints
         .iter()
-        .map(|endpoint| {
+        .flat_map(|endpoint| {
             let method = endpoint.method.as_str();
             let path = &endpoint.path;
+            let canonical_version = endpoint.version.clone();
+            let canonical_version_tokens = match &canonical_version {
+                Some(version) => quote! { Some(#version.to_string()) },
+                None => quote! { None },
+            };
             let (summary, description) = match &endpoint.docs {
                 Some(docs) => {
                     let summary = &docs.summary;
@@ -207,7 +235,7 @@ pub fn generate_openapi_code(
                 })
                 .collect();
 
-            quote! {
+            let mut infos = vec![quote! {
                 #endpoint_info_struct_name {
                     method: #method.to_string(),
                     path: #path.to_string(),
@@ -219,8 +247,78 @@ pub fn generate_openapi_code(
                     response_type_name: #response_type_name.to_string(),
                     path_params: vec![#(#path_param_infos),*] as Vec<(String, String)>,
                     query_params: vec![#(#query_param_infos),*] as Vec<(String, String)>,
+                    version: #canonical_version_tokens,
+                    canonical_version: #canonical_version_tokens,
+                    canonical_path: #path.to_string(),
                 }
-            }
+            }];
+
+            infos.extend(endpoint.versions.iter().map(|version| {
+                let path = &version.path;
+                let version_label = &version.version;
+                let canonical_version = canonical_version
+                    .clone()
+                    .unwrap_or_else(|| "current".to_string());
+                let canonical_path = endpoint.path.clone();
+                let request_type_name = if let Some(request_type) = &version.request_type {
+                    sanitize_type_name(&quote!(#request_type).to_string())
+                } else {
+                    "Unit".to_string()
+                };
+                let response_type = &version.response_type;
+                let response_type_name = if quote!(#response_type).to_string() == "()" {
+                    "Unit".to_string()
+                } else {
+                    sanitize_type_name(&quote!(#response_type).to_string())
+                };
+                let path_param_infos: Vec<TokenStream> = version
+                    .path_params
+                    .iter()
+                    .map(|param| {
+                        let param_name = param.name.to_string();
+                        let param_type = &param.param_type;
+                        let param_type_str = sanitize_type_name(&quote!(#param_type).to_string());
+                        quote! {
+                            (#param_name.to_string(), #param_type_str.to_string())
+                        }
+                    })
+                    .collect();
+                let query_param_infos: Vec<TokenStream> = version
+                    .query_params
+                    .iter()
+                    .map(|param| {
+                        let param_name = param.name.to_string();
+                        let param_type = &param.param_type;
+                        let param_type_str = sanitize_type_name(&quote!(#param_type).to_string());
+                        quote! {
+                            (#param_name.to_string(), #param_type_str.to_string())
+                        }
+                    })
+                    .collect();
+                let permissions = permissions.clone();
+                let summary = summary.clone();
+                let description = description.clone();
+
+                quote! {
+                    #endpoint_info_struct_name {
+                        method: #method.to_string(),
+                        path: #path.to_string(),
+                        summary: #summary,
+                        description: #description,
+                        auth_required: #auth_required,
+                        permissions: vec![#(#permissions.to_string()),*],
+                        request_type_name: #request_type_name.to_string(),
+                        response_type_name: #response_type_name.to_string(),
+                        path_params: vec![#(#path_param_infos),*] as Vec<(String, String)>,
+                        query_params: vec![#(#query_param_infos),*] as Vec<(String, String)>,
+                        version: Some(#version_label.to_string()),
+                        canonical_version: Some(#canonical_version.to_string()),
+                        canonical_path: #canonical_path.to_string(),
+                    }
+                }
+            }));
+
+            infos
         })
         .collect();
 
@@ -238,6 +336,9 @@ pub fn generate_openapi_code(
             response_type_name: String,
             path_params: Vec<(String, String)>, // (name, type)
             query_params: Vec<(String, String)>, // (name, type)
+            version: Option<String>,
+            canonical_version: Option<String>,
+            canonical_path: String,
         }
 
         // Helper function to fix schema references and flatten nested definitions
@@ -550,6 +651,15 @@ pub fn generate_openapi_code(
                     operation["parameters"] = json!(parameters);
                 }
 
+                if let Some(version) = &endpoint.version {
+                    operation["x-ras-version"] = json!(version);
+                }
+
+                if let Some(canonical_version) = &endpoint.canonical_version {
+                    operation["x-ras-canonical-version"] = json!(canonical_version);
+                    operation["x-ras-canonical-path"] = json!(endpoint.canonical_path);
+                }
+
                 // Add request body for non-GET methods
                 if endpoint.method != "GET" && endpoint.request_type_name != "Unit" {
                     operation["requestBody"] = json!({
@@ -647,6 +757,25 @@ pub fn generate_schema_impl_checks(service_def: &ServiceDefinition) -> TokenStre
         for query_param in &endpoint.query_params {
             let param_type = &query_param.param_type;
             unique_types.insert(quote!(#param_type).to_string(), quote!(#param_type));
+        }
+
+        for version in &endpoint.versions {
+            if let Some(request_type) = &version.request_type {
+                unique_types.insert(quote!(#request_type).to_string(), quote!(#request_type));
+            }
+
+            let response_type = &version.response_type;
+            unique_types.insert(quote!(#response_type).to_string(), quote!(#response_type));
+
+            for path_param in &version.path_params {
+                let param_type = &path_param.param_type;
+                unique_types.insert(quote!(#param_type).to_string(), quote!(#param_type));
+            }
+
+            for query_param in &version.query_params {
+                let param_type = &query_param.param_type;
+                unique_types.insert(quote!(#param_type).to_string(), quote!(#param_type));
+            }
         }
     }
 

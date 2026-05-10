@@ -44,9 +44,14 @@ let usage_tracker = {
     }
 };
 
-// Add to your service
-MyServiceBuilder::new()
+// REST service builders take the trait implementation.
+MyServiceBuilder::new(MyServiceImpl::new())
     .with_usage_tracker(usage_tracker)
+    .build()
+
+// JSON-RPC service builders also take the trait implementation.
+MyRpcServiceBuilder::new(MyRpcServiceImpl::new())
+    .with_usage_tracker(rpc_usage_tracker)
     .build()
 ```
 

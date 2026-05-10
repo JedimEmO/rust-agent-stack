@@ -20,13 +20,13 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rust-jsonrpc-types = "0.1.0"
+ras-jsonrpc-types = "0.1.0"
 ```
 
 ### Basic Types
 
 ```rust
-use rust_jsonrpc_types::{JsonRpcRequest, JsonRpcResponse, JsonRpcError};
+use ras_jsonrpc_types::{JsonRpcRequest, JsonRpcResponse, JsonRpcError};
 
 // Create a request
 let request = JsonRpcRequest::new(
@@ -51,7 +51,7 @@ let error_response = JsonRpcResponse::error(
 ### Error Handling
 
 ```rust
-use rust_jsonrpc_types::{JsonRpcError, error_codes};
+use ras_jsonrpc_types::{JsonRpcError, error_codes};
 
 // Standard JSON-RPC errors
 let parse_error = JsonRpcError::parse_error();
@@ -123,8 +123,8 @@ The crate provides all standard JSON-RPC 2.0 error codes plus extension codes fo
 
 This crate is designed to work seamlessly with:
 
-- [`rust-jsonrpc-core`](../rust-jsonrpc-core) - Authentication and authorization traits
-- [`rust-jsonrpc-macro`](../rust-jsonrpc-macro) - Procedural macros for service generation
+- [`ras-jsonrpc-core`](../ras-jsonrpc-core) - Authentication and authorization traits
+- [`ras-jsonrpc-macro`](../ras-jsonrpc-macro) - Procedural macros for service generation
 - Any JSON-RPC client or server implementation
 
 ## License

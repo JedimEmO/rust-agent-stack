@@ -232,7 +232,7 @@ examples/google-oauth-example/
 
 - **rust-identity-oauth2**: OAuth2 provider implementation
 - **rust-identity-session**: JWT session management
-- **rust-jsonrpc-macro**: Type-safe JSON-RPC service generation
+- **ras-jsonrpc-macro**: Type-safe JSON-RPC service generation
 - **axum**: Web framework for HTTP handling
 - **tower-http**: Middleware for CORS and static files
 

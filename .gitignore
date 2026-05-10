@@ -2,6 +2,7 @@
 target
 dist
 node_modules
+playwright-report
 
 # Environment files and secrets
 .env

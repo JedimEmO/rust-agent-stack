@@ -8,12 +8,15 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
     let client_builder_name = quote::format_ident!("{}ClientBuilder", service_name);
 
     // Generate client methods
-    let client_methods = service_def.methods.iter().map(generate_client_method);
+    let client_methods = service_def
+        .methods
+        .iter()
+        .flat_map(generate_client_methods_for_method);
 
     let client_methods_with_timeout = service_def
         .methods
         .iter()
-        .map(generate_client_method_with_timeout);
+        .flat_map(generate_client_methods_with_timeout_for_method);
 
     let output = quote! {
         /// Generated client for the JSON-RPC service
@@ -143,13 +146,65 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
     output
 }
 
-/// Generate a client method for the JSON-RPC service
-fn generate_client_method(method: &MethodDefinition) -> proc_macro2::TokenStream {
-    let method_name = &method.name;
-    let method_str = method_name.to_string();
-    let request_type = &method.request_type;
-    let response_type = &method.response_type;
+fn method_wire_name(method: &MethodDefinition) -> String {
+    method
+        .wire_name
+        .clone()
+        .unwrap_or_else(|| method.name.to_string())
+}
 
+/// Generate client methods for the JSON-RPC service.
+fn generate_client_methods_for_method(method: &MethodDefinition) -> Vec<proc_macro2::TokenStream> {
+    let mut methods = vec![generate_client_method(
+        &method.name,
+        method_wire_name(method),
+        &method.request_type,
+        &method.response_type,
+    )];
+
+    methods.extend(method.versions.iter().map(|version| {
+        let method_name = quote::format_ident!("{}_{}", method.name, version.version);
+        generate_client_method(
+            &method_name,
+            version.wire_name.clone(),
+            &version.request_type,
+            &version.response_type,
+        )
+    }));
+
+    methods
+}
+
+fn generate_client_methods_with_timeout_for_method(
+    method: &MethodDefinition,
+) -> Vec<proc_macro2::TokenStream> {
+    let mut methods = vec![generate_client_method_with_timeout(
+        &method.name,
+        method_wire_name(method),
+        &method.request_type,
+        &method.response_type,
+    )];
+
+    methods.extend(method.versions.iter().map(|version| {
+        let method_name = quote::format_ident!("{}_{}", method.name, version.version);
+        generate_client_method_with_timeout(
+            &method_name,
+            version.wire_name.clone(),
+            &version.request_type,
+            &version.response_type,
+        )
+    }));
+
+    methods
+}
+
+/// Generate a client method for the JSON-RPC service
+fn generate_client_method(
+    method_name: &syn::Ident,
+    method_str: String,
+    request_type: &syn::Type,
+    response_type: &syn::Type,
+) -> proc_macro2::TokenStream {
     quote! {
         /// Call the #method_name method
         pub async fn #method_name(&self, params: #request_type) -> Result<#response_type, Box<dyn std::error::Error + Send + Sync>> {
@@ -159,12 +214,13 @@ fn generate_client_method(method: &MethodDefinition) -> proc_macro2::TokenStream
 }
 
 /// Generate a client method with timeout for the JSON-RPC service
-fn generate_client_method_with_timeout(method: &MethodDefinition) -> proc_macro2::TokenStream {
-    let method_name = &method.name;
+fn generate_client_method_with_timeout(
+    method_name: &syn::Ident,
+    method_str: String,
+    request_type: &syn::Type,
+    response_type: &syn::Type,
+) -> proc_macro2::TokenStream {
     let method_name_with_timeout = quote::format_ident!("{}_with_timeout", method_name);
-    let method_str = method_name.to_string();
-    let request_type = &method.request_type;
-    let response_type = &method.response_type;
 
     quote! {
         /// Call the #method_name method with a custom timeout

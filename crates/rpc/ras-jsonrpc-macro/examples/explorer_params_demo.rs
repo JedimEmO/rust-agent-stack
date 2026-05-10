@@ -210,21 +210,10 @@ async fn main() {
     // Create service
     let auth_provider = MockAuthProvider;
 
-    // Build the service using the builder pattern
-    let builder = UserManagementServiceBuilder::new("/api")
-        .auth_provider(auth_provider)
-        .create_user_handler(|req| {
-            let service = UserManagementServiceImpl;
-            async move { service.create_user(req).await }
-        })
-        .get_user_handler(|user, req| {
-            let service = UserManagementServiceImpl;
-            async move { service.get_user(&user, req).await }
-        })
-        .search_users_handler(|user, req| {
-            let service = UserManagementServiceImpl;
-            async move { service.search_users(&user, req).await }
-        });
+    // Build the service using the trait-backed builder
+    let builder = UserManagementServiceBuilder::new(UserManagementServiceImpl)
+        .base_url("/api")
+        .auth_provider(auth_provider);
 
     // Create router with explorer
     let app = builder.build().expect("Failed to build app");

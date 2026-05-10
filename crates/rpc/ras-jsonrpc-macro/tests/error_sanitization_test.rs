@@ -50,18 +50,8 @@ mod tests {
     }
 
     async fn setup_test_server() -> (SocketAddr, Router) {
-        let service = std::sync::Arc::new(TestServiceImpl);
-        let service_clone = service.clone();
-
-        let router = TestServiceBuilder::new("/api/rpc")
-            .test_internal_error_handler(move |req| {
-                let service = service.clone();
-                async move { service.test_internal_error(req).await }
-            })
-            .test_auth_error_handler(move |user, req| {
-                let service = service_clone.clone();
-                async move { service.test_auth_error(&user, req).await }
-            })
+        let router = TestServiceBuilder::new(TestServiceImpl)
+            .base_url("/api/rpc")
             .build()
             .expect("Failed to build router");
 

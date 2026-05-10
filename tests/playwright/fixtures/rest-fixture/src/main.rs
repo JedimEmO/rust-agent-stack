@@ -42,6 +42,22 @@ pub struct ProfileResponse {
     pub permissions: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct RenameWidgetV1 {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct RenameWidgetV2 {
+    pub display_name: String,
+    pub notify: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct RenameWidgetResponseV1 {
+    pub name: String,
+}
+
 rest_service!({
     service_name: ExplorerRestFixture,
     base_path: "/api/v1",
@@ -66,10 +82,53 @@ rest_service!({
         GET UNAUTHORIZED health() -> HealthResponse,
         GET UNAUTHORIZED widgets/{id: String}() -> Widget,
         GET UNAUTHORIZED search/widgets ? q: String & limit: Option<u32> () -> WidgetsResponse,
+        POST UNAUTHORIZED v2/widgets/{id: String}/rename(RenameWidgetV2) -> Widget {
+            version: v2,
+            versions: [
+                v1 {
+                    path: v1/widgets/{id: String}/rename,
+                    body: RenameWidgetV1,
+                    response: RenameWidgetResponseV1,
+                    migration: RenameWidgetCompat,
+                },
+            ],
+        },
         POST WITH_PERMISSIONS(["admin"]) widgets(CreateWidgetRequest) -> Widget,
         GET WITH_PERMISSIONS(["user"]) profile() -> ProfileResponse,
     ]
 });
+
+struct RenameWidgetCompat;
+
+impl
+    ras_rest_core::VersionMigration<
+        ExplorerRestFixturePostV2WidgetsByIdRenameV1Request,
+        ExplorerRestFixturePostV2WidgetsByIdRenameV2Request,
+    > for RenameWidgetCompat
+{
+    type Error = std::convert::Infallible;
+
+    fn migrate(
+        value: ExplorerRestFixturePostV2WidgetsByIdRenameV1Request,
+    ) -> Result<ExplorerRestFixturePostV2WidgetsByIdRenameV2Request, Self::Error> {
+        Ok(ExplorerRestFixturePostV2WidgetsByIdRenameV2Request {
+            path: ExplorerRestFixturePostV2WidgetsByIdRenameV2Path { id: value.path.id },
+            query: ExplorerRestFixturePostV2WidgetsByIdRenameV2Query {},
+            body: RenameWidgetV2 {
+                display_name: value.body.name,
+                notify: false,
+            },
+        })
+    }
+}
+
+impl ras_rest_core::VersionMigration<Widget, RenameWidgetResponseV1> for RenameWidgetCompat {
+    type Error = std::convert::Infallible;
+
+    fn migrate(value: Widget) -> Result<RenameWidgetResponseV1, Self::Error> {
+        Ok(RenameWidgetResponseV1 { name: value.name })
+    }
+}
 
 struct FixtureAuthProvider;
 
@@ -129,6 +188,18 @@ impl ExplorerRestFixtureTrait for FixtureService {
         Ok(RestResponse::ok(WidgetsResponse {
             total: widgets.len(),
             widgets,
+        }))
+    }
+
+    async fn post_v2_widgets_by_id_rename(
+        &self,
+        id: String,
+        request: RenameWidgetV2,
+    ) -> RestResult<Widget> {
+        Ok(RestResponse::ok(Widget {
+            id,
+            name: request.display_name,
+            owner: if request.notify { "notified" } else { "silent" }.to_string(),
         }))
     }
 

@@ -264,8 +264,8 @@ jsonrpc_service!({
         // Public method
         UNAUTHORIZED get_status(()) -> Status,
         
-        // Requires authentication
-        AUTHENTICATED get_profile(()) -> UserProfile,
+        // Requires authentication but no specific permission
+        WITH_PERMISSIONS([]) get_profile(()) -> UserProfile,
         
         // Requires specific permissions
         WITH_PERMISSIONS(["admin"]) delete_user(DeleteUserRequest) -> (),
@@ -275,21 +275,20 @@ jsonrpc_service!({
 // Implement service
 struct MyApiServiceImpl;
 
-#[async_trait]
-impl MyApiService for MyApiServiceImpl {
+impl MyApiServiceTrait for MyApiServiceImpl {
     async fn get_status(&self) -> Result<Status, Error> {
         Ok(Status { healthy: true })
     }
     
-    async fn get_profile(&self, user: AuthenticatedUser) -> Result<UserProfile, Error> {
+    async fn get_profile(&self, user: &AuthenticatedUser, _request: ()) -> Result<UserProfile, Error> {
         // Access user.user_id, user.permissions, etc.
         Ok(UserProfile { 
-            id: user.user_id,
-            permissions: user.permissions.into_iter().collect(),
+            id: user.user_id.clone(),
+            permissions: user.permissions.iter().cloned().collect(),
         })
     }
     
-    async fn delete_user(&self, _user: AuthenticatedUser, req: DeleteUserRequest) -> Result<(), Error> {
+    async fn delete_user(&self, _user: &AuthenticatedUser, req: DeleteUserRequest) -> Result<(), Error> {
         // Only users with "admin" permission can reach here
         Ok(())
     }
@@ -304,8 +303,9 @@ let service = MyApiServiceImpl;
 let app = Router::new()
     .nest("/api", 
         MyApiServiceBuilder::new(service)
-            .with_auth_provider(Arc::new(jwt_auth))
-            .build()
+            .base_url("/rpc")
+            .auth_provider(jwt_auth)
+            .build()?
     );
 ```
 
@@ -319,13 +319,13 @@ rest_service!({
     base_path: "/api/v1",
     endpoints: [
         // Public endpoint
-        UNAUTHORIZED GET "/health" health_check() -> HealthResponse,
+        GET UNAUTHORIZED health() -> HealthResponse,
         
-        // Authenticated endpoint
-        AUTHENTICATED GET "/me" get_current_user() -> UserResponse,
+        // Authenticated endpoint with no specific permission
+        GET WITH_PERMISSIONS([]) me() -> UserResponse,
         
         // Permission-protected endpoint
-        WITH_PERMISSIONS(["admin"]) DELETE "/users/:id" delete_user(PathParam<String>) -> (),
+        DELETE WITH_PERMISSIONS(["admin"]) users/{id: String}() -> (),
     ]
 });
 ```
@@ -348,7 +348,7 @@ jsonrpc_service!({
     service_name: TodoService,
     methods: [
         UNAUTHORIZED health_check(()) -> HealthStatus,
-        AUTHENTICATED list_todos(()) -> Vec<Todo>,
+        WITH_PERMISSIONS([]) list_todos(()) -> Vec<Todo>,
         WITH_PERMISSIONS(["user"]) create_todo(CreateTodoRequest) -> Todo,
         WITH_PERMISSIONS(["admin"]) delete_all_todos(()) -> (),
     ]
@@ -402,8 +402,9 @@ async fn main() -> anyhow::Result<()> {
     let todo_service = TodoServiceImpl::new();
     
     let api_router = TodoServiceBuilder::new(todo_service)
-        .with_auth_provider(Arc::new(jwt_auth))
-        .build();
+        .base_url("/rpc")
+        .auth_provider(jwt_auth)
+        .build()?;
     
     // 6. Combine everything
     let app = Router::new()
@@ -513,7 +514,7 @@ mod tests {
 3. **Permission denied errors**
    - Verify your `UserPermissions` implementation returns expected permissions
    - Check the method annotation matches required permissions
-   - Use `AUTHENTICATED` for methods that only need login, not specific permissions
+   - Use `WITH_PERMISSIONS([])` for methods that only need login, not specific permissions
 
 4. **OAuth2 redirect issues**
    - Ensure redirect URLs are correctly configured in provider settings

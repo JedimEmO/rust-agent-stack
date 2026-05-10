@@ -44,71 +44,48 @@ mod test_service {
             WITH_PERMISSIONS([]) method_three(TestRequest) -> TestResponse,
         ]
     });
-}
 
-#[test]
-fn test_error_on_missing_handlers() {
-    use test_service::*;
+    pub struct TestServiceImpl;
 
-    // Create a service builder with only one handler configured
-    let builder = TestServiceBuilder::new("/api")
-        .auth_provider(TestAuthProvider)
-        .method_one_handler(|_request| async move {
+    impl TestServiceTrait for TestServiceImpl {
+        async fn method_one(
+            &self,
+            _request: TestRequest,
+        ) -> Result<TestResponse, Box<dyn std::error::Error + Send + Sync>> {
             Ok(TestResponse {
                 result: "one".to_string(),
             })
-        });
-    // Note: method_two_handler and method_three_handler are NOT configured
+        }
 
-    // This should return an error with missing handlers
-    let result = builder.build();
-    assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err(),
-        "Cannot build service: the following handlers are not configured: method_two, method_three"
-    );
-}
-
-#[test]
-fn test_error_on_all_handlers_missing() {
-    use test_service::*;
-
-    // Create a service builder with no handlers configured
-    let builder = TestServiceBuilder::new("/api").auth_provider(TestAuthProvider);
-
-    // This should return an error with all handlers missing
-    let result = builder.build();
-    assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err(),
-        "Cannot build service: the following handlers are not configured: method_one, method_two, method_three"
-    );
-}
-
-#[test]
-fn test_success_with_all_handlers_configured() {
-    use test_service::*;
-
-    // Create a service builder with all handlers configured
-    let builder = TestServiceBuilder::new("/api")
-        .auth_provider(TestAuthProvider)
-        .method_one_handler(|_request| async move {
-            Ok(TestResponse {
-                result: "one".to_string(),
-            })
-        })
-        .method_two_handler(|_user, _request| async move {
+        async fn method_two(
+            &self,
+            _user: &ras_jsonrpc_core::AuthenticatedUser,
+            _request: TestRequest,
+        ) -> Result<TestResponse, Box<dyn std::error::Error + Send + Sync>> {
             Ok(TestResponse {
                 result: "two".to_string(),
             })
-        })
-        .method_three_handler(|_user, _request| async move {
+        }
+
+        async fn method_three(
+            &self,
+            _user: &ras_jsonrpc_core::AuthenticatedUser,
+            _request: TestRequest,
+        ) -> Result<TestResponse, Box<dyn std::error::Error + Send + Sync>> {
             Ok(TestResponse {
                 result: "three".to_string(),
             })
-        });
+        }
+    }
+}
 
-    // This should succeed
+#[test]
+fn test_trait_based_builder_builds_when_trait_is_complete() {
+    use test_service::*;
+
+    let builder = TestServiceBuilder::new(TestServiceImpl)
+        .base_url("/api")
+        .auth_provider(TestAuthProvider);
     let result = builder.build();
     assert!(result.is_ok());
 }

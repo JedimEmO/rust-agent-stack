@@ -4,11 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added - 2026-05-10
+- Added `ras-version-core` `0.1.0` with the shared `VersionMigration<From, To>` trait for opt-in API compatibility migrations.
+- `ras-jsonrpc-macro`: Added opt-in versioned JSON-RPC methods. Legacy wire methods can migrate legacy requests into canonical request types, call the canonical trait method, and migrate canonical responses back to legacy response types.
+- `ras-rest-macro`: Added opt-in versioned REST endpoints. Legacy routes can migrate generated request-part structs into canonical request parts before invoking the canonical service method, then migrate response bodies back to legacy response types.
+- `ras-jsonrpc-macro` and `ras-rest-macro`: Generated clients and OpenRPC/OpenAPI specs now include versioned compatibility methods/routes when configured.
+- Added REST and JSON-RPC Playwright explorer coverage for versioned compatibility routes and wire methods.
+
 ### Fixed - 2026-05-10
 - `ras-rest-macro`: Generated REST clients now serialize query parameters through reqwest's serde-backed query path, support repeated-key `Vec<T>` and `Option<Vec<T>>` query params, and honor serde-renamed enum values without requiring `Display`. Fixes #3.
 
 ### Changed - 2026-05-10
+- `ras-jsonrpc-macro`: Generated service setup now matches REST's trait-backed model. Users implement the generated service trait and pass the implementation to `ServiceBuilder::new(service)`, with `.base_url(...)` for custom JSON-RPC route paths.
+- Bumped `ras-jsonrpc-macro` from `0.1.2` to `0.2.0` because the generated JSON-RPC server setup changed from handler setters to a required service trait implementation.
+- Bumped `ras-jsonrpc-core` from `0.1.1` to `0.1.2` for the additive `VersionMigration` re-export.
+- Bumped `ras-rest-core` from `0.1.0` to `0.1.1` for the additive `VersionMigration` re-export.
+- Bumped `ras-rest-macro` from `0.2.0` to `0.2.1` for additive versioned endpoint/client/spec generation.
 - Bumped `ras-rest-macro` from `0.1.1` to `0.2.0` because generated client query params now use serde serialization instead of `Display`/`ToString`.
+
+### Documentation - 2026-05-10
+- Updated JSON-RPC, REST, identity, observability, example, and Playwright documentation for trait-backed service setup, current auth syntax, current crate names, and versioned API migration examples.
 
 ### Added - 2026-05-09
 - Established repository versioning and changelog policy in `VERSIONING.md`.

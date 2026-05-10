@@ -1,7 +1,8 @@
 use axum::Router;
 use basic_jsonrpc_api::{
-    CreateTaskRequest, DashboardStats, MyServiceBuilder, SignInRequest, SignInResponse, Task,
-    TaskListResponse, TaskPriority, UpdateProfileRequest, UpdateTaskRequest, UserProfile,
+    CreateTaskRequest, DashboardStats, MyServiceBuilder, MyServiceTrait, SignInRequest,
+    SignInResponse, Task, TaskListResponse, TaskPriority, UpdateProfileRequest, UpdateTaskRequest,
+    UserProfile,
 };
 use chrono::Utc;
 use ras_jsonrpc_core::{AuthFuture, AuthProvider, AuthenticatedUser};
@@ -137,6 +138,145 @@ impl TaskStorage {
     }
 }
 
+struct MyServiceImpl {
+    storage: Arc<TaskStorage>,
+}
+
+impl MyServiceTrait for MyServiceImpl {
+    async fn sign_in(
+        &self,
+        request: SignInRequest,
+    ) -> Result<SignInResponse, Box<dyn std::error::Error + Send + Sync>> {
+        println!("{request:?}");
+        match request {
+            SignInRequest::WithCredentials { username, password } => {
+                if username == "admin" && password == "secret" {
+                    Ok(SignInResponse::Success {
+                        jwt: "admin_token".to_string(),
+                    })
+                } else if username == "user" && password == "password" {
+                    Ok(SignInResponse::Success {
+                        jwt: "valid_token".to_string(),
+                    })
+                } else {
+                    Ok(SignInResponse::Failure {
+                        msg: "Invalid credentials".to_string(),
+                    })
+                }
+            }
+        }
+    }
+
+    async fn sign_out(
+        &self,
+        user: &AuthenticatedUser,
+        _request: (),
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        info!("User {} signed out", user.user_id);
+        Ok(())
+    }
+
+    async fn delete_everything(
+        &self,
+        user: &AuthenticatedUser,
+        _request: (),
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        tracing::warn!("Admin {} is deleting everything!", user.user_id);
+        Ok(())
+    }
+
+    async fn list_tasks(
+        &self,
+        _user: &AuthenticatedUser,
+        _request: (),
+    ) -> Result<TaskListResponse, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(self.storage.list_tasks())
+    }
+
+    async fn create_task(
+        &self,
+        _user: &AuthenticatedUser,
+        request: CreateTaskRequest,
+    ) -> Result<Task, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(self.storage.create_task(request))
+    }
+
+    async fn update_task(
+        &self,
+        _user: &AuthenticatedUser,
+        request: UpdateTaskRequest,
+    ) -> Result<Task, Box<dyn std::error::Error + Send + Sync>> {
+        self.storage.update_task(request).ok_or_else(|| {
+            Box::new(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Task not found",
+            )) as Box<dyn std::error::Error + Send + Sync>
+        })
+    }
+
+    async fn delete_task(
+        &self,
+        _user: &AuthenticatedUser,
+        id: String,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(self.storage.delete_task(id))
+    }
+
+    async fn get_task(
+        &self,
+        _user: &AuthenticatedUser,
+        id: String,
+    ) -> Result<Option<Task>, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(self.storage.get_task(id))
+    }
+
+    async fn get_profile(
+        &self,
+        user: &AuthenticatedUser,
+        _request: (),
+    ) -> Result<UserProfile, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(UserProfile {
+            username: if user.user_id == "admin123" {
+                "admin"
+            } else {
+                "user"
+            }
+            .to_string(),
+            email: format!("{}@example.com", user.user_id),
+            permissions: user.permissions.iter().cloned().collect(),
+            created_at: "2024-01-01T00:00:00Z".to_string(),
+        })
+    }
+
+    async fn update_profile(
+        &self,
+        user: &AuthenticatedUser,
+        request: UpdateProfileRequest,
+    ) -> Result<UserProfile, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(UserProfile {
+            username: if user.user_id == "admin123" {
+                "admin"
+            } else {
+                "user"
+            }
+            .to_string(),
+            email: request
+                .email
+                .unwrap_or_else(|| format!("{}@example.com", user.user_id)),
+            permissions: user.permissions.iter().cloned().collect(),
+            created_at: "2024-01-01T00:00:00Z".to_string(),
+        })
+    }
+
+    async fn get_dashboard_stats(
+        &self,
+        _user: &AuthenticatedUser,
+        _request: (),
+    ) -> Result<DashboardStats, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(self.storage.get_stats())
+    }
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
@@ -157,172 +297,59 @@ async fn main() {
     // Initialize task storage
     let task_storage = Arc::new(TaskStorage::new());
 
-    let rpc_router = MyServiceBuilder::new("/rpc")
-        .with_usage_tracker({
-            let usage_tracker = otel.usage_tracker();
-            move |headers, user, payload| {
-                let method = payload.method.clone();
-                let context = RequestContext::jsonrpc(method);
-                let usage_tracker = usage_tracker.clone();
-                let headers_clone = headers.clone();
-                let user_clone = user.cloned();
+    let rpc_router = MyServiceBuilder::new(MyServiceImpl {
+        storage: task_storage.clone(),
+    })
+    .base_url("/rpc")
+    .with_usage_tracker({
+        let usage_tracker = otel.usage_tracker();
+        move |headers, user, payload| {
+            let method = payload.method.clone();
+            let context = RequestContext::jsonrpc(method);
+            let usage_tracker = usage_tracker.clone();
+            let headers_clone = headers.clone();
+            let user_clone = user.cloned();
 
-                async move {
-                    // Log the request
-                    match &user_clone {
-                        Some(u) => {
-                            info!(
-                                "RPC call: method={}, user={}, permissions={:?}",
-                                context.method, u.user_id, u.permissions,
-                            );
-                        }
-                        None => {
-                            info!("RPC call: method={}, user=anonymous", context.method,);
-                        }
+            async move {
+                // Log the request
+                match &user_clone {
+                    Some(u) => {
+                        info!(
+                            "RPC call: method={}, user={}, permissions={:?}",
+                            context.method, u.user_id, u.permissions,
+                        );
                     }
+                    None => {
+                        info!("RPC call: method={}, user=anonymous", context.method,);
+                    }
+                }
 
-                    // Track the request
-                    usage_tracker
-                        .track_request(&headers_clone, user_clone.as_ref(), &context)
-                        .await;
-                }
+                // Track the request
+                usage_tracker
+                    .track_request(&headers_clone, user_clone.as_ref(), &context)
+                    .await;
             }
-        })
-        .with_method_duration_tracker({
-            let duration_tracker = otel.method_duration_tracker();
-            move |method: &str,
-                  user: Option<&ras_jsonrpc_core::AuthenticatedUser>,
-                  duration: std::time::Duration| {
-                let context = RequestContext::jsonrpc(method.to_string());
-                let duration_tracker = duration_tracker.clone();
-                let user_clone = user.cloned();
+        }
+    })
+    .with_method_duration_tracker({
+        let duration_tracker = otel.method_duration_tracker();
+        move |method: &str,
+              user: Option<&ras_jsonrpc_core::AuthenticatedUser>,
+              duration: std::time::Duration| {
+            let context = RequestContext::jsonrpc(method.to_string());
+            let duration_tracker = duration_tracker.clone();
+            let user_clone = user.cloned();
 
-                async move {
-                    duration_tracker
-                        .track_duration(&context, user_clone.as_ref(), duration)
-                        .await;
-                }
+            async move {
+                duration_tracker
+                    .track_duration(&context, user_clone.as_ref(), duration)
+                    .await;
             }
-        })
-        .auth_provider(MyAuthProvider)
-        .sign_in_handler({
-            move |request| async move {
-                println!("{request:?}");
-                match request {
-                    SignInRequest::WithCredentials { username, password } => {
-                        if username == "admin" && password == "secret" {
-                            Ok(SignInResponse::Success {
-                                jwt: "admin_token".to_string(),
-                            })
-                        } else if username == "user" && password == "password" {
-                            Ok(SignInResponse::Success {
-                                jwt: "valid_token".to_string(),
-                            })
-                        } else {
-                            Ok(SignInResponse::Failure {
-                                msg: "Invalid credentials".to_string(),
-                            })
-                        }
-                    }
-                }
-            }
-        })
-        .sign_out_handler({
-            move |user, _request| async move {
-                info!("User {} signed out", user.user_id);
-                Ok(())
-            }
-        })
-        .delete_everything_handler(|user, _request| async move {
-            tracing::warn!("Admin {} is deleting everything!", user.user_id);
-            Ok(())
-        })
-        .create_task_handler({
-            let storage = task_storage.clone();
-            move |_user, request| {
-                let storage = storage.clone();
-                async move {
-                    let task = storage.create_task(request);
-                    Ok(task)
-                }
-            }
-        })
-        .update_task_handler({
-            let storage = task_storage.clone();
-            move |_user, request| {
-                let storage = storage.clone();
-                async move {
-                    storage.update_task(request).ok_or_else(|| {
-                        Box::new(std::io::Error::new(
-                            std::io::ErrorKind::NotFound,
-                            "Task not found",
-                        )) as Box<dyn std::error::Error + Send + Sync>
-                    })
-                }
-            }
-        })
-        .delete_task_handler({
-            let storage = task_storage.clone();
-            move |_user, id| {
-                let storage = storage.clone();
-                async move { Ok(storage.delete_task(id)) }
-            }
-        })
-        .get_task_handler({
-            let storage = task_storage.clone();
-            move |_user, id| {
-                let storage = storage.clone();
-                async move { Ok(storage.get_task(id)) }
-            }
-        })
-        .list_tasks_handler({
-            let storage = task_storage.clone();
-            move |_user, _request| {
-                let storage = storage.clone();
-                async move { Ok(storage.list_tasks()) }
-            }
-        })
-        .get_profile_handler({
-            move |user, _request| async move {
-                Ok(UserProfile {
-                    username: if user.user_id == "admin123" {
-                        "admin"
-                    } else {
-                        "user"
-                    }
-                    .to_string(),
-                    email: format!("{}@example.com", user.user_id),
-                    permissions: user.permissions.iter().cloned().collect(),
-                    created_at: "2024-01-01T00:00:00Z".to_string(),
-                })
-            }
-        })
-        .update_profile_handler({
-            move |user, request| async move {
-                Ok(UserProfile {
-                    username: if user.user_id == "admin123" {
-                        "admin"
-                    } else {
-                        "user"
-                    }
-                    .to_string(),
-                    email: request
-                        .email
-                        .unwrap_or_else(|| format!("{}@example.com", user.user_id)),
-                    permissions: user.permissions.iter().cloned().collect(),
-                    created_at: "2024-01-01T00:00:00Z".to_string(),
-                })
-            }
-        })
-        .get_dashboard_stats_handler({
-            let storage = task_storage.clone();
-            move |_user, _request| {
-                let storage = storage.clone();
-                async move { Ok(storage.get_stats()) }
-            }
-        })
-        .build()
-        .expect("Failed to build JSON-RPC router");
+        }
+    })
+    .auth_provider(MyAuthProvider)
+    .build()
+    .expect("Failed to build JSON-RPC router");
 
     // Create the main app with metrics endpoint
     let app = Router::new().merge(rpc_router).merge(otel.metrics_router());

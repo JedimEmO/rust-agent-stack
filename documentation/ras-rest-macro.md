@@ -9,12 +9,13 @@ The `ras-rest-macro` crate provides a powerful procedural macro for building typ
 3. [Basic Usage](#basic-usage)
 4. [Macro Syntax](#macro-syntax)
 5. [Authentication & Authorization](#authentication--authorization)
-6. [Generated Code](#generated-code)
-7. [TypeScript Client Usage](#typescript-client-usage)
-8. [OpenAPI Documentation](#openapi-documentation)
-9. [Error Handling](#error-handling)
-10. [Advanced Features](#advanced-features)
-11. [Complete Example](#complete-example)
+6. [Versioned Endpoints](#versioned-endpoints)
+7. [Generated Code](#generated-code)
+8. [TypeScript Client Usage](#typescript-client-usage)
+9. [OpenAPI Documentation](#openapi-documentation)
+10. [Error Handling](#error-handling)
+11. [Advanced Features](#advanced-features)
+12. [Complete Example](#complete-example)
 
 ## Overview
 
@@ -24,6 +25,7 @@ The `rest_service!` macro generates:
 - Native Rust client with async/await support
 - OpenAPI 3.0 specification for TypeScript client generation
 - Built-in Swagger UI hosting (optional)
+- Optional compatibility routes that migrate legacy request/response shapes
 
 ## Installation
 
@@ -31,8 +33,8 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-ras-rest-macro = "0.2.0"
-ras-rest-core = "0.1.0"
+ras-rest-macro = "0.2.1"
+ras-rest-core = "0.1.1"
 ras-auth-core = "0.1.0"  # For authentication
 serde = { version = "1.0", features = ["derive"] }
 schemars = "0.8"  # Required for OpenAPI generation
@@ -244,6 +246,89 @@ Use OR logic between permission groups and AND logic within groups:
 // Requires either admin OR (moderator AND editor)
 WITH_PERMISSIONS(["admin"] | ["moderator", "editor"])
 ```
+
+## Versioned Endpoints
+
+Versioned endpoints are opt-in. The canonical route stays implemented by the generated service trait. Each legacy route declares its own path, body, response, and migration type. The generated server migrates legacy request parts into the canonical request parts, calls the canonical service method, then migrates the response body back to the legacy response type.
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct RenameWidgetV1 {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct RenameWidgetV2 {
+    pub display_name: String,
+    pub notify: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct RenameWidgetResponseV1 {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct RenameWidgetResponseV2 {
+    pub display_name: String,
+    pub notified: bool,
+}
+
+rest_service!({
+    service_name: WidgetService,
+    base_path: "/api",
+    openapi: true,
+    endpoints: [
+        POST UNAUTHORIZED v2/widgets/{id: String}/rename(RenameWidgetV2) -> RenameWidgetResponseV2 {
+            version: v2,
+            versions: [
+                v1 {
+                    path: v1/widgets/{id: String}/rename,
+                    body: RenameWidgetV1,
+                    response: RenameWidgetResponseV1,
+                    migration: RenameWidgetCompat,
+                },
+            ],
+        },
+    ]
+});
+
+struct RenameWidgetCompat;
+
+impl ras_rest_core::VersionMigration<
+    WidgetServicePostV2WidgetsByIdRenameV1Request,
+    WidgetServicePostV2WidgetsByIdRenameV2Request,
+> for RenameWidgetCompat {
+    type Error = std::convert::Infallible;
+
+    fn migrate(
+        value: WidgetServicePostV2WidgetsByIdRenameV1Request,
+    ) -> Result<WidgetServicePostV2WidgetsByIdRenameV2Request, Self::Error> {
+        Ok(WidgetServicePostV2WidgetsByIdRenameV2Request {
+            path: WidgetServicePostV2WidgetsByIdRenameV2Path { id: value.path.id },
+            query: WidgetServicePostV2WidgetsByIdRenameV2Query {},
+            body: RenameWidgetV2 {
+                display_name: value.body.name,
+                notify: false,
+            },
+        })
+    }
+}
+
+impl ras_rest_core::VersionMigration<RenameWidgetResponseV2, RenameWidgetResponseV1>
+    for RenameWidgetCompat
+{
+    type Error = std::convert::Infallible;
+
+    fn migrate(value: RenameWidgetResponseV2) -> Result<RenameWidgetResponseV1, Self::Error> {
+        Ok(RenameWidgetResponseV1 {
+            name: value.display_name,
+        })
+    }
+}
+```
+
+OpenAPI output includes both canonical and legacy paths. Versioned operations include `x-ras-version`, `x-ras-canonical-version`, and `x-ras-canonical-path` extensions.
 
 ## Generated Code
 

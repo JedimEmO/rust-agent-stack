@@ -39,10 +39,10 @@ cargo run -p basic-jsonrpc-service
 
 The service will start on `http://localhost:3000` with the following endpoints:
 
-- **JSON-RPC endpoint**: http://localhost:3000/api/rpc
-- **JSON-RPC Explorer**: http://localhost:3000/api/explorer
+- **JSON-RPC endpoint**: http://localhost:3000/rpc
+- **JSON-RPC Explorer**: http://localhost:3000/rpc/explorer
 - **Prometheus metrics**: http://localhost:3000/metrics
-- **OpenRPC Document**: http://localhost:3000/api/explorer/openrpc.json
+- **OpenRPC Document**: http://localhost:3000/rpc/explorer/openrpc.json
 
 ## Configuration
 
@@ -111,7 +111,7 @@ The collector will scrape metrics from `http://localhost:3000/metrics` and forwa
 
 **Admin User:**
 ```bash
-curl -X POST http://localhost:3000/api/rpc \
+curl -X POST http://localhost:3000/rpc \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -142,7 +142,7 @@ curl -X POST http://localhost:3000/api/rpc \
 ### 2. Make Authenticated Requests
 
 ```bash
-curl -X POST http://localhost:3000/api/rpc \
+curl -X POST http://localhost:3000/rpc \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer admin_token" \
   -d '{

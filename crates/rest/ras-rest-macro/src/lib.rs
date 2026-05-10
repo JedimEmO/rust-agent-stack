@@ -96,6 +96,19 @@ struct EndpointDefinition {
     request_type: Option<Type>,
     response_type: Type,
     handler_name: Ident,
+    version: Option<String>,
+    versions: Vec<EndpointVersionDefinition>,
+}
+
+#[derive(Debug)]
+struct EndpointVersionDefinition {
+    version: String,
+    path: String,
+    path_params: Vec<PathParam>,
+    query_params: Vec<QueryParam>,
+    request_type: Option<Type>,
+    response_type: Type,
+    migration_type: Type,
 }
 
 #[derive(Debug)]
@@ -121,7 +134,7 @@ impl DocComment {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum HttpMethod {
     Get,
     Post,
@@ -152,13 +165,13 @@ impl HttpMethod {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct PathParam {
     name: Ident,
     param_type: Type,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct QueryParam {
     name: Ident,
     param_type: Type,
@@ -171,6 +184,14 @@ enum AuthRequirement {
 }
 
 const DOC_COMMENT_EXPECTED: &str = "Expected doc comment in the form `/// ...`";
+
+fn parse_label(input: syn::parse::ParseStream) -> syn::Result<String> {
+    if input.peek(LitStr) {
+        Ok(input.parse::<LitStr>()?.value())
+    } else {
+        Ok(input.parse::<Ident>()?.to_string())
+    }
+}
 
 fn parse_doc_comment_attrs(
     attrs: Vec<syn::Attribute>,
@@ -307,6 +328,86 @@ impl Parse for ServiceDefinition {
     }
 }
 
+fn parse_endpoint_path(
+    input: syn::parse::ParseStream,
+) -> syn::Result<(String, Vec<PathParam>, Vec<String>)> {
+    let mut path_segments = Vec::new();
+    let mut path_params = Vec::new();
+    let mut handler_name_parts = Vec::new();
+
+    let first_segment = input.parse::<Ident>()?;
+    path_segments.push(first_segment.to_string());
+    handler_name_parts.push(first_segment.to_string());
+
+    while input.peek(Token![/]) {
+        let _ = input.parse::<Token![/]>()?;
+
+        if input.peek(syn::token::Brace) {
+            let param_content;
+            syn::braced!(param_content in input);
+
+            let param_name = param_content.parse::<Ident>()?;
+            let _ = param_content.parse::<Token![:]>()?;
+            let param_type = param_content.parse::<Type>()?;
+
+            path_segments.push(format!("{{{}}}", param_name));
+            path_params.push(PathParam {
+                name: param_name.clone(),
+                param_type,
+            });
+            handler_name_parts.push(format!("by_{}", param_name));
+        } else {
+            let segment = input.parse::<Ident>()?;
+            path_segments.push(segment.to_string());
+            handler_name_parts.push(segment.to_string());
+        }
+    }
+
+    Ok((
+        format!("/{}", path_segments.join("/")),
+        path_params,
+        handler_name_parts,
+    ))
+}
+
+fn parse_query_params(input: syn::parse::ParseStream) -> syn::Result<Vec<QueryParam>> {
+    let mut query_params = Vec::new();
+
+    if input.is_empty() {
+        return Ok(query_params);
+    }
+
+    let param_name = input.parse::<Ident>()?;
+    let _ = input.parse::<Token![:]>()?;
+    let param_type = input.parse::<Type>()?;
+    query_params.push(QueryParam {
+        name: param_name,
+        param_type,
+    });
+
+    while input.peek(Token![&]) || input.peek(Token![,]) {
+        if input.peek(Token![&]) {
+            let _ = input.parse::<Token![&]>()?;
+        } else {
+            let _ = input.parse::<Token![,]>()?;
+        }
+
+        if input.is_empty() {
+            break;
+        }
+
+        let param_name = input.parse::<Ident>()?;
+        let _ = input.parse::<Token![:]>()?;
+        let param_type = input.parse::<Type>()?;
+        query_params.push(QueryParam {
+            name: param_name,
+            param_type,
+        });
+    }
+
+    Ok(query_params)
+}
+
 impl Parse for EndpointDefinition {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let docs = parse_doc_comment_attrs(input.call(syn::Attribute::parse_outer)?, "endpoint")?;
@@ -390,72 +491,13 @@ impl Parse for EndpointDefinition {
         };
 
         // Parse path with potential path parameters (e.g., users/{id: String}/posts/{post_id: i32})
-        let mut path_segments = Vec::new();
-        let mut path_params = Vec::new();
-        let mut handler_name_parts = Vec::new();
-
-        // First segment is always the base path segment
-        let first_segment = input.parse::<Ident>()?;
-        path_segments.push(first_segment.to_string());
-        handler_name_parts.push(first_segment.to_string());
-
-        // Parse additional path segments
-        while input.peek(Token![/]) {
-            let _ = input.parse::<Token![/]>()?;
-
-            if input.peek(syn::token::Brace) {
-                // Parse path parameter {name: Type}
-                let param_content;
-                syn::braced!(param_content in input);
-
-                let param_name = param_content.parse::<Ident>()?;
-                let _ = param_content.parse::<Token![:]>()?;
-                let param_type = param_content.parse::<Type>()?;
-
-                path_segments.push(format!("{{{}}}", param_name));
-                path_params.push(PathParam {
-                    name: param_name.clone(),
-                    param_type,
-                });
-                handler_name_parts.push(format!("by_{}", param_name));
-            } else {
-                // Regular path segment
-                let segment = input.parse::<Ident>()?;
-                path_segments.push(segment.to_string());
-                handler_name_parts.push(segment.to_string());
-            }
-        }
-
-        let path = format!("/{}", path_segments.join("/"));
+        let (path, path_params, handler_name_parts) = parse_endpoint_path(input)?;
 
         // Parse query parameters if present (? param1:Type & param2:Type)
         let mut query_params = Vec::new();
         if input.peek(Token![?]) {
             let _ = input.parse::<Token![?]>()?;
-
-            // Parse first query parameter
-            let param_name = input.parse::<Ident>()?;
-            let _ = input.parse::<Token![:]>()?;
-            let param_type = input.parse::<Type>()?;
-            query_params.push(QueryParam {
-                name: param_name,
-                param_type,
-            });
-
-            // Parse additional query parameters separated by &
-            while input.peek(Token![&])
-                && !input.peek2(syn::token::Paren)
-                && !input.peek2(Token![->])
-            {
-                let _ = input.parse::<Token![&]>()?;
-                let param_name = input.parse::<Ident>()?;
-                let _ = input.parse::<Token![:]>()?;
-                let param_type = input.parse::<Type>()?;
-                query_params.push(QueryParam {
-                    name: param_name,
-                    param_type,
-                });
-            }
+            query_params = parse_query_params(input)?;
         }
 
         // Generate handler name based on method and path
@@ -480,6 +522,47 @@ impl Parse for EndpointDefinition {
         let _ = input.parse::<Token![->]>()?;
         let response_type = input.parse::<Type>()?;
 
+        let mut version = None;
+        let mut versions = Vec::new();
+
+        if input.peek(syn::token::Brace) {
+            let content;
+            syn::braced!(content in input);
+
+            while !content.is_empty() {
+                let field_name = content.parse::<Ident>()?;
+                let _ = content.parse::<Token![:]>()?;
+
+                match field_name.to_string().as_str() {
+                    "version" => {
+                        version = Some(parse_label(&content)?);
+                    }
+                    "versions" => {
+                        let versions_content;
+                        syn::bracketed!(versions_content in content);
+
+                        while !versions_content.is_empty() {
+                            versions.push(versions_content.parse::<EndpointVersionDefinition>()?);
+
+                            if versions_content.peek(Token![,]) {
+                                let _ = versions_content.parse::<Token![,]>()?;
+                            }
+                        }
+                    }
+                    _ => {
+                        return Err(syn::Error::new(
+                            field_name.span(),
+                            "Expected version or versions",
+                        ));
+                    }
+                }
+
+                if content.peek(Token![,]) {
+                    let _ = content.parse::<Token![,]>()?;
+                }
+            }
+        }
+
         Ok(EndpointDefinition {
             docs,
             method,
@@ -490,6 +573,79 @@ impl Parse for EndpointDefinition {
             request_type,
             response_type,
             handler_name,
+            version,
+            versions,
+        })
+    }
+}
+
+impl Parse for EndpointVersionDefinition {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let version = parse_label(input)?;
+
+        let content;
+        syn::braced!(content in input);
+
+        let mut path = None;
+        let mut path_params = Vec::new();
+        let mut query_params = Vec::new();
+        let mut request_type = None;
+        let mut response_type = None;
+        let mut migration_type = None;
+
+        while !content.is_empty() {
+            let field_name = content.parse::<Ident>()?;
+            let _ = content.parse::<Token![:]>()?;
+
+            match field_name.to_string().as_str() {
+                "path" => {
+                    let (parsed_path, parsed_path_params, _) = parse_endpoint_path(&content)?;
+                    path = Some(parsed_path);
+                    path_params = parsed_path_params;
+                }
+                "query" => {
+                    let query_content;
+                    syn::bracketed!(query_content in content);
+                    query_params = parse_query_params(&query_content)?;
+                }
+                "body" | "request" => {
+                    let parsed_type = content.parse::<Type>()?;
+                    if quote!(#parsed_type).to_string() != "()" {
+                        request_type = Some(parsed_type);
+                    }
+                }
+                "response" => {
+                    response_type = Some(content.parse::<Type>()?);
+                }
+                "migration" => {
+                    migration_type = Some(content.parse::<Type>()?);
+                }
+                _ => {
+                    return Err(syn::Error::new(
+                        field_name.span(),
+                        "Expected path, query, body, request, response, or migration",
+                    ));
+                }
+            }
+
+            if content.peek(Token![,]) {
+                let _ = content.parse::<Token![,]>()?;
+            }
+        }
+
+        Ok(Self {
+            version,
+            path: path
+                .ok_or_else(|| syn::Error::new(input.span(), "Version entry is missing path"))?,
+            path_params,
+            query_params,
+            request_type,
+            response_type: response_type.ok_or_else(|| {
+                syn::Error::new(input.span(), "Version entry is missing response")
+            })?,
+            migration_type: migration_type.ok_or_else(|| {
+                syn::Error::new(input.span(), "Version entry is missing migration")
+            })?,
         })
     }
 }
@@ -562,82 +718,39 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
 
     // No more individual handler fields - we'll store the service implementation instead
 
-    // Generate query parameter structs at module level
-    let query_structs: Vec<proc_macro2::TokenStream> = service_def
-        .endpoints
-        .iter()
-        .enumerate()
-        .map(|(idx, endpoint)| {
-            if !endpoint.query_params.is_empty() {
-                let struct_name = quote::format_ident!("QueryParams{}", idx);
-                let fields = endpoint.query_params.iter().map(|param| {
-                    let name = &param.name;
-                    let param_type = &param.param_type;
-                    quote! { pub #name: #param_type }
-                });
-                quote! {
-                    #[derive(serde::Deserialize)]
-                    #[allow(dead_code)]
-                    pub(super) struct #struct_name {
-                        #(#fields),*
-                    }
-                }
-            } else {
-                quote! {}
-            }
-        })
-        .collect();
+    let request_part_structs = generate_rest_request_part_structs(&service_def);
 
-    // Generate route registration
-    let route_registrations = service_def.endpoints.iter().enumerate().map(|(idx, endpoint)| {
-        let method_routing = endpoint.method.as_axum_method();
-        let path = &endpoint.path;
-        let handler_name = &endpoint.handler_name;
-        let permission_groups = match &endpoint.auth {
-            AuthRequirement::Unauthorized => Vec::new(),
-            AuthRequirement::WithPermissions(groups) => groups.clone(),
-        };
-        let method_str = endpoint.method.as_str();
+    let mut query_structs: Vec<proc_macro2::TokenStream> = Vec::new();
+    let mut route_registrations: Vec<proc_macro2::TokenStream> = Vec::new();
+    let mut route_idx = 0usize;
 
-        // Generate the axum handler based on endpoint configuration using the idx for the QueryParams struct
-        let axum_handler = generate_axum_handler(endpoint, idx);
-        let handler_body = generate_handler_body(endpoint, handler_name, method_str, path, idx);
+    for endpoint in &service_def.endpoints {
+        let query_struct_name = quote::format_ident!("QueryParams{}", route_idx);
+        query_structs.push(generate_query_struct(
+            &query_struct_name,
+            &endpoint.query_params,
+        ));
+        route_registrations.push(generate_canonical_route_registration(
+            endpoint,
+            &query_struct_name,
+        ));
+        route_idx += 1;
 
-        // Generate permission groups code for quote
-        let permission_groups_code = if permission_groups.is_empty() {
-            quote! { Vec::<Vec<String>>::new() }
-        } else {
-            let groups = permission_groups.iter().map(|group| {
-                let perms = group.iter();
-                quote! { vec![#(#perms.to_string()),*] }
-            });
-            quote! { vec![#(#groups),*] as Vec<Vec<String>> }
-        };
-
-        quote! {
-            {
-                let service = self.service.clone();
-                let auth_provider = self.auth_provider.clone();
-                let required_permission_groups: Vec<Vec<String>> = #permission_groups_code;
-                let with_usage_tracker = self.with_usage_tracker.clone();
-                let with_method_duration_tracker = self.with_method_duration_tracker.clone();
-
-                router = router.route(#path, #method_routing({
-                    move |#axum_handler| {
-                        let service = service.clone();
-                        let auth_provider = auth_provider.clone();
-                        let required_permission_groups: Vec<Vec<String>> = required_permission_groups.clone();
-                        let with_usage_tracker = with_usage_tracker.clone();
-                        let with_method_duration_tracker = with_method_duration_tracker.clone();
-
-                        async move {
-                            #handler_body
-                        }
-                    }
-                }));
-            }
+        for version in &endpoint.versions {
+            let query_struct_name = quote::format_ident!("QueryParams{}", route_idx);
+            query_structs.push(generate_query_struct(
+                &query_struct_name,
+                &version.query_params,
+            ));
+            route_registrations.push(generate_legacy_route_registration(
+                &service_def.service_name,
+                endpoint,
+                version,
+                &query_struct_name,
+            ));
+            route_idx += 1;
         }
-    });
+    }
 
     // Generate static hosting route registration - only if docs are enabled
     let static_routes = if service_def.static_hosting.serve_docs {
@@ -685,6 +798,9 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
 
             #(#query_structs)*
         }
+
+        #[cfg(feature = "server")]
+        #request_part_structs
 
         #[cfg(feature = "server")]
         impl<T: #service_trait_name> #builder_name<T> {
@@ -754,16 +870,603 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
     Ok(output)
 }
 
-fn generate_axum_handler(endpoint: &EndpointDefinition, idx: usize) -> proc_macro2::TokenStream {
+fn rest_permission_groups_code(auth: &AuthRequirement) -> proc_macro2::TokenStream {
+    let permission_groups = match auth {
+        AuthRequirement::Unauthorized => Vec::new(),
+        AuthRequirement::WithPermissions(groups) => groups.clone(),
+    };
+
+    if permission_groups.is_empty() {
+        quote! { Vec::<Vec<String>>::new() }
+    } else {
+        let groups = permission_groups.iter().map(|group| {
+            let perms = group.iter();
+            quote! { vec![#(#perms.to_string()),*] }
+        });
+        quote! { vec![#(#groups),*] as Vec<Vec<String>> }
+    }
+}
+
+fn pascal_ident_segment(value: &str) -> String {
+    let mut out = String::new();
+    let mut uppercase_next = true;
+
+    for ch in value.chars() {
+        if ch.is_ascii_alphanumeric() {
+            if uppercase_next {
+                out.push(ch.to_ascii_uppercase());
+                uppercase_next = false;
+            } else {
+                out.push(ch);
+            }
+        } else {
+            uppercase_next = true;
+        }
+    }
+
+    if out.is_empty() {
+        "Version".to_string()
+    } else if out.chars().next().is_some_and(|ch| ch.is_ascii_digit()) {
+        format!("V{out}")
+    } else {
+        out
+    }
+}
+
+fn rest_request_part_idents(
+    service_name: &Ident,
+    handler_name: &Ident,
+    version: &str,
+) -> (Ident, Ident, Ident) {
+    let service = service_name.to_string();
+    let handler = pascal_ident_segment(&handler_name.to_string());
+    let version = pascal_ident_segment(version);
+    let request_ident = quote::format_ident!("{}{}{}Request", service, handler, version);
+    let path_ident = quote::format_ident!("{}{}{}Path", service, handler, version);
+    let query_ident = quote::format_ident!("{}{}{}Query", service, handler, version);
+    (request_ident, path_ident, query_ident)
+}
+
+fn rest_body_type_tokens(request_type: Option<&Type>) -> proc_macro2::TokenStream {
+    match request_type {
+        Some(request_type) => quote! { #request_type },
+        None => quote! { () },
+    }
+}
+
+fn generate_rest_request_part_structs(service_def: &ServiceDefinition) -> proc_macro2::TokenStream {
+    let structs = service_def.endpoints.iter().flat_map(|endpoint| {
+        if endpoint.versions.is_empty() {
+            return Vec::new();
+        }
+
+        let canonical_version = endpoint.version.as_deref().unwrap_or("current");
+        let mut structs = vec![generate_rest_request_part_struct(
+            &service_def.service_name,
+            &endpoint.handler_name,
+            canonical_version,
+            &endpoint.path_params,
+            &endpoint.query_params,
+            endpoint.request_type.as_ref(),
+        )];
+
+        structs.extend(endpoint.versions.iter().map(|version| {
+            generate_rest_request_part_struct(
+                &service_def.service_name,
+                &endpoint.handler_name,
+                &version.version,
+                &version.path_params,
+                &version.query_params,
+                version.request_type.as_ref(),
+            )
+        }));
+
+        structs
+    });
+
+    quote! {
+        #(#structs)*
+    }
+}
+
+fn generate_rest_request_part_struct(
+    service_name: &Ident,
+    handler_name: &Ident,
+    version: &str,
+    path_params: &[PathParam],
+    query_params: &[QueryParam],
+    request_type: Option<&Type>,
+) -> proc_macro2::TokenStream {
+    let (request_ident, path_ident, query_ident) =
+        rest_request_part_idents(service_name, handler_name, version);
+    let path_fields = path_params.iter().map(|param| {
+        let name = &param.name;
+        let param_type = &param.param_type;
+        quote! { pub #name: #param_type }
+    });
+    let query_fields = query_params.iter().map(|param| {
+        let name = &param.name;
+        let param_type = &param.param_type;
+        quote! { pub #name: #param_type }
+    });
+    let body_type = rest_body_type_tokens(request_type);
+
+    quote! {
+        pub struct #path_ident {
+            #(#path_fields),*
+        }
+
+        pub struct #query_ident {
+            #(#query_fields),*
+        }
+
+        pub struct #request_ident {
+            pub path: #path_ident,
+            pub query: #query_ident,
+            pub body: #body_type,
+        }
+    }
+}
+
+fn generate_rest_parts_init(
+    service_name: &Ident,
+    handler_name: &Ident,
+    version: &str,
+    path_params: &[PathParam],
+    query_params: &[QueryParam],
+    request_type: Option<&Type>,
+) -> proc_macro2::TokenStream {
+    let (request_ident, path_ident, query_ident) =
+        rest_request_part_idents(service_name, handler_name, version);
+
+    let path_values = path_params.iter().enumerate().map(|(idx, param)| {
+        let name = &param.name;
+        if path_params.len() == 1 {
+            quote! { #name: path_params }
+        } else {
+            let idx = syn::Index::from(idx);
+            quote! { #name: path_params.#idx }
+        }
+    });
+
+    let query_values = query_params.iter().map(|param| {
+        let name = &param.name;
+        quote! { #name: query_params.#name }
+    });
+
+    let body_value = if request_type.is_some() {
+        quote! { body }
+    } else {
+        quote! { () }
+    };
+
+    quote! {
+        #request_ident {
+            path: #path_ident {
+                #(#path_values),*
+            },
+            query: #query_ident {
+                #(#query_values),*
+            },
+            body: #body_value,
+        }
+    }
+}
+
+fn rest_canonical_args_from_parts(
+    endpoint: &EndpointDefinition,
+    parts_ident: &Ident,
+) -> Vec<proc_macro2::TokenStream> {
+    let mut args = Vec::new();
+
+    for path_param in &endpoint.path_params {
+        let name = &path_param.name;
+        args.push(quote! { #parts_ident.path.#name });
+    }
+
+    for query_param in &endpoint.query_params {
+        let name = &query_param.name;
+        args.push(quote! { #parts_ident.query.#name });
+    }
+
+    if endpoint.request_type.is_some() {
+        args.push(quote! { #parts_ident.body });
+    }
+
+    args
+}
+
+fn generate_query_struct(
+    struct_name: &Ident,
+    query_params: &[QueryParam],
+) -> proc_macro2::TokenStream {
+    if query_params.is_empty() {
+        return quote! {};
+    }
+
+    let fields = query_params.iter().map(|param| {
+        let name = &param.name;
+        let param_type = &param.param_type;
+        quote! { pub #name: #param_type }
+    });
+
+    quote! {
+        #[derive(serde::Deserialize)]
+        #[allow(dead_code)]
+        pub(super) struct #struct_name {
+            #(#fields),*
+        }
+    }
+}
+
+fn generate_canonical_route_registration(
+    endpoint: &EndpointDefinition,
+    query_struct_name: &Ident,
+) -> proc_macro2::TokenStream {
+    let method_routing = endpoint.method.as_axum_method();
+    let path = &endpoint.path;
+    let handler_name = &endpoint.handler_name;
+    let method_str = endpoint.method.as_str();
+    let axum_handler = generate_axum_handler(
+        &endpoint.path_params,
+        &endpoint.query_params,
+        endpoint.request_type.as_ref(),
+        query_struct_name,
+    );
+    let handler_body = generate_handler_body(endpoint, handler_name, method_str, path);
+    let permission_groups_code = rest_permission_groups_code(&endpoint.auth);
+
+    quote! {
+        {
+            let service = self.service.clone();
+            let auth_provider = self.auth_provider.clone();
+            let required_permission_groups: Vec<Vec<String>> = #permission_groups_code;
+            let with_usage_tracker = self.with_usage_tracker.clone();
+            let with_method_duration_tracker = self.with_method_duration_tracker.clone();
+
+            router = router.route(#path, #method_routing({
+                move |#axum_handler| {
+                    let service = service.clone();
+                    let auth_provider = auth_provider.clone();
+                    let required_permission_groups: Vec<Vec<String>> = required_permission_groups.clone();
+                    let with_usage_tracker = with_usage_tracker.clone();
+                    let with_method_duration_tracker = with_method_duration_tracker.clone();
+
+                    async move {
+                        #handler_body
+                    }
+                }
+            }));
+        }
+    }
+}
+
+fn generate_legacy_route_registration(
+    service_name: &Ident,
+    endpoint: &EndpointDefinition,
+    version: &EndpointVersionDefinition,
+    query_struct_name: &Ident,
+) -> proc_macro2::TokenStream {
+    let method_routing = endpoint.method.as_axum_method();
+    let path = &version.path;
+    let axum_handler = generate_axum_handler(
+        &version.path_params,
+        &version.query_params,
+        version.request_type.as_ref(),
+        query_struct_name,
+    );
+    let handler_body = generate_legacy_handler_body(service_name, endpoint, version);
+    let permission_groups_code = rest_permission_groups_code(&endpoint.auth);
+
+    quote! {
+        {
+            let service = self.service.clone();
+            let auth_provider = self.auth_provider.clone();
+            let required_permission_groups: Vec<Vec<String>> = #permission_groups_code;
+            let with_usage_tracker = self.with_usage_tracker.clone();
+            let with_method_duration_tracker = self.with_method_duration_tracker.clone();
+
+            router = router.route(#path, #method_routing({
+                move |#axum_handler| {
+                    let service = service.clone();
+                    let auth_provider = auth_provider.clone();
+                    let required_permission_groups: Vec<Vec<String>> = required_permission_groups.clone();
+                    let with_usage_tracker = with_usage_tracker.clone();
+                    let with_method_duration_tracker = with_method_duration_tracker.clone();
+
+                    async move {
+                        #handler_body
+                    }
+                }
+            }));
+        }
+    }
+}
+
+fn generate_legacy_handler_body(
+    service_name: &Ident,
+    endpoint: &EndpointDefinition,
+    version: &EndpointVersionDefinition,
+) -> proc_macro2::TokenStream {
+    let handler_name = &endpoint.handler_name;
+    let method = endpoint.method.as_str();
+    let path = &version.path;
+    let migration_type = &version.migration_type;
+    let canonical_response_type = &endpoint.response_type;
+    let legacy_response_type = &version.response_type;
+    let canonical_version = endpoint.version.as_deref().unwrap_or("current");
+    let (canonical_request_ident, _, _) =
+        rest_request_part_idents(service_name, handler_name, canonical_version);
+    let (legacy_request_ident, _, _) =
+        rest_request_part_idents(service_name, handler_name, &version.version);
+    let legacy_parts_init = generate_rest_parts_init(
+        service_name,
+        handler_name,
+        &version.version,
+        &version.path_params,
+        &version.query_params,
+        version.request_type.as_ref(),
+    );
+    let canonical_parts_ident = quote::format_ident!("canonical_parts");
+    let mut canonical_args = rest_canonical_args_from_parts(endpoint, &canonical_parts_ident);
+
+    let json_handling = if version.request_type.is_some() {
+        quote! {
+            let body = match body_result {
+                Ok(json) => json.0,
+                Err(_) => {
+                    use axum::response::IntoResponse;
+                    return (
+                        axum::http::StatusCode::BAD_REQUEST,
+                        axum::Json(serde_json::json!({
+                            "error": "Invalid JSON"
+                        }))
+                    ).into_response();
+                },
+            };
+        }
+    } else {
+        quote! {}
+    };
+
+    match &endpoint.auth {
+        AuthRequirement::Unauthorized => quote! {
+            #json_handling
+
+            if let Some(tracker) = &with_usage_tracker {
+                tracker(&headers, None, #method, #path).await;
+            }
+
+            let legacy_parts: #legacy_request_ident = #legacy_parts_init;
+            let #canonical_parts_ident: #canonical_request_ident =
+                match <#migration_type as ras_rest_core::VersionMigration<#legacy_request_ident, #canonical_request_ident>>::migrate(legacy_parts) {
+                    Ok(parts) => parts,
+                    Err(e) => {
+                        use axum::response::IntoResponse;
+                        return (
+                            axum::http::StatusCode::BAD_REQUEST,
+                            axum::Json(serde_json::json!({
+                                "error": e.to_string()
+                            }))
+                        ).into_response();
+                    },
+                };
+
+            let start_time = std::time::Instant::now();
+
+            let result = match service.#handler_name(#(#canonical_args),*).await {
+                Ok(rest_response) => {
+                    use axum::response::IntoResponse;
+                    let status_code = axum::http::StatusCode::from_u16(rest_response.status)
+                        .unwrap_or(axum::http::StatusCode::OK);
+                    let body: #legacy_response_type =
+                        match <#migration_type as ras_rest_core::VersionMigration<#canonical_response_type, #legacy_response_type>>::migrate(rest_response.body) {
+                            Ok(body) => body,
+                            Err(e) => {
+                                tracing::error!(error = %e, "Response migration failed");
+                                return (
+                                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                                    axum::Json(serde_json::json!({
+                                        "error": "Internal server error"
+                                    }))
+                                ).into_response();
+                            },
+                        };
+                    (
+                        status_code,
+                        axum::Json(body)
+                    ).into_response()
+                },
+                Err(rest_error) => {
+                    use axum::response::IntoResponse;
+
+                    if let Some(internal) = &rest_error.internal_error {
+                        tracing::error!(error = ?internal, "Request failed with status {}", rest_error.status);
+                    }
+
+                    let status_code = axum::http::StatusCode::from_u16(rest_error.status)
+                        .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+
+                    (
+                        status_code,
+                        axum::Json(serde_json::json!({
+                            "error": &rest_error.message
+                        }))
+                    ).into_response()
+                },
+            };
+
+            let duration = start_time.elapsed();
+            if let Some(tracker) = &with_method_duration_tracker {
+                tracker(#method, #path, None, duration).await;
+            }
+
+            result
+        },
+        AuthRequirement::WithPermissions(_) => {
+            canonical_args.insert(0, quote! { &user });
+
+            quote! {
+                #json_handling
+
+                let token = match headers
+                    .get("Authorization")
+                    .and_then(|h| h.to_str().ok())
+                    .and_then(|s| s.strip_prefix("Bearer "))
+                {
+                    Some(token) => token,
+                    None => {
+                        use axum::response::IntoResponse;
+                        return (
+                            axum::http::StatusCode::UNAUTHORIZED,
+                            axum::Json(serde_json::json!({
+                                "error": "Missing or invalid Authorization header"
+                            }))
+                        ).into_response();
+                    },
+                };
+
+                let user = match &auth_provider {
+                    Some(provider) => match provider.authenticate(token.to_string()).await {
+                        Ok(user) => user,
+                        Err(_) => {
+                            use axum::response::IntoResponse;
+                            return (
+                                axum::http::StatusCode::UNAUTHORIZED,
+                                axum::Json(serde_json::json!({
+                                    "error": "Authentication failed"
+                                }))
+                            ).into_response();
+                        },
+                    },
+                    None => {
+                        use axum::response::IntoResponse;
+                        return (
+                            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                            axum::Json(serde_json::json!({
+                                "error": "No auth provider configured"
+                            }))
+                        ).into_response();
+                    },
+                };
+
+                let has_non_empty_groups = required_permission_groups.iter().any(|g| !g.is_empty());
+                if has_non_empty_groups {
+                    let mut has_permission = false;
+
+                    for permission_group in &required_permission_groups {
+                        if permission_group.is_empty() {
+                            has_permission = true;
+                            break;
+                        } else {
+                            let group_result = auth_provider.as_ref().unwrap().check_permissions(&user, permission_group);
+                            if group_result.is_ok() {
+                                has_permission = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if !has_permission {
+                        use axum::response::IntoResponse;
+                        return (
+                            axum::http::StatusCode::FORBIDDEN,
+                            axum::Json(serde_json::json!({
+                                "error": "Insufficient permissions"
+                            }))
+                        ).into_response();
+                    }
+                }
+
+                if let Some(tracker) = &with_usage_tracker {
+                    tracker(&headers, Some(&user), #method, #path).await;
+                }
+
+                let legacy_parts: #legacy_request_ident = #legacy_parts_init;
+                let #canonical_parts_ident: #canonical_request_ident =
+                    match <#migration_type as ras_rest_core::VersionMigration<#legacy_request_ident, #canonical_request_ident>>::migrate(legacy_parts) {
+                        Ok(parts) => parts,
+                        Err(e) => {
+                            use axum::response::IntoResponse;
+                            return (
+                                axum::http::StatusCode::BAD_REQUEST,
+                                axum::Json(serde_json::json!({
+                                    "error": e.to_string()
+                                }))
+                            ).into_response();
+                        },
+                    };
+
+                let start_time = std::time::Instant::now();
+
+                let result = match service.#handler_name(#(#canonical_args),*).await {
+                    Ok(rest_response) => {
+                        use axum::response::IntoResponse;
+                        let status_code = axum::http::StatusCode::from_u16(rest_response.status)
+                            .unwrap_or(axum::http::StatusCode::OK);
+                        let body: #legacy_response_type =
+                            match <#migration_type as ras_rest_core::VersionMigration<#canonical_response_type, #legacy_response_type>>::migrate(rest_response.body) {
+                                Ok(body) => body,
+                                Err(e) => {
+                                    tracing::error!(error = %e, "Response migration failed");
+                                    return (
+                                        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                                        axum::Json(serde_json::json!({
+                                            "error": "Internal server error"
+                                        }))
+                                    ).into_response();
+                                },
+                            };
+                        (
+                            status_code,
+                            axum::Json(body)
+                        ).into_response()
+                    },
+                    Err(rest_error) => {
+                        use axum::response::IntoResponse;
+
+                        if let Some(internal) = &rest_error.internal_error {
+                            tracing::error!(error = ?internal, "Request failed with status {}", rest_error.status);
+                        }
+
+                        let status_code = axum::http::StatusCode::from_u16(rest_error.status)
+                            .unwrap_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+
+                        (
+                            status_code,
+                            axum::Json(serde_json::json!({
+                                "error": &rest_error.message
+                            }))
+                        ).into_response()
+                    },
+                };
+
+                let duration = start_time.elapsed();
+                if let Some(tracker) = &with_method_duration_tracker {
+                    tracker(#method, #path, Some(&user), duration).await;
+                }
+
+                result
+            }
+        }
+    }
+}
+
+fn generate_axum_handler(
+    path_params: &[PathParam],
+    query_params: &[QueryParam],
+    request_type: Option<&Type>,
+    query_struct_name: &Ident,
+) -> proc_macro2::TokenStream {
     let mut extractors = Vec::new();
 
     // Always add headers extraction for tracking purposes
     extractors.push(quote! { headers: axum::http::HeaderMap });
 
     // Add path parameter extractors
-    if !endpoint.path_params.is_empty() {
-        let path_param_types = endpoint.path_params.iter().map(|param| &param.param_type);
-        if endpoint.path_params.len() == 1 {
+    if !path_params.is_empty() {
+        let path_param_types = path_params.iter().map(|param| &param.param_type);
+        if path_params.len() == 1 {
             extractors.push(quote! { axum::extract::Path(path_params): axum::extract::Path<#(#path_param_types)*> });
         } else {
             extractors.push(quote! { axum::extract::Path(path_params): axum::extract::Path<(#(#path_param_types),*)> });
@@ -771,15 +1474,14 @@ fn generate_axum_handler(endpoint: &EndpointDefinition, idx: usize) -> proc_macr
     }
 
     // Add query parameter extractors
-    if !endpoint.query_params.is_empty() {
-        let struct_name = quote::format_ident!("QueryParams{}", idx);
+    if !query_params.is_empty() {
         extractors.push(quote! {
-            ::axum_extra::extract::Query(query_params): ::axum_extra::extract::Query<query_params::#struct_name>
+            ::axum_extra::extract::Query(query_params): ::axum_extra::extract::Query<query_params::#query_struct_name>
         });
     }
 
     // Add request body extractor if present - use Result to handle JSON parsing errors
-    if endpoint.request_type.is_some() {
+    if request_type.is_some() {
         extractors.push(quote! { body_result: Result<axum::extract::Json<_>, axum::extract::rejection::JsonRejection> });
     }
 
@@ -793,7 +1495,6 @@ fn generate_handler_body(
     handler_name: &Ident,
     method: &str,
     path: &str,
-    _idx: usize,
 ) -> proc_macro2::TokenStream {
     // Handle authentication if required
     match &endpoint.auth {

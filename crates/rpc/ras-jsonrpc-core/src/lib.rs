@@ -9,3 +9,6 @@ pub use ras_auth_core::*;
 
 // Re-export JSON-RPC types for convenience
 pub use ras_jsonrpc_types::*;
+
+// Re-export version migration traits for generated compatibility dispatch.
+pub use ras_version_core::*;

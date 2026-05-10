@@ -5,8 +5,9 @@ A procedural macro for creating type-safe REST APIs with authentication integrat
 ## Features
 
 - **Type-safe REST endpoints**: Generate axum-based REST services from macro definitions
-- **Authentication integration**: Seamless integration with `ras-jsonrpc-core::AuthProvider`
+- **Authentication integration**: Seamless integration with `ras-auth-core::AuthProvider`
 - **Permission-based access control**: Support for role-based authorization
+- **Versioned endpoints**: Optional request/response migrations for legacy routes
 - **OpenAPI 3.0 generation**: Automatic OpenAPI documentation using schemars
 - **HTTP methods**: Support for GET, POST, PUT, DELETE, PATCH
 - **Path parameters**: Type-safe path parameter extraction
@@ -49,26 +50,48 @@ rest_service!({
 
 // The macro generates:
 // - UserServiceTrait: A trait with async methods for each endpoint
-// - UserServiceBuilder: A builder for configuring handlers and auth providers
+// - UserServiceBuilder: A builder for configuring the service implementation and auth provider
 ```
 
 ### Service Configuration
 
 ```rust
-let service = UserServiceBuilder::new()
+use ras_auth_core::AuthenticatedUser;
+use ras_rest_core::{RestResponse, RestResult};
+
+struct UserServiceImpl;
+
+#[async_trait::async_trait]
+impl UserServiceTrait for UserServiceImpl {
+    async fn get_users(&self) -> RestResult<Vec<User>> {
+        Ok(RestResponse::ok(vec![]))
+    }
+
+    async fn post_users(
+        &self,
+        _user: &AuthenticatedUser,
+        request: CreateUserRequest,
+    ) -> RestResult<User> {
+        Ok(RestResponse::created(User {
+            id: 1,
+            name: request.name,
+            email: request.email,
+        }))
+    }
+
+    async fn get_users_by_id(&self, _user: &AuthenticatedUser, id: i32) -> RestResult<User> {
+        Ok(RestResponse::ok(User {
+            id,
+            name: "John".to_string(),
+            email: "john@example.com".to_string(),
+        }))
+    }
+
+    // ... implement other endpoints
+}
+
+let service = UserServiceBuilder::new(UserServiceImpl)
     .auth_provider(my_auth_provider)
-    .get_users_handler(|_| async { 
-        // Return list of users
-        Ok(vec![])
-    })
-    .post_users_handler(|user, request| async {
-        // Create new user with admin permissions
-        Ok(User { id: 1, name: request.name, email: request.email })
-    })
-    .get_users_by_id_handler(|user, id| async {
-        // Get user by ID with user permissions
-        Ok(User { id, name: "John".to_string(), email: "john@example.com".to_string() })
-    })
     .build();
 
 // Use with axum
@@ -131,23 +154,102 @@ GET WITH_PERMISSIONS(["user"]) users/{id: i32}() -> User,
 GET UNAUTHORIZED posts/{user_id: i32}/comments/{comment_id: String}() -> Comment,
 ```
 
-## Authentication Integration
+### Versioned Endpoints
 
-The macro integrates with `rust-jsonrpc-core::AuthProvider` for authentication:
+Versioning is opt-in. The canonical endpoint is handled by the generated trait method, and each legacy route is migrated into the canonical request parts before the service implementation is called.
 
 ```rust
-use rust_jsonrpc_core::AuthProvider;
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct RenameUserV1 {
+    name: String,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct RenameUserV2 {
+    display_name: String,
+    notify: bool,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct RenameUserResponseV1 {
+    name: String,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct RenameUserResponseV2 {
+    display_name: String,
+    notified: bool,
+}
+
+rest_service!({
+    service_name: UserService,
+    base_path: "/api",
+    endpoints: [
+        POST UNAUTHORIZED v2/users/{id: i32}/rename(RenameUserV2) -> RenameUserResponseV2 {
+            version: v2,
+            versions: [
+                v1 {
+                    path: v1/users/{id: i32}/rename,
+                    body: RenameUserV1,
+                    response: RenameUserResponseV1,
+                    migration: RenameUserCompat,
+                },
+            ],
+        },
+    ]
+});
+
+struct RenameUserCompat;
+
+impl ras_rest_core::VersionMigration<
+    UserServicePostV2UsersByIdRenameV1Request,
+    UserServicePostV2UsersByIdRenameV2Request,
+> for RenameUserCompat {
+    type Error = std::convert::Infallible;
+
+    fn migrate(
+        value: UserServicePostV2UsersByIdRenameV1Request,
+    ) -> Result<UserServicePostV2UsersByIdRenameV2Request, Self::Error> {
+        Ok(UserServicePostV2UsersByIdRenameV2Request {
+            path: UserServicePostV2UsersByIdRenameV2Path { id: value.path.id },
+            query: UserServicePostV2UsersByIdRenameV2Query {},
+            body: RenameUserV2 {
+                display_name: value.body.name,
+                notify: false,
+            },
+        })
+    }
+}
+
+impl ras_rest_core::VersionMigration<RenameUserResponseV2, RenameUserResponseV1>
+    for RenameUserCompat
+{
+    type Error = std::convert::Infallible;
+
+    fn migrate(value: RenameUserResponseV2) -> Result<RenameUserResponseV1, Self::Error> {
+        Ok(RenameUserResponseV1 {
+            name: value.display_name,
+        })
+    }
+}
+```
+
+## Authentication Integration
+
+The macro integrates with `ras-auth-core::AuthProvider` for authentication:
+
+```rust
+use ras_auth_core::{AuthFuture, AuthProvider};
 
 struct MyAuthProvider;
 
-#[async_trait::async_trait]
 impl AuthProvider for MyAuthProvider {
     fn authenticate(&self, token: String) -> AuthFuture<'_> {
         // Validate JWT token and return authenticated user
     }
 }
 
-let service = UserServiceBuilder::new()
+let service = UserServiceBuilder::new(UserServiceImpl)
     .auth_provider(MyAuthProvider)
     .build();
 ```

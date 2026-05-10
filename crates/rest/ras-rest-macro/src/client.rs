@@ -47,12 +47,15 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
     let base_path = &service_def.base_path;
 
     // Generate client methods
-    let client_methods = service_def.endpoints.iter().map(generate_client_method);
+    let client_methods = service_def
+        .endpoints
+        .iter()
+        .flat_map(generate_client_methods_for_endpoint);
 
     let client_methods_with_timeout = service_def
         .endpoints
         .iter()
-        .map(generate_client_method_with_timeout);
+        .flat_map(generate_client_methods_with_timeout_for_endpoint);
 
     let output = quote! {
         #[cfg(feature = "client")]
@@ -170,16 +173,92 @@ pub fn generate_client_code(service_def: &ServiceDefinition) -> proc_macro2::Tok
     output
 }
 
-/// Generate a client method for the REST service
-fn generate_client_method(endpoint: &EndpointDefinition) -> proc_macro2::TokenStream {
-    let method_name = &endpoint.handler_name;
+fn handler_name_for_path(method: &HttpMethod, path: &str) -> syn::Ident {
+    let method_str = method.as_str().to_lowercase();
+    let mut parts = Vec::new();
 
+    for segment in path.trim_start_matches('/').split('/') {
+        if segment.starts_with('{') && segment.ends_with('}') {
+            let inner = &segment[1..segment.len() - 1];
+            let name = inner.split(':').next().unwrap_or(inner).trim();
+            parts.push(format!("by_{name}"));
+        } else if !segment.is_empty() {
+            parts.push(segment.to_string());
+        }
+    }
+
+    syn::parse_str::<syn::Ident>(&format!("{}_{}", method_str, parts.join("_")))
+        .expect("generated REST client method name must be a valid Rust identifier")
+}
+
+fn generate_client_methods_for_endpoint(
+    endpoint: &EndpointDefinition,
+) -> Vec<proc_macro2::TokenStream> {
+    let mut methods = vec![generate_client_method(
+        &endpoint.handler_name,
+        &endpoint.path_params,
+        &endpoint.query_params,
+        endpoint.request_type.as_ref(),
+        &endpoint.response_type,
+    )];
+
+    methods.extend(endpoint.versions.iter().map(|version| {
+        let method_name = handler_name_for_path(&endpoint.method, &version.path);
+        generate_client_method(
+            &method_name,
+            &version.path_params,
+            &version.query_params,
+            version.request_type.as_ref(),
+            &version.response_type,
+        )
+    }));
+
+    methods
+}
+
+fn generate_client_methods_with_timeout_for_endpoint(
+    endpoint: &EndpointDefinition,
+) -> Vec<proc_macro2::TokenStream> {
+    let mut methods = vec![generate_client_method_with_timeout(
+        &endpoint.handler_name,
+        &endpoint.method,
+        &endpoint.path,
+        &endpoint.path_params,
+        &endpoint.query_params,
+        endpoint.request_type.as_ref(),
+        &endpoint.response_type,
+    )];
+
+    methods.extend(endpoint.versions.iter().map(|version| {
+        let method_name = handler_name_for_path(&endpoint.method, &version.path);
+        generate_client_method_with_timeout(
+            &method_name,
+            &endpoint.method,
+            &version.path,
+            &version.path_params,
+            &version.query_params,
+            version.request_type.as_ref(),
+            &version.response_type,
+        )
+    }));
+
+    methods
+}
+
+/// Generate a client method for the REST service
+fn generate_client_method(
+    method_name: &syn::Ident,
+    path_params: &[crate::PathParam],
+    query_params: &[crate::QueryParam],
+    request_type: Option<&Type>,
+    response_type: &Type,
+) -> proc_macro2::TokenStream {
     // Build function parameters and call arguments
     let mut params = Vec::new();
     let mut call_args = Vec::new();
 
     // Add path parameters
-    for path_param in endpoint.path_params.iter() {
+    for path_param in path_params.iter() {
         let param_name = &path_param.name;
         let param_type = &path_param.param_type;
         params.push(quote! { #param_name: #param_type });
@@ -187,7 +266,7 @@ fn generate_client_method(endpoint: &EndpointDefinition) -> proc_macro2::TokenSt
     }
 
     // Add query parameters (mirroring the macro syntax order: path → query → body).
-    for query_param in endpoint.query_params.iter() {
+    for query_param in query_params.iter() {
         let param_name = &query_param.name;
         let param_type = &query_param.param_type;
         params.push(quote! { #param_name: #param_type });
@@ -195,13 +274,11 @@ fn generate_client_method(endpoint: &EndpointDefinition) -> proc_macro2::TokenSt
     }
 
     // Add request body parameter if present
-    if endpoint.request_type.is_some() {
-        let request_type = endpoint.request_type.as_ref().unwrap();
+    if let Some(request_type) = request_type {
         params.push(quote! { body: #request_type });
         call_args.push(quote! { body });
     }
 
-    let response_type = &endpoint.response_type;
     let method_name_with_timeout = quote::format_ident!("{}_with_timeout", method_name);
 
     quote! {
@@ -213,18 +290,23 @@ fn generate_client_method(endpoint: &EndpointDefinition) -> proc_macro2::TokenSt
 }
 
 /// Generate a client method with timeout for the REST service
-fn generate_client_method_with_timeout(endpoint: &EndpointDefinition) -> proc_macro2::TokenStream {
-    let method_name = &endpoint.handler_name;
+fn generate_client_method_with_timeout(
+    method_name: &syn::Ident,
+    method: &HttpMethod,
+    path: &str,
+    path_params: &[crate::PathParam],
+    query_params: &[crate::QueryParam],
+    request_type: Option<&Type>,
+    response_type: &Type,
+) -> proc_macro2::TokenStream {
     let method_name_with_timeout = quote::format_ident!("{}_with_timeout", method_name);
-    let http_method = match endpoint.method {
+    let http_method = match method {
         HttpMethod::Get => quote! { reqwest::Method::GET },
         HttpMethod::Post => quote! { reqwest::Method::POST },
         HttpMethod::Put => quote! { reqwest::Method::PUT },
         HttpMethod::Delete => quote! { reqwest::Method::DELETE },
         HttpMethod::Patch => quote! { reqwest::Method::PATCH },
     };
-
-    let path = &endpoint.path;
 
     // Build function parameters
     let mut params = Vec::new();
@@ -236,7 +318,7 @@ fn generate_client_method_with_timeout(endpoint: &EndpointDefinition) -> proc_ma
     };
 
     // Add path parameters
-    for path_param in endpoint.path_params.iter() {
+    for path_param in path_params.iter() {
         let param_name = &path_param.name;
         let param_type = &path_param.param_type;
         params.push(quote! { #param_name: #param_type });
@@ -261,10 +343,10 @@ fn generate_client_method_with_timeout(endpoint: &EndpointDefinition) -> proc_ma
     // `Option<T>` params are skipped when `None`. Values are serialized by
     // reqwest's serde-backed `.query()` helper so enum serde renames and other
     // query wire formats stay aligned with server-side extraction.
-    let query_handling = if endpoint.query_params.is_empty() {
+    let query_handling = if query_params.is_empty() {
         quote! {}
     } else {
-        let query_serializers = endpoint.query_params.iter().map(|qp| {
+        let query_serializers = query_params.iter().map(|qp| {
             let param_name = &qp.name;
             let param_str = qp.name.to_string();
             if option_vec_inner_type(&qp.param_type).is_some() {
@@ -300,14 +382,14 @@ fn generate_client_method_with_timeout(endpoint: &EndpointDefinition) -> proc_ma
 
     // Add query parameters to the function signature (after path params,
     // before the body — matches macro syntax order).
-    for query_param in endpoint.query_params.iter() {
+    for query_param in query_params.iter() {
         let param_name = &query_param.name;
         let param_type = &query_param.param_type;
         params.push(quote! { #param_name: #param_type });
     }
 
     // Add request body parameter if present
-    let request_body_handling = if let Some(request_type) = &endpoint.request_type {
+    let request_body_handling = if let Some(request_type) = request_type {
         params.push(quote! { body: #request_type });
         quote! {
             request_builder = request_builder.json(&body);
@@ -315,8 +397,6 @@ fn generate_client_method_with_timeout(endpoint: &EndpointDefinition) -> proc_ma
     } else {
         quote! {}
     };
-
-    let response_type = &endpoint.response_type;
 
     // Check if response type is unit type ()
     let is_unit_type = quote!(#response_type).to_string() == "()";

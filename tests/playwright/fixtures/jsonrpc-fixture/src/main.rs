@@ -43,6 +43,28 @@ pub struct ProfileResponse {
     pub permissions: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct RenameWidgetV1 {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct RenameWidgetV2 {
+    pub display_name: String,
+    pub notify: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct RenameWidgetResponseV1 {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct RenameWidgetResponseV2 {
+    pub display_name: String,
+    pub notified: bool,
+}
+
 jsonrpc_service!({
     service_name: ExplorerRpcFixture,
     openrpc: true,
@@ -64,10 +86,47 @@ jsonrpc_service!({
         /// See [Rust API Stack](https://example.com/docs).
         UNAUTHORIZED ping(PingRequest) -> PingResponse,
         UNAUTHORIZED no_params(()) -> String,
+        UNAUTHORIZED rename_widget(RenameWidgetV2) -> RenameWidgetResponseV2 {
+            version: v2,
+            wire: "rename_widget.v2",
+            versions: [
+                v1 {
+                    wire: "rename_widget.v1",
+                    request: RenameWidgetV1,
+                    response: RenameWidgetResponseV1,
+                    migration: RenameWidgetCompat,
+                },
+            ],
+        },
         WITH_PERMISSIONS(["admin"]) create_widget(CreateWidgetRequest) -> Widget,
         WITH_PERMISSIONS(["user"]) current_profile(()) -> ProfileResponse,
     ]
 });
+
+struct RenameWidgetCompat;
+
+impl ras_jsonrpc_core::VersionMigration<RenameWidgetV1, RenameWidgetV2> for RenameWidgetCompat {
+    type Error = std::convert::Infallible;
+
+    fn migrate(value: RenameWidgetV1) -> Result<RenameWidgetV2, Self::Error> {
+        Ok(RenameWidgetV2 {
+            display_name: value.name,
+            notify: false,
+        })
+    }
+}
+
+impl ras_jsonrpc_core::VersionMigration<RenameWidgetResponseV2, RenameWidgetResponseV1>
+    for RenameWidgetCompat
+{
+    type Error = std::convert::Infallible;
+
+    fn migrate(value: RenameWidgetResponseV2) -> Result<RenameWidgetResponseV1, Self::Error> {
+        Ok(RenameWidgetResponseV1 {
+            name: value.display_name,
+        })
+    }
+}
 
 struct FixtureAuthProvider;
 
@@ -92,29 +151,64 @@ impl AuthProvider for FixtureAuthProvider {
     }
 }
 
+struct ExplorerRpcFixtureImpl;
+
+impl ExplorerRpcFixtureTrait for ExplorerRpcFixtureImpl {
+    async fn ping(
+        &self,
+        request: PingRequest,
+    ) -> std::result::Result<PingResponse, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(PingResponse {
+            message: format!("pong: {}", request.message),
+        })
+    }
+
+    async fn no_params(
+        &self,
+        _request: (),
+    ) -> std::result::Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        Ok("no params ok".to_string())
+    }
+
+    async fn rename_widget(
+        &self,
+        request: RenameWidgetV2,
+    ) -> std::result::Result<RenameWidgetResponseV2, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(RenameWidgetResponseV2 {
+            display_name: request.display_name,
+            notified: request.notify,
+        })
+    }
+
+    async fn create_widget(
+        &self,
+        _user: &AuthenticatedUser,
+        request: CreateWidgetRequest,
+    ) -> std::result::Result<Widget, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(Widget {
+            id: "rpc-created-widget".to_string(),
+            name: request.name,
+            owner: request.owner,
+        })
+    }
+
+    async fn current_profile(
+        &self,
+        user: &AuthenticatedUser,
+        _request: (),
+    ) -> std::result::Result<ProfileResponse, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(ProfileResponse {
+            user_id: user.user_id.clone(),
+            permissions: user.permissions.iter().cloned().collect(),
+        })
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    let rpc_router = ExplorerRpcFixtureBuilder::new("/rpc")
+    let rpc_router = ExplorerRpcFixtureBuilder::new(ExplorerRpcFixtureImpl)
+        .base_url("/rpc")
         .auth_provider(FixtureAuthProvider)
-        .ping_handler(|request| async move {
-            Ok(PingResponse {
-                message: format!("pong: {}", request.message),
-            })
-        })
-        .no_params_handler(|_request| async move { Ok("no params ok".to_string()) })
-        .create_widget_handler(|_user, request| async move {
-            Ok(Widget {
-                id: "rpc-created-widget".to_string(),
-                name: request.name,
-                owner: request.owner,
-            })
-        })
-        .current_profile_handler(|user, _request| async move {
-            Ok(ProfileResponse {
-                user_id: user.user_id.clone(),
-                permissions: user.permissions.iter().cloned().collect(),
-            })
-        })
         .build()
         .expect("fixture JSON-RPC service should build");
 

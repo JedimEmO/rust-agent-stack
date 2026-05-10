@@ -125,66 +125,134 @@ impl AuthProvider for DemoAuthProvider {
     }
 }
 
+struct BasicServiceImpl;
+
+impl basic_service::BasicServiceTrait for BasicServiceImpl {
+    async fn health_check(
+        &self,
+        _request: (),
+    ) -> Result<StatusResponse, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(StatusResponse {
+            success: true,
+            message: "Service is healthy".to_string(),
+        })
+    }
+
+    async fn get_user(
+        &self,
+        _user: &AuthenticatedUser,
+        request: UserRequest,
+    ) -> Result<UserResponse, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(UserResponse {
+            id: "user-123".to_string(),
+            username: request.username,
+        })
+    }
+}
+
+struct ApiServiceImpl;
+
+impl api_service::ApiServiceTrait for ApiServiceImpl {
+    async fn register(
+        &self,
+        request: UserRequest,
+    ) -> Result<UserResponse, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(UserResponse {
+            id: "new-user-456".to_string(),
+            username: request.username,
+        })
+    }
+
+    async fn authenticated_ping(
+        &self,
+        _user: &AuthenticatedUser,
+        _request: (),
+    ) -> Result<StatusResponse, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(StatusResponse {
+            success: true,
+            message: "Pong!".to_string(),
+        })
+    }
+
+    async fn get_profile(
+        &self,
+        user: &AuthenticatedUser,
+        _request: (),
+    ) -> Result<UserResponse, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(UserResponse {
+            id: user.user_id.clone(),
+            username: "profile_user".to_string(),
+        })
+    }
+
+    async fn update_profile(
+        &self,
+        _user: &AuthenticatedUser,
+        request: UserRequest,
+    ) -> Result<UserResponse, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(UserResponse {
+            id: "updated-user".to_string(),
+            username: request.username,
+        })
+    }
+
+    async fn admin_action(
+        &self,
+        _user: &AuthenticatedUser,
+        action: AdminAction,
+    ) -> Result<StatusResponse, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(StatusResponse {
+            success: true,
+            message: format!(
+                "Admin action {} on {} executed",
+                action.action, action.target
+            ),
+        })
+    }
+}
+
+struct DocumentedServiceImpl;
+
+impl documented_service::DocumentedServiceTrait for DocumentedServiceImpl {
+    async fn status(
+        &self,
+        _request: (),
+    ) -> Result<StatusResponse, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(StatusResponse {
+            success: true,
+            message: "Service is operational".to_string(),
+        })
+    }
+
+    async fn process_request(
+        &self,
+        _user: &AuthenticatedUser,
+        request: UserRequest,
+    ) -> Result<UserResponse, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(UserResponse {
+            id: "processed-789".to_string(),
+            username: request.username,
+        })
+    }
+}
+
 fn main() {
     println!("=== Comprehensive JSON-RPC Service Demo ===\n");
 
     // Test basic service (no OpenRPC)
     println!("1. Basic Service (no OpenRPC):");
-    let basic_builder = basic_service::BasicServiceBuilder::new("/basic")
-        .auth_provider(DemoAuthProvider)
-        .health_check_handler(|_| async move {
-            Ok(StatusResponse {
-                success: true,
-                message: "Service is healthy".to_string(),
-            })
-        })
-        .get_user_handler(|_user, request| async move {
-            Ok(UserResponse {
-                id: "user-123".to_string(),
-                username: request.username,
-            })
-        });
+    let basic_builder = basic_service::BasicServiceBuilder::new(BasicServiceImpl)
+        .base_url("/basic")
+        .auth_provider(DemoAuthProvider);
     let _basic_router = basic_builder.build().expect("Failed to build BasicService");
     println!("   ✓ BasicService compiled successfully");
     println!("   ✓ No OpenRPC functions generated\n");
 
     // Test API service with default OpenRPC
     println!("2. API Service (OpenRPC enabled, default path):");
-    let api_builder = api_service::ApiServiceBuilder::new("/api/v1")
-        .auth_provider(DemoAuthProvider)
-        .register_handler(|request| async move {
-            Ok(UserResponse {
-                id: "new-user-456".to_string(),
-                username: request.username,
-            })
-        })
-        .authenticated_ping_handler(|_user, _| async move {
-            Ok(StatusResponse {
-                success: true,
-                message: "Pong!".to_string(),
-            })
-        })
-        .get_profile_handler(|user, _| async move {
-            Ok(UserResponse {
-                id: user.user_id.clone(),
-                username: "profile_user".to_string(),
-            })
-        })
-        .update_profile_handler(|_user, request| async move {
-            Ok(UserResponse {
-                id: "updated-user".to_string(),
-                username: request.username,
-            })
-        })
-        .admin_action_handler(|_user, action| async move {
-            Ok(StatusResponse {
-                success: true,
-                message: format!(
-                    "Admin action {} on {} executed",
-                    action.action, action.target
-                ),
-            })
-        });
+    let api_builder = api_service::ApiServiceBuilder::new(ApiServiceImpl)
+        .base_url("/api/v1")
+        .auth_provider(DemoAuthProvider);
     let _api_router = api_builder.build().expect("Failed to build ApiService");
 
     // Generate OpenRPC document
@@ -207,20 +275,9 @@ fn main() {
 
     // Test documented service with custom OpenRPC path
     println!("3. Documented Service (OpenRPC enabled, custom path):");
-    let doc_builder = documented_service::DocumentedServiceBuilder::new("/docs/api")
-        .auth_provider(DemoAuthProvider)
-        .status_handler(|_| async move {
-            Ok(StatusResponse {
-                success: true,
-                message: "Service is operational".to_string(),
-            })
-        })
-        .process_request_handler(|_user, request| async move {
-            Ok(UserResponse {
-                id: "processed-789".to_string(),
-                username: request.username,
-            })
-        });
+    let doc_builder = documented_service::DocumentedServiceBuilder::new(DocumentedServiceImpl)
+        .base_url("/docs/api")
+        .auth_provider(DemoAuthProvider);
     let _doc_router = doc_builder
         .build()
         .expect("Failed to build DocumentedService");
