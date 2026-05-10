@@ -680,7 +680,9 @@ fn generate_service_code(service_def: ServiceDefinition) -> syn::Result<proc_mac
 
         #[cfg(feature = "server")]
         mod query_params {
-            use serde::Deserialize;
+            #[allow(unused_imports)]
+            use super::*;
+
             #(#query_structs)*
         }
 

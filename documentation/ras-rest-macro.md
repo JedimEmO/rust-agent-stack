@@ -31,7 +31,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-ras-rest-macro = "0.1.0"
+ras-rest-macro = "0.2.0"
 ras-rest-core = "0.1.0"
 ras-auth-core = "0.1.0"  # For authentication
 serde = { version = "1.0", features = ["derive"] }

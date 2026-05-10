@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed - 2026-05-10
+- `ras-rest-macro`: Generated REST clients now serialize query parameters through reqwest's serde-backed query path, support repeated-key `Vec<T>` and `Option<Vec<T>>` query params, and honor serde-renamed enum values without requiring `Display`. Fixes #3.
+
+### Changed - 2026-05-10
+- Bumped `ras-rest-macro` from `0.1.1` to `0.2.0` because generated client query params now use serde serialization instead of `Display`/`ToString`.
+
 ### Added - 2026-05-09
 - Established repository versioning and changelog policy in `VERSIONING.md`.
 - Added doc-comment support for generated API documentation:
