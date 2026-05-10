@@ -42,27 +42,46 @@ jsonrpc_service!({
     ]
 });
 
+struct MyServiceImpl;
+
+impl MyServiceTrait for MyServiceImpl {
+    async fn sign_in(
+        &self,
+        request: SignInRequest,
+    ) -> Result<SignInResponse, Box<dyn std::error::Error + Send + Sync>> {
+        println!("Handling sign_in: {:?}", request);
+        Ok(SignInResponse {
+            jwt: "generated-jwt-token".to_string(),
+            user_id: "user-123".to_string(),
+        })
+    }
+
+    async fn sign_out(
+        &self,
+        user: &AuthenticatedUser,
+        _request: (),
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        println!("User {} signing out", user.user_id);
+        Ok(())
+    }
+
+    async fn delete_everything(
+        &self,
+        user: &AuthenticatedUser,
+        _request: (),
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        println!("User {} deleting everything (admin action)", user.user_id);
+        Ok(())
+    }
+}
+
 #[tokio::main]
 async fn main() {
     println!("Building JSON-RPC service with the generated macro...");
 
-    let _router = MyServiceBuilder::new("/api/v1")
+    let _router = MyServiceBuilder::new(MyServiceImpl)
+        .base_url("/api/v1")
         .auth_provider(MyAuthProvider)
-        .sign_in_handler(|request| async move {
-            println!("Handling sign_in: {:?}", request);
-            Ok(SignInResponse {
-                jwt: "generated-jwt-token".to_string(),
-                user_id: "user-123".to_string(),
-            })
-        })
-        .sign_out_handler(|user, _request| async move {
-            println!("User {} signing out", user.user_id);
-            Ok(())
-        })
-        .delete_everything_handler(|user, _request| async move {
-            println!("User {} deleting everything (admin action)", user.user_id);
-            Ok(())
-        })
         .build()
         .expect("Failed to build router");
 

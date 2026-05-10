@@ -85,16 +85,24 @@ jsonrpc_service!({
 // Implement the service
 struct MyServiceImpl;
 
-impl MyService for MyServiceImpl {
-    async fn health(&self, _ctx: CallContext, _params: ()) -> Result<String, JsonRpcError> {
+impl MyServiceTrait for MyServiceImpl {
+    async fn health(&self, _params: ()) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         Ok("healthy".to_string())
     }
-    
-    async fn create_user(&self, _ctx: CallContext, req: CreateUserRequest) -> Result<User, JsonRpcError> {
+
+    async fn create_user(
+        &self,
+        _user: &ras_jsonrpc_core::AuthenticatedUser,
+        req: CreateUserRequest,
+    ) -> Result<User, Box<dyn std::error::Error + Send + Sync>> {
         // Your implementation
     }
-    
-    async fn delete_user(&self, _ctx: CallContext, req: DeleteUserRequest) -> Result<bool, JsonRpcError> {
+
+    async fn delete_user(
+        &self,
+        _user: &ras_jsonrpc_core::AuthenticatedUser,
+        req: DeleteUserRequest,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         // Your implementation
     }
 }
@@ -105,12 +113,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let otel = OtelSetupBuilder::new("my-jsonrpc-service").build()?;
     
     // Build your service with observability hooks
-    let rpc_router = MyServiceBuilder::new("/rpc")
+    let rpc_router = MyServiceBuilder::new(MyServiceImpl)
+        .base_url("/rpc")
         .with_usage_tracker({
             let usage_tracker = otel.usage_tracker();
             move |headers, user, payload| {
                 let context = RequestContext::jsonrpc(payload.method.clone());
                 let usage_tracker = usage_tracker.clone();
+                let headers = headers.clone();
+                let user = user.cloned();
                 async move {
                     usage_tracker
                         .track_request(&headers, user.as_ref(), &context)
@@ -123,6 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             move |method, user, duration| {
                 let context = RequestContext::jsonrpc(method.to_string());
                 let duration_tracker = duration_tracker.clone();
+                let user = user.cloned();
                 async move {
                     duration_tracker
                         .track_duration(&context, user.as_ref(), duration)
@@ -130,7 +142,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         })
-        .build();
+        .build()?;
     
     // Combine with metrics endpoint
     let app = Router::new()
@@ -158,9 +170,9 @@ rest_service!({
     service_name: UserService,
     base_path: "/api/v1",
     endpoints: [
-        UNAUTHORIZED GET "/health" health() -> HealthResponse,
-        WITH_PERMISSIONS(["user"]) GET "/users/:id" get_user(PathParams<UserId>) -> User,
-        WITH_PERMISSIONS(["admin"]) DELETE "/users/:id" delete_user(PathParams<UserId>) -> DeleteResponse,
+        GET UNAUTHORIZED health() -> HealthResponse,
+        GET WITH_PERMISSIONS(["user"]) users/{id: UserId}() -> User,
+        DELETE WITH_PERMISSIONS(["admin"]) users/{id: UserId}() -> DeleteResponse,
     ]
 });
 
@@ -178,6 +190,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             move |headers, user, method, path| {
                 let context = RequestContext::rest(method, path);
                 let usage_tracker = usage_tracker.clone();
+                let headers = headers.clone();
+                let user = user.cloned();
                 async move {
                     usage_tracker
                         .track_request(&headers, user.as_ref(), &context)
@@ -190,6 +204,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             move |method, path, user, duration| {
                 let context = RequestContext::rest(method, path);
                 let duration_tracker = duration_tracker.clone();
+                let user = user.cloned();
                 async move {
                     duration_tracker
                         .track_duration(&context, user.as_ref(), duration)

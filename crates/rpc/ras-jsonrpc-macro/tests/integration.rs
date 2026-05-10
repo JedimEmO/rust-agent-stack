@@ -60,6 +60,44 @@ mod basic_service {
             WITH_PERMISSIONS([]) get_profile(()) -> User,
         ]
     });
+
+    pub struct MyServiceImpl;
+
+    impl MyServiceTrait for MyServiceImpl {
+        async fn sign_in(
+            &self,
+            _request: SignInRequest,
+        ) -> Result<SignInResponse, Box<dyn std::error::Error + Send + Sync>> {
+            Ok(SignInResponse {
+                jwt: "test-jwt".to_string(),
+                user_id: "123".to_string(),
+            })
+        }
+
+        async fn create_user(
+            &self,
+            _user: &ras_jsonrpc_core::AuthenticatedUser,
+            request: CreateUserRequest,
+        ) -> Result<User, Box<dyn std::error::Error + Send + Sync>> {
+            Ok(User {
+                id: "new-id".to_string(),
+                name: request.name,
+                role: request.role,
+            })
+        }
+
+        async fn get_profile(
+            &self,
+            user: &ras_jsonrpc_core::AuthenticatedUser,
+            _request: (),
+        ) -> Result<User, Box<dyn std::error::Error + Send + Sync>> {
+            Ok(User {
+                id: user.user_id.clone(),
+                name: "Test User".to_string(),
+                role: "user".to_string(),
+            })
+        }
+    }
 }
 
 #[tokio::test]
@@ -67,28 +105,9 @@ async fn test_macro_generates_code() {
     use basic_service::*;
 
     // Create a service builder
-    let builder = MyServiceBuilder::new("/api/v1")
-        .auth_provider(TestAuthProvider)
-        .sign_in_handler(|_request| async move {
-            Ok(SignInResponse {
-                jwt: "test-jwt".to_string(),
-                user_id: "123".to_string(),
-            })
-        })
-        .create_user_handler(|_user, request| async move {
-            Ok(User {
-                id: "new-id".to_string(),
-                name: request.name,
-                role: request.role,
-            })
-        })
-        .get_profile_handler(|user, _request| async move {
-            Ok(User {
-                id: user.user_id.clone(),
-                name: "Test User".to_string(),
-                role: "user".to_string(),
-            })
-        });
+    let builder = MyServiceBuilder::new(MyServiceImpl)
+        .base_url("/api/v1")
+        .auth_provider(TestAuthProvider);
 
     // Build the router (this ensures all generated code compiles)
     let _router = builder.build().expect("Failed to build router");
@@ -114,6 +133,40 @@ mod openrpc_service {
             WITH_PERMISSIONS([]) sign_out(()) -> (),
         ]
     });
+
+    pub struct OpenRpcServiceImpl;
+
+    impl OpenRpcServiceTrait for OpenRpcServiceImpl {
+        async fn sign_in(
+            &self,
+            _request: SignInRequest,
+        ) -> Result<SignInResponse, Box<dyn std::error::Error + Send + Sync>> {
+            Ok(SignInResponse {
+                jwt: "test-jwt".to_string(),
+                user_id: "123".to_string(),
+            })
+        }
+
+        async fn create_user(
+            &self,
+            _user: &ras_jsonrpc_core::AuthenticatedUser,
+            request: CreateUserRequest,
+        ) -> Result<User, Box<dyn std::error::Error + Send + Sync>> {
+            Ok(User {
+                id: "new-id".to_string(),
+                name: request.name,
+                role: request.role,
+            })
+        }
+
+        async fn sign_out(
+            &self,
+            _user: &ras_jsonrpc_core::AuthenticatedUser,
+            _request: (),
+        ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+            Ok(())
+        }
+    }
 }
 
 // Generate a service with custom OpenRPC output path
@@ -129,6 +182,28 @@ mod custom_path_service {
             WITH_PERMISSIONS(["admin"]) delete_everything(()) -> (),
         ]
     });
+
+    pub struct CustomPathServiceImpl;
+
+    impl CustomPathServiceTrait for CustomPathServiceImpl {
+        async fn sign_in(
+            &self,
+            _request: SignInRequest,
+        ) -> Result<SignInResponse, Box<dyn std::error::Error + Send + Sync>> {
+            Ok(SignInResponse {
+                jwt: "test-jwt".to_string(),
+                user_id: "123".to_string(),
+            })
+        }
+
+        async fn delete_everything(
+            &self,
+            _user: &ras_jsonrpc_core::AuthenticatedUser,
+            _request: (),
+        ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+            Ok(())
+        }
+    }
 }
 
 #[tokio::test]
@@ -136,22 +211,9 @@ async fn test_openrpc_generation() {
     use openrpc_service::*;
 
     // Create a service builder with OpenRPC enabled
-    let builder = OpenRpcServiceBuilder::new("/api/v1")
-        .auth_provider(TestAuthProvider)
-        .sign_in_handler(|_request| async move {
-            Ok(SignInResponse {
-                jwt: "test-jwt".to_string(),
-                user_id: "123".to_string(),
-            })
-        })
-        .create_user_handler(|_user, request| async move {
-            Ok(User {
-                id: "new-id".to_string(),
-                name: request.name,
-                role: request.role,
-            })
-        })
-        .sign_out_handler(|_user, _request| async move { Ok(()) });
+    let builder = OpenRpcServiceBuilder::new(OpenRpcServiceImpl)
+        .base_url("/api/v1")
+        .auth_provider(TestAuthProvider);
 
     // Build the router
     let _router = builder.build().expect("Failed to build router");
@@ -200,15 +262,9 @@ async fn test_custom_openrpc_path() {
     use custom_path_service::*;
 
     // Create a service builder
-    let builder = CustomPathServiceBuilder::new("/api/v2")
-        .auth_provider(TestAuthProvider)
-        .sign_in_handler(|_request| async move {
-            Ok(SignInResponse {
-                jwt: "test-jwt".to_string(),
-                user_id: "123".to_string(),
-            })
-        })
-        .delete_everything_handler(|_user, _request| async move { Ok(()) });
+    let builder = CustomPathServiceBuilder::new(CustomPathServiceImpl)
+        .base_url("/api/v2")
+        .auth_provider(TestAuthProvider);
 
     // Build the router
     let _router = builder.build().expect("Failed to build router");

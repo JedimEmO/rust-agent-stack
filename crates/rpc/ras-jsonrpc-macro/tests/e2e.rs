@@ -29,32 +29,122 @@ struct AddResponse {
     sum: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct RenameUserV1 {
+    name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct RenameUserV2 {
+    display_name: String,
+    notify: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct RenameUserResponseV1 {
+    name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct RenameUserResponseV2 {
+    display_name: String,
+    notified: bool,
+}
+
+struct RenameUserCompat;
+
+impl ras_jsonrpc_core::VersionMigration<RenameUserV1, RenameUserV2> for RenameUserCompat {
+    type Error = std::convert::Infallible;
+
+    fn migrate(value: RenameUserV1) -> Result<RenameUserV2, Self::Error> {
+        Ok(RenameUserV2 {
+            display_name: value.name,
+            notify: false,
+        })
+    }
+}
+
+impl ras_jsonrpc_core::VersionMigration<RenameUserResponseV2, RenameUserResponseV1>
+    for RenameUserCompat
+{
+    type Error = std::convert::Infallible;
+
+    fn migrate(value: RenameUserResponseV2) -> Result<RenameUserResponseV1, Self::Error> {
+        Ok(RenameUserResponseV1 {
+            name: value.display_name,
+        })
+    }
+}
+
 jsonrpc_service!({
     service_name: Demo,
     openrpc: false,
     methods: [
         UNAUTHORIZED ping(EchoRequest) -> EchoResponse,
+        UNAUTHORIZED rename_user(RenameUserV2) -> RenameUserResponseV2 {
+            version: v2,
+            wire: "rename_user.v2",
+            versions: [
+                v1 {
+                    wire: "rename_user.v1",
+                    request: RenameUserV1,
+                    response: RenameUserResponseV1,
+                    migration: RenameUserCompat,
+                },
+            ],
+        },
         WITH_PERMISSIONS(["user"]) add(AddRequest) -> AddResponse,
         WITH_PERMISSIONS(["admin"]) admin_only(EchoRequest) -> EchoResponse,
     ]
 });
 
+struct DemoImpl;
+
+impl DemoTrait for DemoImpl {
+    async fn ping(
+        &self,
+        req: EchoRequest,
+    ) -> Result<EchoResponse, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(EchoResponse {
+            msg: req.msg,
+            user_id: None,
+        })
+    }
+
+    async fn add(
+        &self,
+        _user: &ras_jsonrpc_core::AuthenticatedUser,
+        req: AddRequest,
+    ) -> Result<AddResponse, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(AddResponse { sum: req.a + req.b })
+    }
+
+    async fn rename_user(
+        &self,
+        req: RenameUserV2,
+    ) -> Result<RenameUserResponseV2, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(RenameUserResponseV2 {
+            display_name: req.display_name,
+            notified: req.notify,
+        })
+    }
+
+    async fn admin_only(
+        &self,
+        user: &ras_jsonrpc_core::AuthenticatedUser,
+        req: EchoRequest,
+    ) -> Result<EchoResponse, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(EchoResponse {
+            msg: req.msg,
+            user_id: Some(user.user_id.clone()),
+        })
+    }
+}
+
 fn router() -> axum::Router {
-    DemoBuilder::new("/rpc")
+    DemoBuilder::new(DemoImpl)
+        .base_url("/rpc")
         .auth_provider(MockAuthProvider::default())
-        .ping_handler(|req: EchoRequest| async move {
-            Ok(EchoResponse {
-                msg: req.msg,
-                user_id: None,
-            })
-        })
-        .add_handler(|_user, req: AddRequest| async move { Ok(AddResponse { sum: req.a + req.b }) })
-        .admin_only_handler(|user, req: EchoRequest| async move {
-            Ok(EchoResponse {
-                msg: req.msg,
-                user_id: Some(user.user_id),
-            })
-        })
         .build()
         .expect("build router")
 }
@@ -64,6 +154,48 @@ fn client(url: String) -> DemoClient {
         .server_url(url)
         .build()
         .expect("client build")
+}
+
+#[tokio::test]
+async fn legacy_version_round_trips_through_canonical_handler() {
+    let server = spawn_http(router());
+    let url = server.server_url("/rpc").expect("server url").to_string();
+
+    let resp = client(url)
+        .rename_user_v1(RenameUserV1 {
+            name: "Ada".to_string(),
+        })
+        .await
+        .expect("legacy rename ok");
+
+    assert_eq!(
+        resp,
+        RenameUserResponseV1 {
+            name: "Ada".to_string()
+        }
+    );
+}
+
+#[tokio::test]
+async fn canonical_version_uses_declared_wire_method() {
+    let server = spawn_http(router());
+    let url = server.server_url("/rpc").expect("server url").to_string();
+
+    let resp = client(url)
+        .rename_user(RenameUserV2 {
+            display_name: "Grace".to_string(),
+            notify: true,
+        })
+        .await
+        .expect("canonical rename ok");
+
+    assert_eq!(
+        resp,
+        RenameUserResponseV2 {
+            display_name: "Grace".to_string(),
+            notified: true,
+        }
+    );
 }
 
 #[tokio::test]

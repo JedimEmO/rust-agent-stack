@@ -127,6 +127,131 @@ jsonrpc_service!({
     ]
 });
 
+struct TestServiceImpl;
+
+impl TestServiceTrait for TestServiceImpl {
+    async fn sign_in(
+        &self,
+        request: SignInRequest,
+    ) -> Result<SignInResponse, Box<dyn std::error::Error + Send + Sync>> {
+        if request.email == "admin@test.com" && request.password == "admin123" {
+            Ok(SignInResponse {
+                jwt: "valid-admin-token".to_string(),
+                user_id: "admin-user".to_string(),
+            })
+        } else if request.email == "user@test.com" && request.password == "user123" {
+            Ok(SignInResponse {
+                jwt: "valid-user-token".to_string(),
+                user_id: "regular-user".to_string(),
+            })
+        } else {
+            Err("Invalid credentials".into())
+        }
+    }
+
+    async fn get_public_info(
+        &self,
+        _request: (),
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        Ok("This is public information".to_string())
+    }
+
+    async fn echo_complex(
+        &self,
+        request: ComplexRequest,
+    ) -> Result<ComplexRequest, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(request)
+    }
+
+    async fn sign_out(
+        &self,
+        _user: &AuthenticatedUser,
+        _request: (),
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        Ok(())
+    }
+
+    async fn get_user_info(
+        &self,
+        user: &AuthenticatedUser,
+        _request: (),
+    ) -> Result<User, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(User {
+            id: Some(123),
+            name: format!("User {}", user.user_id),
+            email: format!("{}@test.com", user.user_id),
+            permissions: user.permissions.iter().cloned().collect(),
+        })
+    }
+
+    async fn process_data(
+        &self,
+        _user: &AuthenticatedUser,
+        data: Vec<String>,
+    ) -> Result<ProcessingResult, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(ProcessingResult {
+            processed_count: data.len(),
+            errors: vec![],
+            success: true,
+        })
+    }
+
+    async fn delete_everything(
+        &self,
+        _user: &AuthenticatedUser,
+        _request: (),
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        Ok(())
+    }
+
+    async fn create_user(
+        &self,
+        _user: &AuthenticatedUser,
+        request: CreateUserRequest,
+    ) -> Result<User, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(User {
+            id: Some(rand::thread_rng().gen_range(1000..9999)),
+            name: request.name,
+            email: request.email,
+            permissions: request.permissions,
+        })
+    }
+
+    async fn moderate_content(
+        &self,
+        _user: &AuthenticatedUser,
+        content: String,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(!content.contains("spam"))
+    }
+
+    async fn update_profile(
+        &self,
+        _user: &AuthenticatedUser,
+        mut user: User,
+    ) -> Result<User, Box<dyn std::error::Error + Send + Sync>> {
+        user.id = Some(456);
+        Ok(user)
+    }
+
+    async fn get_user_data(
+        &self,
+        _user: &AuthenticatedUser,
+        user_id: i32,
+    ) -> Result<Option<User>, Box<dyn std::error::Error + Send + Sync>> {
+        if user_id == 123 {
+            Ok(Some(User {
+                id: Some(user_id),
+                name: "Found User".to_string(),
+                email: "found@test.com".to_string(),
+                permissions: vec!["user".to_string()],
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
 async fn create_test_server() -> (String, tokio::task::JoinHandle<()>) {
     let tokio_listener = TokioTcpListener::bind("127.0.0.1:0")
         .await
@@ -136,72 +261,9 @@ async fn create_test_server() -> (String, tokio::task::JoinHandle<()>) {
         .expect("Failed to get local addr");
     let base_url = format!("http://127.0.0.1:{}", addr.port());
 
-    let builder = TestServiceBuilder::new("/rpc")
-        .auth_provider(TestAuthProvider::new())
-        // UNAUTHORIZED handlers
-        .sign_in_handler(|request| async move {
-            // Simulate authentication logic
-            if request.email == "admin@test.com" && request.password == "admin123" {
-                Ok(SignInResponse {
-                    jwt: "valid-admin-token".to_string(),
-                    user_id: "admin-user".to_string(),
-                })
-            } else if request.email == "user@test.com" && request.password == "user123" {
-                Ok(SignInResponse {
-                    jwt: "valid-user-token".to_string(),
-                    user_id: "regular-user".to_string(),
-                })
-            } else {
-                Err("Invalid credentials".into())
-            }
-        })
-        .get_public_info_handler(|_| async move { Ok("This is public information".to_string()) })
-        .echo_complex_handler(|request| async move { Ok(request) })
-        // WITH_PERMISSIONS([]) handlers
-        .sign_out_handler(|_user, _| async move { Ok(()) })
-        .get_user_info_handler(|user, _| async move {
-            Ok(User {
-                id: Some(123),
-                name: format!("User {}", user.user_id),
-                email: format!("{}@test.com", user.user_id),
-                permissions: user.permissions.into_iter().collect(),
-            })
-        })
-        .process_data_handler(|_user, data| async move {
-            Ok(ProcessingResult {
-                processed_count: data.len(),
-                errors: vec![],
-                success: true,
-            })
-        })
-        // WITH_PERMISSIONS(["admin"]) handlers
-        .delete_everything_handler(|_user, _| async move { Ok(()) })
-        .create_user_handler(|_user, request| async move {
-            Ok(User {
-                id: Some(rand::thread_rng().gen_range(1000..9999)),
-                name: request.name,
-                email: request.email,
-                permissions: request.permissions,
-            })
-        })
-        .moderate_content_handler(|_user, content| async move { Ok(!content.contains("spam")) })
-        // WITH_PERMISSIONS(["user"]) handlers
-        .update_profile_handler(|_user, mut user| async move {
-            user.id = Some(456);
-            Ok(user)
-        })
-        .get_user_data_handler(|_user, user_id| async move {
-            if user_id == 123 {
-                Ok(Some(User {
-                    id: Some(user_id),
-                    name: "Found User".to_string(),
-                    email: "found@test.com".to_string(),
-                    permissions: vec!["user".to_string()],
-                }))
-            } else {
-                Ok(None)
-            }
-        });
+    let builder = TestServiceBuilder::new(TestServiceImpl)
+        .base_url("/rpc")
+        .auth_provider(TestAuthProvider::new());
 
     let app = builder.build().expect("Failed to build app");
 

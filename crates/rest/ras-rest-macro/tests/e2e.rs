@@ -24,6 +24,29 @@ struct ItemsResponse {
     items: Vec<Item>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+struct RenameItemV1 {
+    name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+struct RenameItemV2 {
+    display_name: String,
+    notify: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema, PartialEq)]
+struct RenamedItemV1 {
+    name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema, PartialEq)]
+struct RenamedItemV2 {
+    id: u32,
+    display_name: String,
+    notified: bool,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, schemars::JsonSchema)]
 enum SortOrder {
     #[serde(rename = "asc")]
@@ -47,8 +70,56 @@ rest_service!({
         GET UNAUTHORIZED sorted ? order: SortOrder () -> ItemsResponse,
         POST WITH_PERMISSIONS(["admin"]) items/batch ? notify: bool (CreateItem) -> Item,
         GET WITH_PERMISSIONS(["user"]) items/{id: u32}/related ? tag: Option<String> () -> ItemsResponse,
+        POST UNAUTHORIZED v2/items/{id: u32}/rename ? notify: bool (RenameItemV2) -> RenamedItemV2 {
+            version: v2,
+            versions: [
+                v1 {
+                    path: v1/items/{id: u32}/rename,
+                    query: [notify: Option<bool>],
+                    body: RenameItemV1,
+                    response: RenamedItemV1,
+                    migration: RenameItemCompat,
+                },
+            ],
+        },
     ]
 });
+
+struct RenameItemCompat;
+
+impl
+    ras_rest_core::VersionMigration<
+        DemoPostV2ItemsByIdRenameV1Request,
+        DemoPostV2ItemsByIdRenameV2Request,
+    > for RenameItemCompat
+{
+    type Error = std::convert::Infallible;
+
+    fn migrate(
+        value: DemoPostV2ItemsByIdRenameV1Request,
+    ) -> Result<DemoPostV2ItemsByIdRenameV2Request, Self::Error> {
+        Ok(DemoPostV2ItemsByIdRenameV2Request {
+            path: DemoPostV2ItemsByIdRenameV2Path { id: value.path.id },
+            query: DemoPostV2ItemsByIdRenameV2Query {
+                notify: value.query.notify.unwrap_or(false),
+            },
+            body: RenameItemV2 {
+                display_name: value.body.name,
+                notify: value.query.notify.unwrap_or(false),
+            },
+        })
+    }
+}
+
+impl ras_rest_core::VersionMigration<RenamedItemV2, RenamedItemV1> for RenameItemCompat {
+    type Error = std::convert::Infallible;
+
+    fn migrate(value: RenamedItemV2) -> Result<RenamedItemV1, Self::Error> {
+        Ok(RenamedItemV1 {
+            name: value.display_name,
+        })
+    }
+}
 
 struct DemoImpl;
 
@@ -170,6 +241,19 @@ impl DemoTrait for DemoImpl {
             }],
         }))
     }
+
+    async fn post_v2_items_by_id_rename(
+        &self,
+        id: u32,
+        notify: bool,
+        request: RenameItemV2,
+    ) -> RestResult<RenamedItemV2> {
+        Ok(RestResponse::ok(RenamedItemV2 {
+            id,
+            display_name: request.display_name,
+            notified: notify || request.notify,
+        }))
+    }
 }
 
 fn router() -> axum::Router {
@@ -189,6 +273,57 @@ async fn unauth_get_round_trips() {
     let resp = client(&base).get_items().await.expect("get_items ok");
     assert_eq!(resp.items.len(), 1);
     assert_eq!(resp.items[0].name, "alpha");
+}
+
+#[tokio::test]
+async fn legacy_rest_version_round_trips_through_canonical_handler() {
+    let server = spawn_http(router());
+    let base = server.server_address().unwrap().to_string();
+
+    let resp = client(&base)
+        .post_v1_items_by_id_rename(
+            7,
+            Some(true),
+            RenameItemV1 {
+                name: "renamed".to_string(),
+            },
+        )
+        .await
+        .expect("legacy rename ok");
+
+    assert_eq!(
+        resp,
+        RenamedItemV1 {
+            name: "renamed".to_string()
+        }
+    );
+}
+
+#[tokio::test]
+async fn canonical_rest_version_uses_v2_path_and_types() {
+    let server = spawn_http(router());
+    let base = server.server_address().unwrap().to_string();
+
+    let resp = client(&base)
+        .post_v2_items_by_id_rename(
+            8,
+            false,
+            RenameItemV2 {
+                display_name: "canonical".to_string(),
+                notify: true,
+            },
+        )
+        .await
+        .expect("canonical rename ok");
+
+    assert_eq!(
+        resp,
+        RenamedItemV2 {
+            id: 8,
+            display_name: "canonical".to_string(),
+            notified: true,
+        }
+    );
 }
 
 #[tokio::test]

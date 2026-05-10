@@ -64,6 +64,16 @@ pub fn generate_openrpc_code(
 
         unique_types.insert(request_type_str, quote!(#request_type));
         unique_types.insert(response_type_str, quote!(#response_type));
+
+        for version in &method.versions {
+            let request_type = &version.request_type;
+            let response_type = &version.response_type;
+            let request_type_str = quote!(#request_type).to_string();
+            let response_type_str = quote!(#response_type).to_string();
+
+            unique_types.insert(request_type_str, quote!(#request_type));
+            unique_types.insert(response_type_str, quote!(#response_type));
+        }
     }
 
     // Generate schema generation functions
@@ -143,8 +153,16 @@ pub fn generate_openrpc_code(
     let method_infos: Vec<TokenStream> = service_def
         .methods
         .iter()
-        .map(|method| {
-            let method_name = method.name.to_string();
+        .flat_map(|method| {
+            let canonical_method_name = method
+                .wire_name
+                .clone()
+                .unwrap_or_else(|| method.name.to_string());
+            let canonical_version = method.version.clone();
+            let canonical_version_tokens = match &canonical_version {
+                Some(version) => quote! { Some(#version.to_string()) },
+                None => quote! { None },
+            };
             let auth_required = matches!(method.auth, AuthRequirement::WithPermissions(_));
             // Flatten permission groups for OpenRPC documentation
             let permissions = match &method.auth {
@@ -169,17 +187,51 @@ pub fn generate_openrpc_code(
                 None => (quote! { None }, quote! { None }),
             };
 
-            quote! {
+            let mut infos = vec![quote! {
                 #method_info_struct_name {
-                    name: #method_name.to_string(),
+                    name: #canonical_method_name.to_string(),
                     summary: #summary,
                     description: #description,
                     auth_required: #auth_required,
                     permissions: vec![#(#permissions.to_string()),*],
                     request_type_name: stringify!(#request_type).to_string(),
                     response_type_name: stringify!(#response_type).to_string(),
+                    version: #canonical_version_tokens,
+                    canonical_version: #canonical_version_tokens,
+                    canonical_method: #canonical_method_name.to_string(),
                 }
-            }
+            }];
+
+            infos.extend(method.versions.iter().map(|version| {
+                let method_name = &version.wire_name;
+                let version_label = &version.version;
+                let request_type = &version.request_type;
+                let response_type = &version.response_type;
+                let canonical_version = canonical_version
+                    .clone()
+                    .unwrap_or_else(|| "current".to_string());
+                let canonical_method_name = canonical_method_name.clone();
+                let permissions = permissions.clone();
+                let summary = summary.clone();
+                let description = description.clone();
+
+                quote! {
+                    #method_info_struct_name {
+                        name: #method_name.to_string(),
+                        summary: #summary,
+                        description: #description,
+                        auth_required: #auth_required,
+                        permissions: vec![#(#permissions.to_string()),*],
+                        request_type_name: stringify!(#request_type).to_string(),
+                        response_type_name: stringify!(#response_type).to_string(),
+                        version: Some(#version_label.to_string()),
+                        canonical_version: Some(#canonical_version.to_string()),
+                        canonical_method: #canonical_method_name.to_string(),
+                    }
+                }
+            }));
+
+            infos
         })
         .collect();
 
@@ -193,6 +245,9 @@ pub fn generate_openrpc_code(
             permissions: Vec<String>,
             request_type_name: String,
             response_type_name: String,
+            version: Option<String>,
+            canonical_version: Option<String>,
+            canonical_method: String,
         }
 
         /// Helper function to extract examples from a JSON schema
@@ -367,6 +422,15 @@ pub fn generate_openrpc_code(
                     }
                 }
 
+                if let Some(version) = &method.version {
+                    extensions.insert("x-ras-version".to_string(), json!(version));
+                }
+
+                if let Some(canonical_version) = &method.canonical_version {
+                    extensions.insert("x-ras-canonical-version".to_string(), json!(canonical_version));
+                    extensions.insert("x-ras-canonical-method".to_string(), json!(method.canonical_method));
+                }
+
                 // Generate example pairing for the method
                 let mut examples = vec![];
                 if method.request_type_name != "()" {
@@ -515,6 +579,14 @@ pub fn generate_schema_impl_checks(service_def: &ServiceDefinition) -> TokenStre
 
         unique_types.insert(quote!(#request_type).to_string(), quote!(#request_type));
         unique_types.insert(quote!(#response_type).to_string(), quote!(#response_type));
+
+        for version in &method.versions {
+            let request_type = &version.request_type;
+            let response_type = &version.response_type;
+
+            unique_types.insert(quote!(#request_type).to_string(), quote!(#request_type));
+            unique_types.insert(quote!(#response_type).to_string(), quote!(#response_type));
+        }
     }
 
     let type_checks: Vec<TokenStream> = unique_types

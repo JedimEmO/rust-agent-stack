@@ -119,15 +119,41 @@ Example JWT payload:
 
 ```rust
 use ras_jsonrpc_macro::jsonrpc_service;
+use ras_identity_session::JwtAuthProvider;
 
 jsonrpc_service!({
     service_name: MyService,
-    auth_provider: JwtAuthProvider,
     methods: [
         WITH_PERMISSIONS(["read"]) get_data(GetRequest) -> GetResponse,
         WITH_PERMISSIONS(["write"]) update_data(UpdateRequest) -> UpdateResponse,
     ]
 });
+
+struct MyServiceImpl;
+
+impl MyServiceTrait for MyServiceImpl {
+    async fn get_data(
+        &self,
+        user: &ras_jsonrpc_core::AuthenticatedUser,
+        request: GetRequest,
+    ) -> Result<GetResponse, Box<dyn std::error::Error + Send + Sync>> {
+        // Load data for `user`.
+    }
+
+    async fn update_data(
+        &self,
+        user: &ras_jsonrpc_core::AuthenticatedUser,
+        request: UpdateRequest,
+    ) -> Result<UpdateResponse, Box<dyn std::error::Error + Send + Sync>> {
+        // Update data for `user`.
+    }
+}
+
+let auth_provider = JwtAuthProvider::new(session_service.clone());
+let router = MyServiceBuilder::new(MyServiceImpl)
+    .base_url("/rpc")
+    .auth_provider(auth_provider)
+    .build()?;
 ```
 
 ### With WebSocket Authentication

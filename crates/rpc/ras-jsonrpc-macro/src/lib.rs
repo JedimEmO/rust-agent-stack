@@ -49,6 +49,18 @@ struct MethodDefinition {
     name: Ident,
     request_type: Type,
     response_type: Type,
+    version: Option<String>,
+    wire_name: Option<String>,
+    versions: Vec<MethodVersionDefinition>,
+}
+
+#[derive(Debug)]
+struct MethodVersionDefinition {
+    version: String,
+    wire_name: String,
+    request_type: Type,
+    response_type: Type,
+    migration_type: Type,
 }
 
 #[derive(Debug)]
@@ -81,6 +93,14 @@ enum AuthRequirement {
 }
 
 const DOC_COMMENT_EXPECTED: &str = "Expected doc comment in the form `/// ...`";
+
+fn parse_label(input: syn::parse::ParseStream) -> syn::Result<String> {
+    if input.peek(LitStr) {
+        Ok(input.parse::<LitStr>()?.value())
+    } else {
+        Ok(input.parse::<Ident>()?.to_string())
+    }
+}
 
 fn parse_doc_comment_attrs(
     attrs: Vec<syn::Attribute>,
@@ -282,12 +302,118 @@ impl Parse for MethodDefinition {
         let _ = input.parse::<Token![->]>()?;
         let response_type = input.parse::<Type>()?;
 
+        let mut version = None;
+        let mut wire_name = None;
+        let mut versions = Vec::new();
+
+        if input.peek(syn::token::Brace) {
+            let content;
+            syn::braced!(content in input);
+
+            while !content.is_empty() {
+                let field_name = content.parse::<Ident>()?;
+                let _ = content.parse::<Token![:]>()?;
+
+                match field_name.to_string().as_str() {
+                    "version" => {
+                        version = Some(parse_label(&content)?);
+                    }
+                    "wire" => {
+                        wire_name = Some(content.parse::<LitStr>()?.value());
+                    }
+                    "versions" => {
+                        let versions_content;
+                        syn::bracketed!(versions_content in content);
+
+                        while !versions_content.is_empty() {
+                            versions.push(versions_content.parse::<MethodVersionDefinition>()?);
+
+                            if versions_content.peek(Token![,]) {
+                                let _ = versions_content.parse::<Token![,]>()?;
+                            }
+                        }
+                    }
+                    _ => {
+                        return Err(syn::Error::new(
+                            field_name.span(),
+                            "Expected version, wire, or versions",
+                        ));
+                    }
+                }
+
+                if content.peek(Token![,]) {
+                    let _ = content.parse::<Token![,]>()?;
+                }
+            }
+        }
+
         Ok(MethodDefinition {
             docs,
             auth,
             name,
             request_type,
             response_type,
+            version,
+            wire_name,
+            versions,
+        })
+    }
+}
+
+impl Parse for MethodVersionDefinition {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let version = parse_label(input)?;
+
+        let content;
+        syn::braced!(content in input);
+
+        let mut wire_name = None;
+        let mut request_type = None;
+        let mut response_type = None;
+        let mut migration_type = None;
+
+        while !content.is_empty() {
+            let field_name = content.parse::<Ident>()?;
+            let _ = content.parse::<Token![:]>()?;
+
+            match field_name.to_string().as_str() {
+                "wire" => {
+                    wire_name = Some(content.parse::<LitStr>()?.value());
+                }
+                "request" => {
+                    request_type = Some(content.parse::<Type>()?);
+                }
+                "response" => {
+                    response_type = Some(content.parse::<Type>()?);
+                }
+                "migration" => {
+                    migration_type = Some(content.parse::<Type>()?);
+                }
+                _ => {
+                    return Err(syn::Error::new(
+                        field_name.span(),
+                        "Expected wire, request, response, or migration",
+                    ));
+                }
+            }
+
+            if content.peek(Token![,]) {
+                let _ = content.parse::<Token![,]>()?;
+            }
+        }
+
+        Ok(Self {
+            version,
+            wire_name: wire_name
+                .ok_or_else(|| syn::Error::new(input.span(), "Version entry is missing wire"))?,
+            request_type: request_type
+                .ok_or_else(|| syn::Error::new(input.span(), "Version entry is missing request"))?,
+            response_type: response_type.ok_or_else(|| {
+                syn::Error::new(input.span(), "Version entry is missing response")
+            })?,
+            migration_type: migration_type.ok_or_else(|| {
+                syn::Error::new(input.span(), "Version entry is missing migration")
+            })?,
         })
     }
 }
@@ -406,311 +532,60 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
         match &method.auth {
             AuthRequirement::Unauthorized => {
                 quote! {
-                    async fn #method_name(&self, request: #request_type) -> Result<#response_type, Box<dyn std::error::Error + Send + Sync>>;
+                    fn #method_name(&self, request: #request_type) -> impl std::future::Future<Output = Result<#response_type, Box<dyn std::error::Error + Send + Sync>>> + Send;
                 }
             }
             AuthRequirement::WithPermissions(_) => {
                 quote! {
-                    async fn #method_name(&self, user: &ras_jsonrpc_core::AuthenticatedUser, request: #request_type) -> Result<#response_type, Box<dyn std::error::Error + Send + Sync>>;
+                    fn #method_name(&self, user: &ras_jsonrpc_core::AuthenticatedUser, request: #request_type) -> impl std::future::Future<Output = Result<#response_type, Box<dyn std::error::Error + Send + Sync>>> + Send;
                 }
-            }
-        }
-    });
-
-    // Generate builder struct and implementation
-    let builder_fields = service_def.methods.iter().map(|method| {
-        let method_name = &method.name;
-        let field_name = quote::format_ident!("{}_handler", method_name);
-        let request_type = &method.request_type;
-        let response_type = &method.response_type;
-
-        match &method.auth {
-            AuthRequirement::Unauthorized => {
-                quote! {
-                    #field_name: Option<Box<dyn Fn(#request_type) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<#response_type, Box<dyn std::error::Error + Send + Sync>>> + Send>> + Send + Sync>>,
-                }
-            }
-            AuthRequirement::WithPermissions(_) => {
-                quote! {
-                    #field_name: Option<Box<dyn Fn(ras_jsonrpc_core::AuthenticatedUser, #request_type) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<#response_type, Box<dyn std::error::Error + Send + Sync>>> + Send>> + Send + Sync>>,
-                }
-            }
-        }
-    });
-
-    let builder_setters = service_def.methods.iter().map(|method| {
-        let method_name = &method.name;
-        let setter_name = quote::format_ident!("{}_handler", method_name);
-        let field_name = quote::format_ident!("{}_handler", method_name);
-        let request_type = &method.request_type;
-        let response_type = &method.response_type;
-
-        match &method.auth {
-            AuthRequirement::Unauthorized => {
-                quote! {
-                    pub fn #setter_name<F, Fut>(mut self, handler: F) -> Self
-                    where
-                        F: Fn(#request_type) -> Fut + Send + Sync + 'static,
-                        Fut: std::future::Future<Output = Result<#response_type, Box<dyn std::error::Error + Send + Sync>>> + Send + 'static,
-                    {
-                        self.#field_name = Some(Box::new(move |req| Box::pin(handler(req))));
-                        self
-                    }
-                }
-            }
-            AuthRequirement::WithPermissions(_) => {
-                quote! {
-                    pub fn #setter_name<F, Fut>(mut self, handler: F) -> Self
-                    where
-                        F: Fn(ras_jsonrpc_core::AuthenticatedUser, #request_type) -> Fut + Send + Sync + 'static,
-                        Fut: std::future::Future<Output = Result<#response_type, Box<dyn std::error::Error + Send + Sync>>> + Send + 'static,
-                    {
-                        self.#field_name = Some(Box::new(move |user, req| Box::pin(handler(user, req))));
-                        self
-                    }
-                }
-            }
-        }
-    });
-
-    // Generate field initializations for the constructor
-    let field_inits = service_def.methods.iter().map(|method| {
-        let field_name = quote::format_ident!("{}_handler", method.name);
-        quote! { #field_name: None }
-    });
-
-    // Generate handler validation checks for the build method
-    let handler_validations = service_def.methods.iter().map(|method| {
-        let method_name = &method.name;
-        let field_name = quote::format_ident!("{}_handler", method_name);
-        let method_str = method_name.to_string();
-
-        quote! {
-            if self.#field_name.is_none() {
-                missing_handlers.push(#method_str);
             }
         }
     });
 
     // Generate method dispatch logic for the JSON-RPC handler
-    let method_dispatch = service_def.methods.iter().map(|method| {
-        let method_name = &method.name;
-        let method_str = method_name.to_string();
-        let field_name = quote::format_ident!("{}_handler", method_name);
-        let request_type = &method.request_type;
-        let permission_groups = match &method.auth {
-            AuthRequirement::Unauthorized => Vec::new(),
-            AuthRequirement::WithPermissions(groups) => groups.clone(),
-        };
-
-        match &method.auth {
-            AuthRequirement::Unauthorized => {
-                quote! {
-                    #method_str => {
-                        if let Some(handler) = &self.#field_name {
-                            // Parse parameters
-                            let params: #request_type = match request.params {
-                                Some(params) => match serde_json::from_value(params) {
-                                    Ok(p) => p,
-                                    Err(e) => return ras_jsonrpc_types::JsonRpcResponse::error(
-                                        ras_jsonrpc_types::JsonRpcError::invalid_params(e.to_string()),
-                                        request.id.clone()
-                                    ),
-                                },
-                                None => match serde_json::from_value(serde_json::Value::Null) {
-                                    Ok(p) => p,
-                                    Err(e) => return ras_jsonrpc_types::JsonRpcResponse::error(
-                                        ras_jsonrpc_types::JsonRpcError::invalid_params(e.to_string()),
-                                        request.id.clone()
-                                    ),
-                                }
-                            };
-
-                            // Call handler with duration tracking
-                            let start_time = std::time::Instant::now();
-                            let handler_result = handler(params).await;
-                            let duration = start_time.elapsed();
-
-                            // Track method duration if configured
-                            if let Some(duration_tracker) = &self.method_duration_tracker {
-                                duration_tracker(#method_str, None, duration).await;
-                            }
-
-                            match handler_result {
-                                Ok(result) => {
-                                    match serde_json::to_value(result) {
-                                        Ok(result_value) => ras_jsonrpc_types::JsonRpcResponse::success(result_value, request.id.clone()),
-                                        Err(e) => ras_jsonrpc_types::JsonRpcResponse::error(
-                                            ras_jsonrpc_types::JsonRpcError::internal_error(e.to_string()),
-                                            request.id.clone()
-                                        ),
-                                    }
-                                }
-                                Err(e) => ras_jsonrpc_types::JsonRpcResponse::error(
-                                    ras_jsonrpc_types::JsonRpcError::internal_error(e.to_string()),
-                                    request.id.clone()
-                                ),
-                            }
-                        } else {
-                            ras_jsonrpc_types::JsonRpcResponse::error(
-                                ras_jsonrpc_types::JsonRpcError::method_not_found(&#method_str),
-                                request.id.clone()
-                            )
-                        }
-                    }
-                }
-            }
-            AuthRequirement::WithPermissions(_) => {
-                // Generate permission groups code for quote
-                let permission_groups_code = if permission_groups.is_empty() {
-                    quote! { Vec::<Vec<String>>::new() }
-                } else {
-                    let groups = permission_groups.iter().map(|group| {
-                        let perms = group.iter();
-                        quote! { vec![#(#perms.to_string()),*] }
-                    });
-                    quote! { vec![#(#groups),*] as Vec<Vec<String>> }
-                };
-
-                quote! {
-                    #method_str => {
-                        if let Some(handler) = &self.#field_name {
-                            // Check if user is authenticated
-                            let user = match &authenticated_user {
-                                Some(u) => u,
-                                None => return ras_jsonrpc_types::JsonRpcResponse::error(
-                                    ras_jsonrpc_types::JsonRpcError::authentication_required(),
-                                    request.id.clone()
-                                ),
-                            };
-
-                            // Check permissions - AND within groups, OR between groups
-                            let required_permission_groups: Vec<Vec<String>> = #permission_groups_code;
-                            // Only check permissions if we have non-empty groups
-                            let has_non_empty_groups = required_permission_groups.iter().any(|g| !g.is_empty());
-                            if has_non_empty_groups {
-                                let mut has_permission = false;
-
-                                // Check each permission group (OR logic between groups)
-                                for permission_group in &required_permission_groups {
-                                    // Check if user has ALL permissions in this group (AND logic within group)
-                                    if permission_group.is_empty() {
-                                        // Empty group means any authenticated user can access
-                                        has_permission = true;
-                                        break;
-                                    } else {
-                                        // Check if user has all permissions in this group
-                                        let group_result = self.auth_provider
-                                            .as_ref()
-                                            .unwrap()
-                                            .check_permissions(user, permission_group);
-                                        if group_result.is_ok() {
-                                            has_permission = true;
-                                            break;
-                                        }
-                                    }
-                                }
-
-                                if !has_permission {
-                                    // Find the first non-empty group for error reporting
-                                    let first_group = required_permission_groups.iter()
-                                        .find(|g| !g.is_empty())
-                                        .cloned()
-                                        .unwrap_or_default();
-                                    return ras_jsonrpc_types::JsonRpcResponse::error(
-                                        ras_jsonrpc_types::JsonRpcError::insufficient_permissions(
-                                            first_group,
-                                            user.permissions.iter().cloned().collect()
-                                        ),
-                                        request.id.clone()
-                                    );
-                                }
-                            }
-
-                            // Parse parameters
-                            let params: #request_type = match request.params {
-                                Some(params) => match serde_json::from_value(params) {
-                                    Ok(p) => p,
-                                    Err(e) => return ras_jsonrpc_types::JsonRpcResponse::error(
-                                        ras_jsonrpc_types::JsonRpcError::invalid_params(e.to_string()),
-                                        request.id.clone()
-                                    ),
-                                },
-                                None => match serde_json::from_value(serde_json::Value::Null) {
-                                    Ok(p) => p,
-                                    Err(e) => return ras_jsonrpc_types::JsonRpcResponse::error(
-                                        ras_jsonrpc_types::JsonRpcError::invalid_params(e.to_string()),
-                                        request.id.clone()
-                                    ),
-                                }
-                            };
-
-                            // Call handler with duration tracking
-                            let start_time = std::time::Instant::now();
-                            let handler_result = handler(user.clone(), params).await;
-                            let duration = start_time.elapsed();
-
-                            // Track method duration if configured
-                            if let Some(duration_tracker) = &self.method_duration_tracker {
-                                duration_tracker(#method_str, Some(user), duration).await;
-                            }
-
-                            match handler_result {
-                                Ok(result) => {
-                                    match serde_json::to_value(result) {
-                                        Ok(result_value) => ras_jsonrpc_types::JsonRpcResponse::success(result_value, request.id.clone()),
-                                        Err(e) => ras_jsonrpc_types::JsonRpcResponse::error(
-                                            ras_jsonrpc_types::JsonRpcError::internal_error(e.to_string()),
-                                            request.id.clone()
-                                        ),
-                                    }
-                                }
-                                Err(e) => ras_jsonrpc_types::JsonRpcResponse::error(
-                                    ras_jsonrpc_types::JsonRpcError::internal_error(e.to_string()),
-                                    request.id.clone()
-                                ),
-                            }
-                        } else {
-                            ras_jsonrpc_types::JsonRpcResponse::error(
-                                ras_jsonrpc_types::JsonRpcError::method_not_found(&#method_str),
-                                request.id.clone()
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    });
+    let method_dispatch = service_def
+        .methods
+        .iter()
+        .flat_map(generate_jsonrpc_method_dispatches);
 
     quote! {
         /// Generated service trait
-        pub trait #service_trait_name {
+        pub trait #service_trait_name: Send + Sync + 'static {
             #(#trait_methods)*
         }
 
         /// Generated builder for the JSON-RPC service
-        pub struct #builder_name {
+        pub struct #builder_name<T: #service_trait_name> {
             base_url: String,
+            service: std::sync::Arc<T>,
             auth_provider: Option<Box<dyn ras_jsonrpc_core::AuthProvider>>,
             usage_tracker: Option<Box<dyn Fn(&axum::http::HeaderMap, Option<&ras_jsonrpc_core::AuthenticatedUser>, &ras_jsonrpc_types::JsonRpcRequest) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> + Send + Sync>>,
             method_duration_tracker: Option<Box<dyn Fn(&str, Option<&ras_jsonrpc_core::AuthenticatedUser>, std::time::Duration) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> + Send + Sync>>,
-            #(#builder_fields)*
         }
 
-        impl #builder_name {
-            /// Create a new builder with the base URL
-            pub fn new(base_url: impl Into<String>) -> Self {
+        impl<T: #service_trait_name> #builder_name<T> {
+            /// Create a new builder with the service implementation.
+            ///
+            /// The JSON-RPC route defaults to `/rpc`; use `base_url` to override it.
+            pub fn new(service: T) -> Self {
                 Self {
-                    base_url: base_url.into(),
+                    base_url: "/rpc".to_string(),
+                    service: std::sync::Arc::new(service),
                     auth_provider: None,
                     usage_tracker: None,
                     method_duration_tracker: None,
-                    #(#field_inits,)*
                 }
             }
 
+            /// Override the JSON-RPC route path.
+            pub fn base_url(mut self, base_url: impl Into<String>) -> Self {
+                self.base_url = base_url.into();
+                self
+            }
+
             /// Set the auth provider
-            pub fn auth_provider<T: ras_jsonrpc_core::AuthProvider>(mut self, provider: T) -> Self {
+            pub fn auth_provider<A: ras_jsonrpc_core::AuthProvider>(mut self, provider: A) -> Self {
                 self.auth_provider = Some(Box::new(provider));
                 self
             }
@@ -741,21 +616,8 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                 self
             }
 
-            #(#builder_setters)*
-
             /// Build the axum router for the JSON-RPC service
             pub fn build(self) -> Result<axum::Router, String> {
-                // Validate that all handlers are configured
-                let mut missing_handlers = Vec::new();
-                #(#handler_validations)*
-
-                if !missing_handlers.is_empty() {
-                    return Err(format!(
-                        "Cannot build service: the following handlers are not configured: {}",
-                        missing_handlers.join(", ")
-                    ));
-                }
-
                 let base_url = self.base_url.clone();
                 let service = std::sync::Arc::new(self);
 
@@ -850,6 +712,244 @@ fn generate_server_code(service_def: &ServiceDefinition) -> proc_macro2::TokenSt
                         request_id
                     )
                 }
+            }
+        }
+    }
+}
+
+fn jsonrpc_method_wire_name(method: &MethodDefinition) -> String {
+    method
+        .wire_name
+        .clone()
+        .unwrap_or_else(|| method.name.to_string())
+}
+
+fn jsonrpc_permission_groups_code(auth: &AuthRequirement) -> proc_macro2::TokenStream {
+    let permission_groups = match auth {
+        AuthRequirement::Unauthorized => Vec::new(),
+        AuthRequirement::WithPermissions(groups) => groups.clone(),
+    };
+
+    if permission_groups.is_empty() {
+        quote! { Vec::<Vec<String>>::new() }
+    } else {
+        let groups = permission_groups.iter().map(|group| {
+            let perms = group.iter();
+            quote! { vec![#(#perms.to_string()),*] }
+        });
+        quote! { vec![#(#groups),*] as Vec<Vec<String>> }
+    }
+}
+
+fn jsonrpc_auth_check_code(
+    auth: &AuthRequirement,
+) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
+    match auth {
+        AuthRequirement::Unauthorized => (quote! {}, quote! { None }),
+        AuthRequirement::WithPermissions(_) => {
+            let permission_groups_code = jsonrpc_permission_groups_code(auth);
+            (
+                quote! {
+                    let user = match &authenticated_user {
+                        Some(u) => u,
+                        None => return ras_jsonrpc_types::JsonRpcResponse::error(
+                            ras_jsonrpc_types::JsonRpcError::authentication_required(),
+                            request.id.clone()
+                        ),
+                    };
+
+                    let required_permission_groups: Vec<Vec<String>> = #permission_groups_code;
+                    let has_non_empty_groups = required_permission_groups.iter().any(|g| !g.is_empty());
+                    if has_non_empty_groups {
+                        let mut has_permission = false;
+
+                        for permission_group in &required_permission_groups {
+                            if permission_group.is_empty() {
+                                has_permission = true;
+                                break;
+                            } else {
+                                let group_result = self.auth_provider
+                                    .as_ref()
+                                    .unwrap()
+                                    .check_permissions(user, permission_group);
+                                if group_result.is_ok() {
+                                    has_permission = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if !has_permission {
+                            let first_group = required_permission_groups.iter()
+                                .find(|g| !g.is_empty())
+                                .cloned()
+                                .unwrap_or_default();
+                            return ras_jsonrpc_types::JsonRpcResponse::error(
+                                ras_jsonrpc_types::JsonRpcError::insufficient_permissions(
+                                    first_group,
+                                    user.permissions.iter().cloned().collect()
+                                ),
+                                request.id.clone()
+                            );
+                        }
+                    }
+                },
+                quote! { Some(user) },
+            )
+        }
+    }
+}
+
+fn jsonrpc_parse_params_code(
+    params_ident: &Ident,
+    request_type: &Type,
+) -> proc_macro2::TokenStream {
+    quote! {
+        let #params_ident: #request_type = match request.params {
+            Some(params) => match serde_json::from_value(params) {
+                Ok(p) => p,
+                Err(e) => return ras_jsonrpc_types::JsonRpcResponse::error(
+                    ras_jsonrpc_types::JsonRpcError::invalid_params(e.to_string()),
+                    request.id.clone()
+                ),
+            },
+            None => match serde_json::from_value(serde_json::Value::Null) {
+                Ok(p) => p,
+                Err(e) => return ras_jsonrpc_types::JsonRpcResponse::error(
+                    ras_jsonrpc_types::JsonRpcError::invalid_params(e.to_string()),
+                    request.id.clone()
+                ),
+            }
+        };
+    }
+}
+
+fn generate_jsonrpc_method_dispatches(method: &MethodDefinition) -> Vec<proc_macro2::TokenStream> {
+    let mut dispatches = vec![generate_jsonrpc_canonical_dispatch(method)];
+    dispatches.extend(
+        method
+            .versions
+            .iter()
+            .map(|version| generate_jsonrpc_legacy_dispatch(method, version)),
+    );
+    dispatches
+}
+
+fn generate_jsonrpc_canonical_dispatch(method: &MethodDefinition) -> proc_macro2::TokenStream {
+    let method_name = &method.name;
+    let method_wire = jsonrpc_method_wire_name(method);
+    let request_type = &method.request_type;
+    let params_ident = quote::format_ident!("params");
+    let parse_params = jsonrpc_parse_params_code(&params_ident, request_type);
+    let (auth_check, tracker_user) = jsonrpc_auth_check_code(&method.auth);
+
+    let handler_call = match &method.auth {
+        AuthRequirement::Unauthorized => quote! { self.service.#method_name(#params_ident).await },
+        AuthRequirement::WithPermissions(_) => {
+            quote! { self.service.#method_name(user, #params_ident).await }
+        }
+    };
+
+    quote! {
+        #method_wire => {
+            #auth_check
+            #parse_params
+
+            let start_time = std::time::Instant::now();
+            let handler_result = #handler_call;
+            let duration = start_time.elapsed();
+
+            if let Some(duration_tracker) = &self.method_duration_tracker {
+                duration_tracker(#method_wire, #tracker_user, duration).await;
+            }
+
+            match handler_result {
+                Ok(result) => {
+                    match serde_json::to_value(result) {
+                        Ok(result_value) => ras_jsonrpc_types::JsonRpcResponse::success(result_value, request.id.clone()),
+                        Err(e) => ras_jsonrpc_types::JsonRpcResponse::error(
+                            ras_jsonrpc_types::JsonRpcError::internal_error(e.to_string()),
+                            request.id.clone()
+                        ),
+                    }
+                }
+                Err(e) => ras_jsonrpc_types::JsonRpcResponse::error(
+                    ras_jsonrpc_types::JsonRpcError::internal_error(e.to_string()),
+                    request.id.clone()
+                ),
+            }
+        }
+    }
+}
+
+fn generate_jsonrpc_legacy_dispatch(
+    method: &MethodDefinition,
+    version: &MethodVersionDefinition,
+) -> proc_macro2::TokenStream {
+    let method_name = &method.name;
+    let method_wire = &version.wire_name;
+    let canonical_request_type = &method.request_type;
+    let canonical_response_type = &method.response_type;
+    let legacy_request_type = &version.request_type;
+    let legacy_response_type = &version.response_type;
+    let migration_type = &version.migration_type;
+    let legacy_params_ident = quote::format_ident!("legacy_params");
+    let params_ident = quote::format_ident!("params");
+    let parse_params = jsonrpc_parse_params_code(&legacy_params_ident, legacy_request_type);
+    let (auth_check, tracker_user) = jsonrpc_auth_check_code(&method.auth);
+
+    let handler_call = match &method.auth {
+        AuthRequirement::Unauthorized => quote! { self.service.#method_name(#params_ident).await },
+        AuthRequirement::WithPermissions(_) => {
+            quote! { self.service.#method_name(user, #params_ident).await }
+        }
+    };
+
+    quote! {
+        #method_wire => {
+            #auth_check
+            #parse_params
+
+            let #params_ident: #canonical_request_type =
+                match <#migration_type as ras_jsonrpc_core::VersionMigration<#legacy_request_type, #canonical_request_type>>::migrate(#legacy_params_ident) {
+                    Ok(params) => params,
+                    Err(e) => return ras_jsonrpc_types::JsonRpcResponse::error(
+                        ras_jsonrpc_types::JsonRpcError::invalid_params(e.to_string()),
+                        request.id.clone()
+                    ),
+                };
+
+            let start_time = std::time::Instant::now();
+            let handler_result = #handler_call;
+            let duration = start_time.elapsed();
+
+            if let Some(duration_tracker) = &self.method_duration_tracker {
+                duration_tracker(#method_wire, #tracker_user, duration).await;
+            }
+
+            match handler_result {
+                Ok(result) => {
+                    let result: #legacy_response_type =
+                        match <#migration_type as ras_jsonrpc_core::VersionMigration<#canonical_response_type, #legacy_response_type>>::migrate(result) {
+                            Ok(result) => result,
+                            Err(e) => return ras_jsonrpc_types::JsonRpcResponse::error(
+                                ras_jsonrpc_types::JsonRpcError::internal_error(e.to_string()),
+                                request.id.clone()
+                            ),
+                        };
+
+                    match serde_json::to_value(result) {
+                        Ok(result_value) => ras_jsonrpc_types::JsonRpcResponse::success(result_value, request.id.clone()),
+                        Err(e) => ras_jsonrpc_types::JsonRpcResponse::error(
+                            ras_jsonrpc_types::JsonRpcError::internal_error(e.to_string()),
+                            request.id.clone()
+                        ),
+                    }
+                }
+                Err(e) => ras_jsonrpc_types::JsonRpcResponse::error(
+                    ras_jsonrpc_types::JsonRpcError::internal_error(e.to_string()),
+                    request.id.clone()
+                ),
             }
         }
     }

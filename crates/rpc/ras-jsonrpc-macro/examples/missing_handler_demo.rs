@@ -1,5 +1,5 @@
-//! Example demonstrating the handler validation feature
-//! This example shows what happens when you try to build a service without configuring all handlers
+//! Example demonstrating the trait-based JSON-RPC service setup.
+//! All methods must be implemented by the generated trait.
 
 use ras_jsonrpc_core::{AuthError, AuthFuture, AuthProvider, AuthenticatedUser};
 use serde::{Deserialize, Serialize};
@@ -49,54 +49,43 @@ mod calculator_service {
             WITH_PERMISSIONS(["user"]) divide(CalculateRequest) -> CalculateResponse,
         ]
     });
-}
 
-fn main() {
-    use calculator_service::*;
+    pub struct CalculatorServiceImpl;
 
-    println!("=== JSON-RPC Service Handler Validation Demo ===\n");
-
-    println!("This example demonstrates the handler validation feature.");
-    println!("The service builder will panic if not all handlers are configured.\n");
-
-    // Uncomment the following code to see the panic in action:
-    /*
-    println!("1. Attempting to build service with only 'add' and 'subtract' handlers configured...");
-
-    let incomplete_builder = CalculatorServiceBuilder::new("/api/calc")
-        .auth_provider(DemoAuthProvider)
-        .add_handler(|req| async move {
-            Ok(CalculateResponse { result: req.a + req.b })
-        })
-        .subtract_handler(|req| async move {
-            Ok(CalculateResponse { result: req.a - req.b })
-        });
-    // Note: multiply_handler and divide_handler are NOT configured!
-
-    // This will panic with: "Cannot build service: the following handlers are not configured: multiply, divide"
-    let _router = incomplete_builder.build().expect("This should fail!");
-    */
-
-    println!("Building service with ALL handlers configured...");
-
-    let complete_builder = CalculatorServiceBuilder::new("/api/calc")
-        .auth_provider(DemoAuthProvider)
-        .add_handler(|req| async move {
+    impl CalculatorServiceTrait for CalculatorServiceImpl {
+        async fn add(
+            &self,
+            req: CalculateRequest,
+        ) -> Result<CalculateResponse, Box<dyn std::error::Error + Send + Sync>> {
             Ok(CalculateResponse {
                 result: req.a + req.b,
             })
-        })
-        .subtract_handler(|req| async move {
+        }
+
+        async fn subtract(
+            &self,
+            req: CalculateRequest,
+        ) -> Result<CalculateResponse, Box<dyn std::error::Error + Send + Sync>> {
             Ok(CalculateResponse {
                 result: req.a - req.b,
             })
-        })
-        .multiply_handler(|_user, req| async move {
+        }
+
+        async fn multiply(
+            &self,
+            _user: &ras_jsonrpc_core::AuthenticatedUser,
+            req: CalculateRequest,
+        ) -> Result<CalculateResponse, Box<dyn std::error::Error + Send + Sync>> {
             Ok(CalculateResponse {
                 result: req.a * req.b,
             })
-        })
-        .divide_handler(|_user, req| async move {
+        }
+
+        async fn divide(
+            &self,
+            _user: &ras_jsonrpc_core::AuthenticatedUser,
+            req: CalculateRequest,
+        ) -> Result<CalculateResponse, Box<dyn std::error::Error + Send + Sync>> {
             if req.b == 0 {
                 Err("Division by zero".into())
             } else {
@@ -104,7 +93,20 @@ fn main() {
                     result: req.a / req.b,
                 })
             }
-        });
+        }
+    }
+}
+
+fn main() {
+    use calculator_service::*;
+
+    println!("=== JSON-RPC Service Trait Demo ===\n");
+
+    println!("Building service from a complete trait implementation...");
+
+    let complete_builder = CalculatorServiceBuilder::new(CalculatorServiceImpl)
+        .base_url("/api/calc")
+        .auth_provider(DemoAuthProvider);
 
     // This should succeed
     let _router = complete_builder
@@ -113,10 +115,7 @@ fn main() {
     println!("✓ Build succeeded! All handlers are configured.");
 
     println!("\nSummary:");
-    println!("- The JSON-RPC service builder now validates that all handlers are configured");
-    println!("- If any handler is missing, build() will panic with a helpful error message");
-    println!("- This ensures that services are fully configured before deployment");
-    println!("- The error message lists exactly which handlers are missing");
-
-    println!("\nTo see the panic behavior, uncomment the code block in the source file.");
+    println!("- The JSON-RPC service builder accepts a generated trait implementation");
+    println!("- Missing methods are now compile-time trait implementation errors");
+    println!("- The builder still configures route path, auth, and observability hooks");
 }

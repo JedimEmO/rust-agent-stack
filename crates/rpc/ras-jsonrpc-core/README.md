@@ -4,7 +4,7 @@ Core authentication and authorization traits for JSON-RPC services.
 
 ## Overview
 
-This crate provides the foundational authentication and authorization traits used by the `ras-jsonrpc-macro` procedural macro to generate type-safe JSON-RPC services with axum integration. It defines the `AuthProvider` trait that enables flexible authentication mechanisms while maintaining a consistent interface.
+This crate provides the foundational authentication, authorization, and version migration traits used by the `ras-jsonrpc-macro` procedural macro to generate type-safe JSON-RPC services with axum integration. It defines the `AuthProvider` trait that enables flexible authentication mechanisms while maintaining a consistent interface.
 
 ## Features
 
@@ -13,6 +13,7 @@ This crate provides the foundational authentication and authorization traits use
 - ✅ **Flexible Auth Providers**: Support for JWT, API keys, or custom authentication
 - ✅ **Comprehensive Error Handling**: Detailed error types for all authentication scenarios
 - ✅ **Extension Traits**: Optional authentication helpers
+- ✅ **Version Migration**: Re-exports `VersionMigration` for opt-in API compatibility paths
 - ✅ **Integration Ready**: Re-exports JSON-RPC types for convenience
 
 ## Usage
@@ -21,13 +22,13 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rust-jsonrpc-core = "0.1.0"
+ras-jsonrpc-core = "0.1.2"
 ```
 
 ### Implementing an Auth Provider
 
 ```rust
-use rust_jsonrpc_core::{AuthProvider, AuthenticatedUser, AuthFuture, AuthError};
+use ras_jsonrpc_core::{AuthProvider, AuthenticatedUser, AuthFuture, AuthError};
 use std::collections::HashSet;
 
 struct JwtAuthProvider {
@@ -60,7 +61,7 @@ impl AuthProvider for JwtAuthProvider {
 ### Using with Permissions
 
 ```rust
-use rust_jsonrpc_core::{AuthProvider, AuthProviderExt};
+use ras_jsonrpc_core::{AuthProvider, AuthProviderExt};
 
 async fn example_usage() {
     let auth_provider = JwtAuthProvider::new("secret".to_string());
@@ -114,7 +115,7 @@ let user = auth_provider.authenticate_and_authorize(
 The crate provides comprehensive error handling:
 
 ```rust
-use rust_jsonrpc_core::AuthError;
+use ras_jsonrpc_core::AuthError;
 
 match auth_result {
     Err(AuthError::InvalidToken) => {
@@ -165,12 +166,12 @@ pub struct AuthenticatedUser {
 - `AuthResult<T>` - Result type for authentication operations
 - `AuthFuture<'a, T>` - Boxed future for async authentication
 
-## Integration with rust-jsonrpc-macro
+## Integration with ras-jsonrpc-macro
 
-This crate is designed to work with the `rust-jsonrpc-macro` procedural macro:
+This crate is designed to work with the `ras-jsonrpc-macro` procedural macro:
 
 ```rust
-use rust_jsonrpc_macro::jsonrpc_service;
+use ras_jsonrpc_macro::jsonrpc_service;
 
 jsonrpc_service!({
     service_name: MyService,
@@ -181,10 +182,69 @@ jsonrpc_service!({
     ]
 });
 
-// Use with the generated builder
-let service = MyServiceBuilder::new("/api")
+struct MyServiceImpl;
+
+impl MyServiceTrait for MyServiceImpl {
+    async fn sign_in(
+        &self,
+        request: SignInRequest,
+    ) -> Result<SignInResponse, Box<dyn std::error::Error + Send + Sync>> {
+        // Validate credentials and issue a token.
+    }
+
+    async fn get_profile(
+        &self,
+        user: &ras_jsonrpc_core::AuthenticatedUser,
+        _request: (),
+    ) -> Result<UserProfile, Box<dyn std::error::Error + Send + Sync>> {
+        // Load the authenticated user's profile.
+    }
+
+    async fn delete_user(
+        &self,
+        user: &ras_jsonrpc_core::AuthenticatedUser,
+        request: UserId,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        // Only users with the admin permission can reach here.
+    }
+}
+
+// Use with the generated builder. The JSON-RPC route defaults to `/rpc`.
+let service = MyServiceBuilder::new(MyServiceImpl)
+    .base_url("/api/rpc")
     .auth_provider(JwtAuthProvider::new("secret"))
-    .build();
+    .build()?;
+```
+
+### Version Migrations
+
+The macro uses `VersionMigration<From, To>` for opt-in legacy compatibility. A legacy JSON-RPC method can migrate its request into the canonical request type, call the canonical service method, then migrate the canonical response back to the legacy response type.
+
+```rust
+use ras_jsonrpc_core::VersionMigration;
+
+struct RenameCompat;
+
+impl VersionMigration<RenameUserV1, RenameUserV2> for RenameCompat {
+    type Error = std::convert::Infallible;
+
+    fn migrate(value: RenameUserV1) -> Result<RenameUserV2, Self::Error> {
+        Ok(RenameUserV2 {
+            display_name: value.name,
+            notify: false,
+        })
+    }
+}
+
+impl VersionMigration<RenameUserResponseV2, RenameUserResponseV1> for RenameCompat {
+    type Error = std::convert::Infallible;
+
+    fn migrate(value: RenameUserResponseV2) -> Result<RenameUserResponseV1, Self::Error> {
+        Ok(RenameUserResponseV1 {
+            name: value.display_name,
+        })
+    }
+}
 ```
 
 ## Example Auth Providers
@@ -211,10 +271,10 @@ See the [`examples/`](../../examples/) directory for complete implementations.
 
 ## Re-exports
 
-For convenience, this crate re-exports all types from `rust-jsonrpc-types`:
+For convenience, this crate re-exports all types from `ras-jsonrpc-types`:
 
 ```rust
-use rust_jsonrpc_core::{JsonRpcRequest, JsonRpcResponse, JsonRpcError};
+use ras_jsonrpc_core::{JsonRpcRequest, JsonRpcResponse, JsonRpcError};
 ```
 
 ## License

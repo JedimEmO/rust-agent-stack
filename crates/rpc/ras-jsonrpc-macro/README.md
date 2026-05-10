@@ -12,7 +12,8 @@ This crate provides the `jsonrpc_service!` procedural macro that generates type-
 - ✅ **Authentication Integration**: Built-in support for `UNAUTHORIZED` and `WITH_PERMISSIONS` methods
 - ✅ **Type Safety**: Compile-time validation of request/response types
 - ✅ **Axum Integration**: Generates standard axum `Router` for easy composition
-- ✅ **Builder Pattern**: Ergonomic service configuration using the `bon` crate
+- ✅ **Trait-Based Service Wiring**: Implement one generated trait and pass it to the service builder
+- ✅ **Versioned Methods**: Optional request/response migrations for legacy wire methods
 - ✅ **Async Support**: Full async/await support throughout
 - ✅ **JSON-RPC 2.0 Compliant**: Complete protocol compliance with proper error handling
 - ✅ **OpenRPC Document Generation**: Automatic API documentation generation
@@ -23,8 +24,8 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-ras-jsonrpc-macro = "0.1.0"
-ras-jsonrpc-core = "0.1.0"  # For AuthProvider trait
+ras-jsonrpc-macro = "0.2.0"
+ras-jsonrpc-core = "0.1.2"  # For AuthProvider and VersionMigration traits
 axum = "0.8"                  # For web server integration
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.0", features = ["full"] }
@@ -101,33 +102,50 @@ impl AuthProvider for MyAuthProvider {
 ```rust
 use axum::{Router, routing::get};
 
+struct MyServiceImpl;
+
+impl MyServiceTrait for MyServiceImpl {
+    async fn sign_in(
+        &self,
+        _request: SignInRequest,
+    ) -> Result<SignInResponse, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(SignInResponse {
+            jwt: "valid_user_token".to_string(),
+            user_id: "123".to_string(),
+        })
+    }
+
+    async fn get_profile(
+        &self,
+        user: &ras_jsonrpc_core::AuthenticatedUser,
+        _request: (),
+    ) -> Result<UserProfile, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(UserProfile {
+            name: format!("User {}", user.user_id),
+            email: "user@example.com".to_string(),
+        })
+    }
+
+    async fn delete_user(
+        &self,
+        user: &ras_jsonrpc_core::AuthenticatedUser,
+        user_id: UserId,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        println!("Admin {} deleting user {:?}", user.user_id, user_id);
+        Ok(())
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let app = Router::new()
         .route("/", get(|| async { "Hello, World!" }))
-        .nest("/api", 
-            MyServiceBuilder::new("/rpc")
+        .nest("/api",
+            MyServiceBuilder::new(MyServiceImpl)
+                .base_url("/rpc")
                 .auth_provider(MyAuthProvider)
-                .sign_in_handler(|request| async move {
-                    // Validate credentials
-                    Ok(SignInResponse {
-                        jwt: "valid_user_token".to_string(),
-                        user_id: "123".to_string(),
-                    })
-                })
-                .get_profile_handler(|user, _request| async move {
-                    // User is already authenticated and authorized
-                    Ok(UserProfile {
-                        name: format!("User {}", user.user_id),
-                        email: "user@example.com".to_string(),
-                    })
-                })
-                .delete_user_handler(|user, user_id| async move {
-                    // User is authenticated and has "admin" permission
-                    println!("Admin {} deleting user {:?}", user.user_id, user_id);
-                    Ok(())
-                })
                 .build()
+                .expect("service should build")
         );
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -157,7 +175,7 @@ jsonrpc_service!({
 UNAUTHORIZED method_name(RequestType) -> ResponseType,
 ```
 - No authentication required
-- Handler signature: `Fn(RequestType) -> Future<Output = Result<ResponseType, Error>>`
+- Trait method signature: `fn method(&self, RequestType) -> impl Future<Output = Result<ResponseType, Error>> + Send`
 
 #### Permission-Based Methods
 ```rust
@@ -165,7 +183,7 @@ WITH_PERMISSIONS(["perm1", "perm2"]) method_name(RequestType) -> ResponseType,
 ```
 - Requires valid authentication
 - Checks for specified permissions
-- Handler signature: `Fn(AuthenticatedUser, RequestType) -> Future<Output = Result<ResponseType, Error>>`
+- Trait method signature: `fn method(&self, &AuthenticatedUser, RequestType) -> impl Future<Output = Result<ResponseType, Error>> + Send`
 
 #### Empty Permissions (Any Valid Token)
 ```rust
@@ -173,7 +191,7 @@ WITH_PERMISSIONS([]) method_name(RequestType) -> ResponseType,
 ```
 - Requires valid authentication
 - No specific permissions required
-- Handler signature: `Fn(AuthenticatedUser, RequestType) -> Future<Output = Result<ResponseType, Error>>`
+- Trait method signature: `fn method(&self, &AuthenticatedUser, RequestType) -> impl Future<Output = Result<ResponseType, Error>> + Send`
 
 ## Generated Code
 
@@ -181,15 +199,19 @@ The macro generates:
 
 ### Service Builder
 ```rust
-pub struct MyServiceBuilder {
+pub trait MyServiceTrait: Send + Sync + 'static {
+    // One method per JSON-RPC method definition.
+}
+
+pub struct MyServiceBuilder<T: MyServiceTrait> {
     // Internal fields...
 }
 
-impl MyServiceBuilder {
-    pub fn new(base_url: impl Into<String>) -> Self { /* ... */ }
+impl<T: MyServiceTrait> MyServiceBuilder<T> {
+    pub fn new(service: T) -> Self { /* ... */ }
+    pub fn base_url(self, base_url: impl Into<String>) -> Self { /* ... */ }
     pub fn auth_provider<T: AuthProvider>(self, provider: T) -> Self { /* ... */ }
-    pub fn method_name_handler<F, Fut>(self, handler: F) -> Self { /* ... */ }
-    pub fn build(self) -> axum::Router { /* ... */ }
+    pub fn build(self) -> Result<axum::Router, String> { /* ... */ }
 }
 ```
 
@@ -198,6 +220,80 @@ impl MyServiceBuilder {
 - Authentication token extraction from `Authorization` header
 - Permission validation
 - Error handling with proper JSON-RPC error codes
+
+## Versioned Methods
+
+Versioning is opt-in. By default, the Rust method name is also the JSON-RPC wire method. Add a method block when you need a canonical wire name and one or more legacy compatibility methods.
+
+```rust
+#[derive(serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+struct RenameUserV1 {
+    name: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+struct RenameUserV2 {
+    display_name: String,
+    notify: bool,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+struct RenameUserResponseV1 {
+    name: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+struct RenameUserResponseV2 {
+    display_name: String,
+    notified: bool,
+}
+
+struct RenameUserCompat;
+
+impl ras_jsonrpc_core::VersionMigration<RenameUserV1, RenameUserV2> for RenameUserCompat {
+    type Error = std::convert::Infallible;
+
+    fn migrate(value: RenameUserV1) -> Result<RenameUserV2, Self::Error> {
+        Ok(RenameUserV2 {
+            display_name: value.name,
+            notify: false,
+        })
+    }
+}
+
+impl ras_jsonrpc_core::VersionMigration<RenameUserResponseV2, RenameUserResponseV1>
+    for RenameUserCompat
+{
+    type Error = std::convert::Infallible;
+
+    fn migrate(value: RenameUserResponseV2) -> Result<RenameUserResponseV1, Self::Error> {
+        Ok(RenameUserResponseV1 {
+            name: value.display_name,
+        })
+    }
+}
+
+jsonrpc_service!({
+    service_name: UserService,
+    openrpc: true,
+    methods: [
+        UNAUTHORIZED rename_user(RenameUserV2) -> RenameUserResponseV2 {
+            version: v2,
+            wire: "rename_user.v2",
+            versions: [
+                v1 {
+                    wire: "rename_user.v1",
+                    request: RenameUserV1,
+                    response: RenameUserResponseV1,
+                    migration: RenameUserCompat,
+                },
+            ],
+        },
+    ]
+});
+```
+
+The generated server accepts both `rename_user.v2` and `rename_user.v1`. The generated Rust client exposes `rename_user(...)` for the canonical method and `rename_user_v1(...)` for the legacy method.
 
 ## Authentication Flow
 
@@ -279,6 +375,7 @@ The macro generates comprehensive error handling:
 - **Authentication Required**: Missing/invalid token (-32001)
 - **Insufficient Permissions**: Missing permissions (-32002)
 - **Internal Errors**: Handler errors (-32603)
+- **Migration Errors**: Legacy request migration failures are invalid params (-32602); legacy response migration failures are internal errors (-32603)
 
 ## OpenRPC Document Generation
 
@@ -345,6 +442,7 @@ The generated OpenRPC document includes:
 - **Method specifications**: Name, parameters, results
 - **JSON Schemas**: Complete type definitions with descriptions
 - **Authentication metadata**: `x-authentication` and `x-permissions` extensions for each method
+- **Version metadata**: `x-ras-version`, `x-ras-canonical-version`, and `x-ras-canonical-method` extensions for versioned methods
 
 ### Example
 
@@ -407,7 +505,6 @@ This crate works seamlessly with:
 - [`ras-jsonrpc-core`](../ras-jsonrpc-core) - Authentication traits and types
 - [`ras-jsonrpc-types`](../ras-jsonrpc-types) - JSON-RPC protocol types
 - [`axum`](https://crates.io/crates/axum) - Web framework
-- [`bon`](https://crates.io/crates/bon) - Builder pattern generation
 
 ## Examples
 

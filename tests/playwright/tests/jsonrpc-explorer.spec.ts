@@ -23,6 +23,8 @@ test.describe('JSON-RPC API explorer', () => {
     await expect(page.locator('#service-subtitle')).toContainText('JSON-RPC OpenRPC');
     await expect(page.locator('#operation-list')).toContainText('ping');
     await expect(page.locator('.op').filter({ hasText: 'ping' })).toContainText('Echo a `PingRequest` message.');
+    await expect(page.locator('#operation-list')).toContainText('rename_widget.v2');
+    await expect(page.locator('#operation-list')).toContainText('rename_widget.v1');
     await expect(page.locator('#operation-list')).toContainText('create_widget');
     await expect(page.locator('#operation-list')).toContainText('current_profile');
 
@@ -85,6 +87,14 @@ test.describe('JSON-RPC API explorer', () => {
     await expect(page.locator('#response-status')).toContainText('200');
     await expect(page.locator('#response-output')).toContainText('pong: browser');
     await expect(page.locator('#history-list')).toContainText('RPC ping');
+
+    await selectMethod(page, 'rename_widget.v1');
+    await page.locator('#params-editor').fill(JSON.stringify({ name: 'Legacy Widget' }, null, 2));
+    await send(page);
+    await expect(page.locator('#response-status')).toContainText('200');
+    await expect(page.locator('#response-output')).toContainText('Legacy Widget');
+    await expect(page.locator('#response-output')).not.toContainText('notified');
+    await expect(page.locator('#history-list')).toContainText('RPC rename_widget.v1');
 
     await selectMethod(page, 'create_widget');
     await page.locator('#params-editor').fill(JSON.stringify({ name: 'RPC Widget', owner: 'playwright' }, null, 2));

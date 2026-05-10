@@ -1,6 +1,6 @@
 [package]
 name = "ras-rest-core"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Core types and traits for REST services in Rust Agent Stack"
 license = "MIT OR Apache-2.0"
@@ -11,3 +11,4 @@ homepage = "https://github.com/example/rust-agent-stack"
 serde = { workspace = true }
 thiserror = { workspace = true }
 ras-auth-core = { path = "../../core/ras-auth-core" }
+ras-version-core = { path = "../../core/ras-version-core" }
