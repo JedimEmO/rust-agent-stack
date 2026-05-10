@@ -30,6 +30,7 @@ rest_service!({
     openapi: false,
     serve_docs: false,
     endpoints: [
+        /// List all items.
         GET UNAUTHORIZED items() -> ItemsResponse,
         GET WITH_PERMISSIONS(["user"]) items/{id: u32}() -> Item,
         POST WITH_PERMISSIONS(["admin"]) items(CreateItem) -> Item,

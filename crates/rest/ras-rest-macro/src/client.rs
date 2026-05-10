@@ -6,11 +6,12 @@ use syn::Type;
 /// segment as well as fully-qualified forms like `std::option::Option<T>` /
 /// `core::option::Option<T>` — anything whose last path segment is `Option`.
 fn is_option_type(ty: &Type) -> bool {
-    if let Type::Path(type_path) = ty {
-        if let Some(last) = type_path.path.segments.last() {
-            return last.ident == "Option";
-        }
+    if let Type::Path(type_path) = ty
+        && let Some(last) = type_path.path.segments.last()
+    {
+        return last.ident == "Option";
     }
+
     false
 }
 

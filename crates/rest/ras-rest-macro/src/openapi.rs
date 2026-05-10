@@ -148,6 +148,17 @@ pub fn generate_openapi_code(
         .map(|endpoint| {
             let method = endpoint.method.as_str();
             let path = &endpoint.path;
+            let (summary, description) = match &endpoint.docs {
+                Some(docs) => {
+                    let summary = &docs.summary;
+                    let description = &docs.description;
+                    (
+                        quote! { Some(#summary.to_string()) },
+                        quote! { Some(#description.to_string()) },
+                    )
+                }
+                None => (quote! { None }, quote! { None }),
+            };
             let auth_required = matches!(endpoint.auth, AuthRequirement::WithPermissions(_));
             // Flatten permission groups for OpenAPI documentation
             let permissions = match &endpoint.auth {
@@ -200,6 +211,8 @@ pub fn generate_openapi_code(
                 #endpoint_info_struct_name {
                     method: #method.to_string(),
                     path: #path.to_string(),
+                    summary: #summary,
+                    description: #description,
                     auth_required: #auth_required,
                     permissions: vec![#(#permissions.to_string()),*],
                     request_type_name: #request_type_name.to_string(),
@@ -217,6 +230,8 @@ pub fn generate_openapi_code(
         struct #endpoint_info_struct_name {
             method: String,
             path: String,
+            summary: Option<String>,
+            description: Option<String>,
             auth_required: bool,
             permissions: Vec<String>,
             request_type_name: String,
@@ -462,9 +477,17 @@ pub fn generate_openapi_code(
                 let path_item = paths.entry(endpoint.path.clone()).or_insert_with(|| json!({}));
 
                 let method_lower = endpoint.method.to_lowercase();
+                let operation_summary = endpoint
+                    .summary
+                    .clone()
+                    .unwrap_or_else(|| format!("{} {}", endpoint.method, endpoint.path));
+                let operation_description = endpoint
+                    .description
+                    .clone()
+                    .unwrap_or_else(|| format!("Handles {} requests to {}", endpoint.method, endpoint.path));
                 let mut operation = json!({
-                    "summary": format!("{} {}", endpoint.method, endpoint.path),
-                    "description": format!("Handles {} requests to {}", endpoint.method, endpoint.path),
+                    "summary": operation_summary,
+                    "description": operation_description,
                     "operationId": format!("{}_{}", method_lower, endpoint.path.replace("/", "_").replace("{", "").replace("}", "").trim_start_matches('_')),
                     "responses": {
                         "200": {

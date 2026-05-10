@@ -7,8 +7,13 @@ use ras_rest_macro::rest_service;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+/// Health status returned by the fixture service.
+///
+/// **Schema docs** should render for REST.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct HealthResponse {
+    /// Current health state.
+    /// This field description keeps its line break.
     pub status: String,
 }
 
@@ -44,6 +49,20 @@ rest_service!({
     serve_docs: true,
     docs_path: "/docs",
     endpoints: [
+        /// Check fixture `health`.
+        ///
+        /// **REST docs** support Markdown.
+        /// - Shows operation details
+        /// - Preserves line breaks
+        ///
+        /// Alpha line
+        /// Beta line
+        ///
+        /// ```json
+        /// {"status":"ok"}
+        /// ```
+        ///
+        /// See [REST docs](https://example.com/rest).
         GET UNAUTHORIZED health() -> HealthResponse,
         GET UNAUTHORIZED widgets/{id: String}() -> Widget,
         GET UNAUTHORIZED search/widgets ? q: String & limit: Option<u32> () -> WidgetsResponse,
